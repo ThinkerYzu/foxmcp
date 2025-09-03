@@ -2,7 +2,7 @@
 console.log('FoxMCP content script loaded');
 
 // Listen for messages from background script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const { action, script } = request;
   
   try {

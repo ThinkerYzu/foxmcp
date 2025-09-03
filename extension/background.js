@@ -60,13 +60,13 @@ function updateConfig(newConfig) {
   console.log('Configuration updated:', CONFIG);
   
   // Save to storage for persistence
-  chrome.storage.local.set({ foxmcpConfig: CONFIG });
+  browser.storage.local.set({ foxmcpConfig: CONFIG });
 }
 
 // Load configuration from storage on startup
 async function loadConfig() {
   try {
-    const result = await chrome.storage.local.get(['foxmcpConfig']);
+    const result = await browser.storage.local.get(['foxmcpConfig']);
     if (result.foxmcpConfig) {
       Object.assign(CONFIG, result.foxmcpConfig);
       console.log('Configuration loaded from storage:', CONFIG);
@@ -141,8 +141,8 @@ function sendError(id, code, message, details = {}) {
   websocket.send(JSON.stringify(errorMessage));
 }
 
-// Handle popup requests for connection status
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+// Handle popup requests for connection status  
+browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getConnectionStatus') {
     sendResponse({ 
       connected: isConnected, 
@@ -223,7 +223,7 @@ async function handleHistoryAction(id, action, data) {
   try {
     switch (action) {
       case 'history.query':
-        const historyItems = await chrome.history.search({
+        const historyItems = await browser.history.search({
           text: data.text || '',
           startTime: data.startTime || 0,
           endTime: data.endTime || Date.now(),
@@ -233,7 +233,7 @@ async function handleHistoryAction(id, action, data) {
         break;
         
       case 'history.recent':
-        const recentItems = await chrome.history.search({
+        const recentItems = await browser.history.search({
           text: '',
           maxResults: data.count || 10
         });
@@ -253,19 +253,19 @@ async function handleTabsAction(id, action, data) {
   try {
     switch (action) {
       case 'tabs.list':
-        const tabs = await chrome.tabs.query({
+        const tabs = await browser.tabs.query({
           currentWindow: data.currentWindow || false
         });
         sendResponse(id, action, { tabs });
         break;
         
       case 'tabs.active':
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
         sendResponse(id, action, { tab: activeTab });
         break;
         
       case 'tabs.create':
-        const newTab = await chrome.tabs.create({
+        const newTab = await browser.tabs.create({
           url: data.url,
           active: data.active || false
         });
@@ -273,12 +273,12 @@ async function handleTabsAction(id, action, data) {
         break;
         
       case 'tabs.close':
-        await chrome.tabs.remove(data.tabId);
+        await browser.tabs.remove(data.tabId);
         sendResponse(id, action, { success: true });
         break;
         
       case 'tabs.update':
-        const updatedTab = await chrome.tabs.update(data.tabId, {
+        const updatedTab = await browser.tabs.update(data.tabId, {
           url: data.url,
           active: data.active
         });
@@ -298,21 +298,21 @@ async function handleContentAction(id, action, data) {
   try {
     switch (action) {
       case 'content.text':
-        const textResult = await chrome.tabs.sendMessage(data.tabId, {
+        const textResult = await browser.tabs.sendMessage(data.tabId, {
           action: 'extractText'
         });
         sendResponse(id, action, { text: textResult.text });
         break;
         
       case 'content.html':
-        const htmlResult = await chrome.tabs.sendMessage(data.tabId, {
+        const htmlResult = await browser.tabs.sendMessage(data.tabId, {
           action: 'extractHTML'
         });
         sendResponse(id, action, { html: htmlResult.html });
         break;
         
       case 'content.execute':
-        const executeResult = await chrome.tabs.sendMessage(data.tabId, {
+        const executeResult = await browser.tabs.sendMessage(data.tabId, {
           action: 'executeScript',
           script: data.script
         });
@@ -332,22 +332,22 @@ async function handleNavigationAction(id, action, data) {
   try {
     switch (action) {
       case 'navigation.go':
-        await chrome.tabs.update(data.tabId, { url: data.url });
+        await browser.tabs.update(data.tabId, { url: data.url });
         sendResponse(id, action, { success: true });
         break;
         
       case 'navigation.back':
-        await chrome.tabs.goBack(data.tabId);
+        await browser.tabs.goBack(data.tabId);
         sendResponse(id, action, { success: true });
         break;
         
       case 'navigation.forward':
-        await chrome.tabs.goForward(data.tabId);
+        await browser.tabs.goForward(data.tabId);
         sendResponse(id, action, { success: true });
         break;
         
       case 'navigation.reload':
-        await chrome.tabs.reload(data.tabId, { bypassCache: data.bypassCache || false });
+        await browser.tabs.reload(data.tabId, { bypassCache: data.bypassCache || false });
         sendResponse(id, action, { success: true });
         break;
         
@@ -364,17 +364,17 @@ async function handleBookmarksAction(id, action, data) {
   try {
     switch (action) {
       case 'bookmarks.list':
-        const bookmarks = await chrome.bookmarks.getTree();
+        const bookmarks = await browser.bookmarks.getTree();
         sendResponse(id, action, { bookmarks });
         break;
         
       case 'bookmarks.search':
-        const searchResults = await chrome.bookmarks.search(data.query);
+        const searchResults = await browser.bookmarks.search(data.query);
         sendResponse(id, action, { bookmarks: searchResults });
         break;
         
       case 'bookmarks.create':
-        const newBookmark = await chrome.bookmarks.create({
+        const newBookmark = await browser.bookmarks.create({
           parentId: data.parentId,
           title: data.title,
           url: data.url
@@ -383,7 +383,7 @@ async function handleBookmarksAction(id, action, data) {
         break;
         
       case 'bookmarks.remove':
-        await chrome.bookmarks.remove(data.bookmarkId);
+        await browser.bookmarks.remove(data.bookmarkId);
         sendResponse(id, action, { success: true });
         break;
         
@@ -396,12 +396,12 @@ async function handleBookmarksAction(id, action, data) {
 }
 
 // Start connection when extension loads
-chrome.runtime.onStartup.addListener(async () => {
+browser.runtime.onStartup.addListener(async () => {
   await loadConfig();
   connectToMCPServer();
 });
 
-chrome.runtime.onInstalled.addListener(async () => {
+browser.runtime.onInstalled.addListener(async () => {
   await loadConfig();
   connectToMCPServer();
 });

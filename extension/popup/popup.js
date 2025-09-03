@@ -16,8 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Request connection status from background script
   function updateDisplay() {
-    chrome.runtime.sendMessage({ action: 'getConnectionStatus' }, (response) => {
-      if (chrome.runtime.lastError) {
+    browser.runtime.sendMessage({ action: 'getConnectionStatus' }, (response) => {
+      if (browser.runtime.lastError) {
         updateStatus(false, 0, {});
         return;
       }
@@ -45,12 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
     testButton.textContent = 'Testing...';
     testResult.textContent = 'Sending ping...';
     
-    chrome.runtime.sendMessage({ action: 'testPing' }, (response) => {
+    browser.runtime.sendMessage({ action: 'testPing' }, (response) => {
       testButton.disabled = false;
       testButton.textContent = 'Test Connection';
       
-      if (chrome.runtime.lastError) {
-        testResult.textContent = `Error: ${chrome.runtime.lastError.message}`;
+      if (browser.runtime.lastError) {
+        testResult.textContent = `Error: ${browser.runtime.lastError.message}`;
         testResult.style.color = 'red';
         return;
       }
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Handle force reconnect button
   forceReconnectButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'forceReconnect' }, (response) => {
+    browser.runtime.sendMessage({ action: 'forceReconnect' }, (response) => {
       if (response?.success) {
         testResult.textContent = '🔄 Reconnection initiated';
         testResult.style.color = 'blue';
@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    chrome.runtime.sendMessage({ action: 'updateConfig', config: newConfig }, (response) => {
+    browser.runtime.sendMessage({ action: 'updateConfig', config: newConfig }, (response) => {
       if (response?.success) {
         testResult.textContent = '✅ Configuration saved successfully!';
         testResult.style.color = 'green';

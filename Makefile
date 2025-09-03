@@ -15,7 +15,7 @@ help:
 	@echo ""
 	@echo "Building:"
 	@echo "  build          - Build extension package"
-	@echo "  package        - Create distributable packages (XPI for Firefox, ZIP for Chrome)"
+	@echo "  package        - Create distributable packages (XPI for Firefox)"
 	@echo ""
 	@echo "Development:"
 	@echo "  dev            - Setup development environment"
@@ -69,9 +69,6 @@ package: build
 	# Package extension as XPI for Firefox
 	cd dist && zip -r packages/foxmcp-extension.xpi extension/
 	
-	# Also create ZIP for Chrome
-	cd dist && zip -r packages/foxmcp-extension.zip extension/
-	
 	# Package server
 	@mkdir -p dist/server-package
 	@cp -r server/* dist/server-package/
@@ -79,8 +76,7 @@ package: build
 	cd dist && zip -r packages/foxmcp-server.zip server-package/
 	
 	@echo "📦 Packages created:"
-	@echo "  - dist/packages/foxmcp-extension.xpi (Firefox)"
-	@echo "  - dist/packages/foxmcp-extension.zip (Chrome)"
+	@echo "  - dist/packages/foxmcp-extension.xpi"
 	@echo "  - dist/packages/foxmcp-server.zip"
 
 # Development and Running

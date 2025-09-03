@@ -47,7 +47,6 @@ htmlcov/
 extension.zip
 server.zip
 dist/
-*.crx
 *.xpi
 
 # OS
