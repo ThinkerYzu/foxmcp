@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "FoxMCP Extension",
+  "name": "FoxMCP",
   "version": "1.0.0",
   "description": "Browser extension that exposes data and functions to MCP clients via WebSocket",
   "permissions": [
@@ -23,6 +23,11 @@
   ],
   "browser_action": {
     "default_popup": "popup/popup.html",
-    "default_title": "FoxMCP Extension"
+    "default_title": "FoxMCP"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "foxmcp@codemud.org"
+    }
   }
 }

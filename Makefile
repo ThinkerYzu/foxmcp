@@ -27,6 +27,7 @@ help:
 	@echo "  test           - Run all tests"
 	@echo "  test-unit      - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
+	@echo "  test-with-firefox - Run tests with temporary Firefox profile and extension"
 	@echo "  run-tests      - Run tests with coverage report"
 	@echo ""
 	@echo "Maintenance:"
@@ -65,18 +66,18 @@ build-extension:
 package: build
 	@echo "Creating distributable packages..."
 	@mkdir -p dist/packages
-	
+
 	# Package extension as XPI for Firefox
-	cd dist && zip -r packages/foxmcp-extension.xpi extension/
-	
+	cd dist/extension && zip -r ../packages/foxmcp@codemud.org.xpi *
+
 	# Package server
 	@mkdir -p dist/server-package
 	@cp -r server/* dist/server-package/
 	@cp README.md dist/server-package/ 2>/dev/null || echo "README.md not found, skipping..."
 	cd dist && zip -r packages/foxmcp-server.zip server-package/
-	
+
 	@echo "📦 Packages created:"
-	@echo "  - dist/packages/foxmcp-extension.xpi"
+	@echo "  - dist/packages/foxmcp@codemud.org.xpi"
 	@echo "  - dist/packages/foxmcp-server.zip"
 
 # Development and Running
@@ -87,7 +88,7 @@ run-server:
 # Testing
 test: run-tests
 
-run-tests:
+run-tests: package
 	@echo "Running all tests with coverage..."
 	cd tests && python run_tests.py
 
@@ -98,6 +99,30 @@ test-unit:
 test-integration:
 	@echo "Running integration tests..."
 	cd tests && python run_tests.py integration
+
+test-with-firefox: package
+	@echo "Running tests with temporary Firefox profile and extension..."
+	@mkdir -p /tmp/foxmcp-test-profile
+	@echo 'user_pref("xpinstall.signatures.required", false);' > /tmp/foxmcp-test-profile/user.js
+	@echo "Installing extension to temporary profile..."
+	@mkdir -p /tmp/foxmcp-test-profile/extensions
+	@cp dist/packages/foxmcp@codemud.org.xpi /tmp/foxmcp-test-profile/extensions/
+	@echo "Creating temporary Firefox profile..."
+	@timeout 20 ~/tmp/ff2/bin/firefox -profile /tmp/foxmcp-test-profile -no-remote -headless >/dev/null 2>&1 &
+	@while [ ! -f /tmp/foxmcp-test-profile/extensions.json ]; do sleep 1; done
+	@sleep 1; pkill -f "[f]irefox.*foxmcp-test-profile" >/dev/null 2>&1 || true
+	@echo "Enable the extension in the profile..."
+	@jq '.addons[] |= if .id == "foxmcp@codemud.org" then .userDisabled = false | .active = true else . end' /tmp/foxmcp-test-profile/extensions.json | sponge /tmp/foxmcp-test-profile/extensions.json
+	@echo "Starting Firefox with extension (background mode)..."
+	@timeout 300 ~/tmp/ff2/bin/firefox -profile /tmp/foxmcp-test-profile -no-remote -headless >/dev/null 2>&1 &
+	@sleep 10
+	@echo "Running tests..."
+	@cd tests && python run_tests.py || true
+	@echo "Cleaning up Firefox processes and temporary profile..."
+	@pkill -f "[f]irefox.*foxmcp-test-profile" >/dev/null 2>&1 || true
+	@sleep 2
+	@rm -rf /tmp/foxmcp-test-profile
+	@echo "✅ Test with Firefox complete!"
 
 # Quality Checks
 check: lint test
@@ -130,6 +155,8 @@ clean:
 	@rm -rf dist/
 	@rm -rf tests/htmlcov/
 	@rm -rf tests/.coverage
+	@rm -rf /tmp/foxmcp-test-profile
+	@pkill -f "firefox.*foxmcp-test-profile" >/dev/null 2>&1 || true
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
