@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    .status {
+      padding: 8px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h3>FoxMCP Extension</h3>
+  
+  <div id="status" class="status disconnected">
+    Status: Disconnected
+  </div>
+  
+  <div id="retryInfo" style="margin: 5px 0; font-size: 11px; color: #666;"></div>
+  
+  <button id="testPing" style="margin: 5px 2px; padding: 5px 10px;">Test Connection</button>
+  <button id="forceReconnect" style="margin: 5px 2px; padding: 5px 10px;">Reconnect</button>
+  
+  <div id="testResult" style="margin: 10px 0; font-size: 12px;"></div>
+  
+  <details style="margin: 10px 0;">
+    <summary style="cursor: pointer; font-size: 12px;">Configuration</summary>
+    <div style="padding: 10px; border: 1px solid #ddd; margin-top: 5px;">
+      <label style="display: block; margin: 5px 0;">
+        Server URL:
+        <input type="text" id="serverUrl" style="width: 100%; margin-top: 2px;" />
+      </label>
+      <label style="display: block; margin: 5px 0;">
+        Retry Interval (ms):
+        <input type="number" id="retryInterval" min="1000" max="60000" style="width: 100%; margin-top: 2px;" />
+      </label>
+      <label style="display: block; margin: 5px 0;">
+        Max Retry Attempts (-1 for infinite):
+        <input type="number" id="maxRetries" min="-1" max="100" style="width: 100%; margin-top: 2px;" />
+      </label>
+      <label style="display: block; margin: 5px 0;">
+        Ping Timeout (ms):
+        <input type="number" id="pingTimeout" min="1000" max="30000" style="width: 100%; margin-top: 2px;" />
+      </label>
+      <button id="saveConfig" style="margin: 10px 0; padding: 5px 15px;">Save Configuration</button>
+    </div>
+  </details>
+  
+  <div class="info">
+    <p>This extension exposes browser data and functions to MCP clients via WebSocket connection.</p>
+    <p id="serverInfo">Server: ws://localhost:8765</p>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

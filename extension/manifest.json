@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "FoxMCP Extension",
+  "version": "1.0.0",
+  "description": "Browser extension that exposes data and functions to MCP clients via WebSocket",
+  "permissions": [
+    "tabs",
+    "history", 
+    "bookmarks",
+    "activeTab",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "FoxMCP Extension"
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}

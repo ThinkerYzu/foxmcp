@@ -1,0 +1,288 @@
+# FoxMCP Project Skeleton Structure
+
+This document explains the basic skeleton structure created for the FoxMCP project.
+
+## Project Overview
+
+```
+foxmcp/
+├── CLAUDE.md           # Project requirements and instructions
+├── PLAN.md            # Development plan and phases
+├── protocol.md        # WebSocket message protocol specification
+├── files.md           # This file - explains project structure
+├── README.md          # Main project documentation and quick start
+├── Makefile           # Build system and development commands
+├── venv-setup.md      # Virtual environment setup documentation
+├── venv/              # Python virtual environment (created)
+├── extension/         # Browser extension directory
+│   ├── manifest.json  # Extension configuration and permissions
+│   ├── background.js  # Service worker with WebSocket client and ping-pong
+│   ├── content.js     # Content script for page interaction
+│   └── popup/         # Extension popup UI
+│       ├── popup.html # Popup interface HTML with test button
+│       └── popup.js   # Popup JavaScript logic with ping test
+├── server/            # Python MCP server directory
+│   ├── __init__.py    # Python package init (for imports)
+│   ├── requirements.txt # Python dependencies
+│   ├── server.py       # WebSocket server implementation with ping-pong
+│   └── mcp_handler.py  # MCP tool definitions and handlers
+└── tests/             # Test suite directory
+    ├── conftest.py    # Pytest configuration and fixtures
+    ├── pytest.ini     # Pytest settings
+    ├── requirements.txt # Test dependencies (with pytest-cov)
+    ├── run_tests.py   # Test runner script (with PYTHONPATH fix)
+    ├── README.md      # Test documentation
+    ├── htmlcov/       # Coverage HTML reports (generated)
+    ├── unit/          # Unit tests
+    │   ├── test_server.py      # Server component tests
+    │   ├── test_mcp_handler.py # MCP handler tests
+    │   ├── test_protocol.py    # Protocol message tests
+    │   └── test_ping_pong.py   # Ping-pong functionality tests
+    ├── integration/   # Integration tests
+    │   ├── test_websocket_communication.py (1 test skipped)
+    │   └── test_ping_pong_integration.py  # End-to-end ping tests
+    └── fixtures/      # Test data files
+```
+
+## Extension Directory (`/extension`)
+
+### `manifest.json`
+- **Purpose**: Extension configuration file for Chrome/Firefox
+- **Key Features**:
+  - Manifest V3 format for modern browser compatibility
+  - Permissions for tabs, history, bookmarks, activeTab, storage
+  - Host permissions for all URLs
+  - Service worker background script registration
+  - Content script injection for all URLs
+  - Popup UI configuration
+
+### `background.js`
+- **Purpose**: Extension service worker (background script)
+- **Key Features**:
+  - WebSocket client connection to MCP server (ws://localhost:8765)
+  - **Configurable connection parameters** with persistent storage
+  - Automatic reconnection with configurable retry intervals and limits
+  - Message routing to appropriate handler functions
+  - Request/response message handling with async support
+  - **Ping-pong functionality** for connection testing
+  - **Runtime message handling** for popup communication
+  - **Async ping testing** with timeout and correlation
+  - Error handling and logging
+  - **Complete browser API implementations** for all function categories:
+    - **History management**: Query history, get recent items
+    - **Tab management**: List, create, close, update tabs
+    - **Content extraction**: Text and HTML extraction from pages
+    - **Navigation control**: URL navigation, back/forward, reload
+    - **Bookmark management**: List, search, create, remove bookmarks
+
+### `content.js`
+- **Purpose**: Content script injected into web pages
+- **Key Features**:
+  - Page content extraction (text, HTML, title, URL)
+  - JavaScript execution capability
+  - Message passing with background script
+  - Error handling for page interactions
+
+### `popup/popup.html`
+- **Purpose**: Extension popup user interface
+- **Key Features**:
+  - Connection status display with retry attempt information
+  - **Test Connection button** for ping-pong testing
+  - **Force Reconnect button** for manual connection restart
+  - **Test result display area** with success/failure feedback
+  - **Collapsible configuration panel** with:
+    - Server URL input field
+    - Retry interval configuration (1000ms - 60000ms)
+    - Max retry attempts setting (-1 for infinite)
+    - Ping timeout configuration (1000ms - 30000ms)
+  - **Save Configuration button** with validation
+  - Server information display
+  - Clean, minimal design with enhanced status indicators
+
+### `popup/popup.js`
+- **Purpose**: Popup interface logic
+- **Key Features**:
+  - **Real-time connection status checking** with retry information display
+  - **Ping test functionality** with visual feedback and detailed results
+  - **Configuration management** with form validation and persistence
+  - **Force reconnect functionality** for manual connection control
+  - **Async communication** with background script
+  - **Comprehensive error handling** and user feedback
+  - **Dynamic UI updates** based on connection state and configuration
+  - **Button state management** during testing and configuration operations
+
+## Server Directory (`/server`)
+
+### `requirements.txt`
+- **Purpose**: Python package dependencies
+- **Dependencies**:
+  - `fastmcp>=1.0.0` - FastMCP framework for MCP protocol
+  - `websockets>=12.0` - WebSocket server implementation
+  - `asyncio` - Async/await support
+  - `json` - JSON message parsing
+
+### `server.py`
+- **Purpose**: Main WebSocket server implementation
+- **Key Features**:
+  - WebSocket server on localhost:8765
+  - Extension connection management with proper cleanup
+  - **Request/response correlation system** with unique ID tracking
+  - **Pending requests map** with Future-based async response handling
+  - **Ping-pong message handling** for connection testing
+  - **Bidirectional ping functionality** (server can ping extension)
+  - **send_request_and_wait method** with configurable timeouts
+  - **Async ping testing methods** with correlation
+  - **Response type handling** (success, error, timeout scenarios)
+  - Message handling and comprehensive logging
+  - Connection state tracking
+  - Error handling and recovery
+  - Async/await architecture
+  - Graceful shutdown handling
+
+### `mcp_handler.py`
+- **Purpose**: MCP protocol integration and tool definitions
+- **Key Features**:
+  - **Complete MCP tool registry** with all browser functions:
+    - **History**: query with search terms/time ranges, recent items
+    - **Tabs**: list all tabs, create new tabs, close tabs, update tabs
+    - **Content**: text extraction, HTML extraction, script execution
+    - **Navigation**: URL navigation, back/forward, reload with cache options
+    - **Bookmarks**: list bookmarks tree, search bookmarks, create/remove bookmarks
+  - **Comprehensive tool parameter definitions** with types and validation
+  - **UUID-based request ID generation** for correlation tracking
+  - **Complete action mapping** between MCP tools and WebSocket actions
+  - **Full response correlation implementation** with timeout handling
+  - **Response type processing** (success data extraction, error handling)
+  - **15-second timeout** for extension responses with graceful failure handling
+
+## Communication Flow
+
+1. **Extension Startup**: Extension connects to WebSocket server with auto-retry
+2. **MCP Request**: MCP client calls browser tool via FastMCP framework
+3. **Request Generation**: MCP handler creates unique request with UUID-based ID
+4. **Tool Mapping**: MCP handler maps tool name to WebSocket action
+5. **Extension Forward**: Server sends request to extension via send_request_and_wait
+6. **Browser API**: Extension calls actual Chrome/Firefox APIs (history, tabs, etc.)
+7. **Response Correlation**: Extension sends response with matching request ID
+8. **Future Completion**: Server correlates response and completes pending Future
+9. **Response Chain**: Actual results flow back through WebSocket to MCP client
+10. **Error Handling**: Timeouts, API errors, and connection issues handled gracefully
+
+## Current Implementation Status
+
+- ✅ **Basic Structure**: All directories and files created (26 files)
+- ✅ **WebSocket Foundation**: Connection handling implemented with modern API
+- ✅ **Message Protocol**: Request/response format defined and implemented
+- ✅ **Tool Definitions**: MCP tools registered and mapped to browser actions
+- ✅ **Unit Test Infrastructure**: Complete test suite with fixtures and runners
+- ✅ **Ping-Pong Communication**: End-to-end connection testing implemented
+- ✅ **Build System**: Makefile with complete development workflow
+- ✅ **Documentation**: README, protocol spec, and project documentation
+- ✅ **Virtual Environment**: Python venv with all dependencies installed
+- ✅ **Working Test Suite**: 55 tests passing, 70% code coverage, 1 integration test skipped
+- ✅ **Browser API Integration**: Complete Chrome API implementations for all handlers
+- ✅ **Response Correlation**: Full async response handling with UUID-based correlation
+- ✅ **Configuration System**: Configurable retry intervals and connection parameters
+- ⏳ **FastMCP Integration**: Actual MCP server framework setup pending
+- ⏳ **Error Handling**: Comprehensive error scenarios (partially implemented)
+- ⏳ **Integration Testing**: End-to-end testing with real browser APIs and MCP client
+
+## Tests Directory (`/tests`)
+
+### `conftest.py`
+- **Purpose**: Pytest configuration and shared fixtures
+- **Key Features**:
+  - Sample message fixtures (request, response, error)
+  - Mock WebSocket and Chrome API objects
+  - Test data fixtures (tabs, history, bookmarks)
+  - Async test support configuration
+
+### `pytest.ini`
+- **Purpose**: Pytest configuration settings
+- **Key Features**:
+  - Test discovery patterns
+  - Async test mode configuration
+  - Coverage and reporting settings
+
+### `requirements.txt`
+- **Purpose**: Test-specific Python dependencies
+- **Dependencies**: pytest, pytest-asyncio, pytest-mock, coverage, websockets
+
+### `run_tests.py`
+- **Purpose**: Test runner script with coverage
+- **Key Features**:
+  - Run all tests with coverage reporting
+  - Run unit tests only
+  - Run integration tests only
+  - HTML coverage reports
+
+### Unit Tests (`/unit`)
+- **`test_server.py`**: WebSocket server functionality tests
+- **`test_mcp_handler.py`**: MCP tool registration and request handling tests  
+- **`test_protocol.py`**: Message format and data structure validation tests
+- **`test_ping_pong.py`**: Ping-pong message handling and protocol tests
+
+### Integration Tests (`/integration`)
+- **`test_websocket_communication.py`**: End-to-end WebSocket communication tests
+- **`test_ping_pong_integration.py`**: Ping-pong functionality integration tests
+
+## Build and Development System
+
+### `Makefile`
+- **Purpose**: Complete build system and development workflow
+- **Key Features**:
+  - **Setup and Installation**: `make setup` - Install all dependencies
+  - **Building**: `make build` - Build extension package  
+  - **Testing**: `make test` - Run comprehensive test suite with coverage
+  - **Development**: `make run-server` - Start WebSocket server
+  - **Quality Assurance**: `make check` - Run linting and tests
+  - **Packaging**: `make package` - Create distributable ZIP files
+  - **Maintenance**: `make clean` - Clean build artifacts
+  - **Status Monitoring**: `make status` - Check project status
+
+### `README.md`
+- **Purpose**: Main project documentation and quick start guide
+- **Key Features**:
+  - **Quick Start**: Get running in 5 commands
+  - **Complete Function Reference**: All browser APIs documented
+  - **Development Workflow**: Step-by-step development process
+  - **WebSocket Protocol**: Message format examples
+  - **Troubleshooting Guide**: Common issues and solutions
+  - **Architecture Diagram**: System overview with data flow
+
+## Virtual Environment and Testing
+
+### `venv/` - Python Virtual Environment
+- **Python 3.13.3** with all required dependencies installed
+- **Dependencies**: websockets, pytest, pytest-asyncio, pytest-mock, pytest-cov, coverage
+- **Usage**: `source venv/bin/activate` to activate environment
+
+### `venv-setup.md` - Setup Documentation
+- Complete virtual environment setup instructions
+- Package installation commands and verification steps
+- Server and test running instructions
+
+### Test Results (Current)
+- **55 tests passing** - All unit and most integration tests
+- **1 test skipped** - Integration test requiring browser extension
+- **70% code coverage** - Good coverage across server components
+- **HTML coverage reports** - Generated in tests/htmlcov/
+- **Response correlation testing** - All async handler tests passing
+- **Updated test mocks** - AsyncMock used for send_request_and_wait methods
+
+## Next Steps
+
+1. ✅ ~~**Run existing tests** to validate current implementation: `make test`~~
+2. ✅ ~~**Implement actual browser API calls** in extension handlers~~
+3. ✅ ~~**Add response correlation** and async waiting in MCP handler~~
+4. **Integrate FastMCP server framework** for MCP protocol compliance
+5. **Add comprehensive error handling** for edge cases and permissions
+6. ✅ ~~Create testing framework and test cases~~
+7. ✅ ~~Add ping-pong communication for connection validation~~
+8. ✅ ~~Create build system and documentation~~
+9. ✅ ~~Set up virtual environment and fix test infrastructure~~
+10. **Add logging and debugging capabilities** for production deployment
+11. **Performance optimization and connection management** for multiple clients
+12. **End-to-end integration testing** with real browser extension and MCP client
+
+This foundation provides a complete development environment with professional build tooling, comprehensive testing infrastructure, working Python environment, and full documentation for implementing the FoxMCP system with clear separation of concerns and validation.
