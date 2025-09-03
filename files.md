@@ -47,17 +47,16 @@ foxmcp/
 ## Extension Directory (`/extension`)
 
 ### `manifest.json`
-- **Purpose**: Extension configuration file for Chrome/Firefox
+- **Purpose**: Extension configuration file for Firefox
 - **Key Features**:
-  - Manifest V3 format for modern browser compatibility
-  - Permissions for tabs, history, bookmarks, activeTab, storage
-  - Host permissions for all URLs
-  - Service worker background script registration
+  - Manifest V2 format for Firefox WebExtensions compatibility
+  - Permissions for tabs, history, bookmarks, activeTab, storage, and all URLs
+  - Persistent background script registration
   - Content script injection for all URLs
-  - Popup UI configuration
+  - Browser action popup UI configuration
 
 ### `background.js`
-- **Purpose**: Extension service worker (background script)
+- **Purpose**: Extension persistent background script
 - **Key Features**:
   - WebSocket client connection to MCP server (ws://localhost:8765)
   - **Configurable connection parameters** with persistent storage
@@ -68,19 +67,19 @@ foxmcp/
   - **Runtime message handling** for popup communication
   - **Async ping testing** with timeout and correlation
   - Error handling and logging
-  - **Complete browser API implementations** for all function categories:
-    - **History management**: Query history, get recent items
-    - **Tab management**: List, create, close, update tabs
-    - **Content extraction**: Text and HTML extraction from pages
-    - **Navigation control**: URL navigation, back/forward, reload
-    - **Bookmark management**: List, search, create, remove bookmarks
+  - **Complete WebExtensions API implementations** for all function categories:
+    - **History management**: Query history, get recent items via browser.history
+    - **Tab management**: List, create, close, update tabs via browser.tabs
+    - **Content extraction**: Text and HTML extraction from pages via browser.tabs.sendMessage
+    - **Navigation control**: URL navigation, back/forward, reload via browser.tabs
+    - **Bookmark management**: List, search, create, remove bookmarks via browser.bookmarks
 
 ### `content.js`
 - **Purpose**: Content script injected into web pages
 - **Key Features**:
-  - Page content extraction (text, HTML, title, URL)
-  - JavaScript execution capability
-  - Message passing with background script
+  - Page content extraction (text, HTML) via browser.runtime.onMessage
+  - JavaScript execution capability with eval()
+  - Message passing with background script using WebExtensions messaging
   - Error handling for page interactions
 
 ### `popup/popup.html`
@@ -104,10 +103,10 @@ foxmcp/
 - **Key Features**:
   - **Real-time connection status checking** with retry information display
   - **Ping test functionality** with visual feedback and detailed results
-  - **Configuration management** with form validation and persistence
+  - **Configuration management** with form validation and persistence via browser.storage
   - **Force reconnect functionality** for manual connection control
-  - **Async communication** with background script
-  - **Comprehensive error handling** and user feedback
+  - **Async communication** with background script using browser.runtime.sendMessage
+  - **Comprehensive error handling** with browser.runtime.lastError checks
   - **Dynamic UI updates** based on connection state and configuration
   - **Button state management** during testing and configuration operations
 
@@ -157,12 +156,12 @@ foxmcp/
 
 ## Communication Flow
 
-1. **Extension Startup**: Extension connects to WebSocket server with auto-retry
+1. **Extension Startup**: Firefox extension connects to WebSocket server with auto-retry
 2. **MCP Request**: MCP client calls browser tool via FastMCP framework
 3. **Request Generation**: MCP handler creates unique request with UUID-based ID
 4. **Tool Mapping**: MCP handler maps tool name to WebSocket action
 5. **Extension Forward**: Server sends request to extension via send_request_and_wait
-6. **Browser API**: Extension calls actual Chrome/Firefox APIs (history, tabs, etc.)
+6. **WebExtensions API**: Extension calls Firefox WebExtensions APIs (browser.history, browser.tabs, etc.)
 7. **Response Correlation**: Extension sends response with matching request ID
 8. **Future Completion**: Server correlates response and completes pending Future
 9. **Response Chain**: Actual results flow back through WebSocket to MCP client
@@ -180,12 +179,12 @@ foxmcp/
 - ✅ **Documentation**: README, protocol spec, and project documentation
 - ✅ **Virtual Environment**: Python venv with all dependencies installed
 - ✅ **Working Test Suite**: 55 tests passing, 70% code coverage, 1 integration test skipped
-- ✅ **Browser API Integration**: Complete Chrome API implementations for all handlers
+- ✅ **Firefox WebExtensions API Integration**: Complete browser.* API implementations for all handlers
 - ✅ **Response Correlation**: Full async response handling with UUID-based correlation
 - ✅ **Configuration System**: Configurable retry intervals and connection parameters
 - ⏳ **FastMCP Integration**: Actual MCP server framework setup pending
 - ⏳ **Error Handling**: Comprehensive error scenarios (partially implemented)
-- ⏳ **Integration Testing**: End-to-end testing with real browser APIs and MCP client
+- ⏳ **Integration Testing**: End-to-end testing with real Firefox extension and MCP client
 
 ## Tests Directory (`/tests`)
 
@@ -264,7 +263,7 @@ foxmcp/
 
 ### Test Results (Current)
 - **55 tests passing** - All unit and most integration tests
-- **1 test skipped** - Integration test requiring browser extension
+- **1 test skipped** - Integration test requiring Firefox extension
 - **70% code coverage** - Good coverage across server components
 - **HTML coverage reports** - Generated in tests/htmlcov/
 - **Response correlation testing** - All async handler tests passing
@@ -283,6 +282,6 @@ foxmcp/
 9. ✅ ~~Set up virtual environment and fix test infrastructure~~
 10. **Add logging and debugging capabilities** for production deployment
 11. **Performance optimization and connection management** for multiple clients
-12. **End-to-end integration testing** with real browser extension and MCP client
+12. **End-to-end integration testing** with real Firefox extension and MCP client
 
 This foundation provides a complete development environment with professional build tooling, comprehensive testing infrastructure, working Python environment, and full documentation for implementing the FoxMCP system with clear separation of concerns and validation.

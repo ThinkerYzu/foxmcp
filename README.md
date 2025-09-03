@@ -1,6 +1,6 @@
-# FoxMCP - Browser Extension MCP Integration
+# FoxMCP - Firefox Extension MCP Integration
 
-A browser extension that exposes browser functionality (history, tabs, bookmarks, navigation, content) to MCP (Model Context Protocol) clients via WebSocket communication.
+A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content) to MCP (Model Context Protocol) clients via WebSocket communication.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ make load-extension
 
 ```
 foxmcp/
-├── extension/          # Browser extension (Chrome/Firefox)
+├── extension/          # Firefox extension (WebExtensions API)
 ├── server/            # Python WebSocket server  
 ├── tests/             # Unit and integration tests
 ├── Makefile          # Build and development commands
@@ -168,7 +168,7 @@ make status            # Show project status
 - **Port:** 8765 (default)
 - **Protocol:** WebSocket (ws://)
 
-### Extension Permissions
+### Firefox Extension Permissions
 - `tabs` - Tab management
 - `history` - Browser history access
 - `bookmarks` - Bookmark management  
@@ -223,32 +223,32 @@ MIT License - see LICENSE file for details.
 ## Implementation Status
 
 ### ✅ Completed Features
-- **Browser Extension**: Complete Chrome extension with manifest V3, background service worker, content script, and popup UI
+- **Firefox Extension**: Complete Firefox extension with manifest V2, persistent background script, content script, and popup UI
 - **WebSocket Communication**: Bidirectional communication with auto-reconnect and configurable retry intervals
-- **Browser API Integration**: Full implementations for history, tabs, content, navigation, and bookmarks APIs
+- **Browser API Integration**: Full WebExtensions API implementations for history, tabs, content, navigation, and bookmarks
 - **Response Correlation**: UUID-based request/response correlation with async handling and timeouts
 - **Configuration System**: Persistent configuration with UI controls for connection parameters
 - **Test Infrastructure**: Comprehensive unit and integration tests with 70% code coverage
-- **Build System**: Complete Makefile with development, testing, and packaging commands
+- **Build System**: Complete Makefile with development, testing, and XPI packaging commands
 
 ### ⏳ In Progress
 - **FastMCP Integration**: MCP protocol server implementation (framework ready, needs integration)
 
 ### 📋 Pending
-- **End-to-end Testing**: Integration testing with real browser extension and MCP client
+- **End-to-end Testing**: Integration testing with real Firefox extension and MCP client
 - **Production Deployment**: Enhanced logging and multi-client support
 
 ### 📊 Test Results
-- **55 tests passing**, 1 skipped (requires live browser extension)
+- **55 tests passing**, 1 skipped (requires live Firefox extension)
 - **70% code coverage** across server components
-- **All browser API handlers implemented** and tested
+- **All Firefox WebExtensions API handlers implemented** and tested
 
 ## Architecture
 
 ```
 ┌─────────────────┐    WebSocket     ┌──────────────────┐    MCP Protocol    ┌─────────────┐
 │                 │   (Port 8765)    │                  │                    │             │
-│  Browser        │◄────────────────►│  Python Server   │◄──────────────────►│ MCP Client  │
+│  Firefox        │◄────────────────►│  Python Server   │◄──────────────────►│ MCP Client  │
 │  Extension      │                  │  (FastMCP)       │                    │             │
 │                 │                  │                  │                    │             │
 └─────────────────┘                  └──────────────────┘                    └─────────────┘
@@ -256,7 +256,8 @@ MIT License - see LICENSE file for details.
         ▼
 ┌─────────────────┐
 │                 │
-│  Browser APIs   │
+│ WebExtensions   │
+│ APIs            │
 │  - Tabs         │
 │  - History      │
 │  - Bookmarks    │
@@ -265,4 +266,4 @@ MIT License - see LICENSE file for details.
 └─────────────────┘
 ```
 
-The extension acts as a bridge between browser APIs and MCP clients, enabling AI assistants and other tools to interact with browser functionality programmatically.
+The Firefox extension acts as a bridge between WebExtensions APIs and MCP clients, enabling AI assistants and other tools to interact with browser functionality programmatically.
