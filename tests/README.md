@@ -51,17 +51,17 @@ python run_tests.py unit
 python run_tests.py integration
 ```
 
-### Run Tests with Firefox Extension
+### Run Integration Tests (includes Firefox Extension)
 
 ```bash
 # From project root directory
-make test-with-firefox
+make test-integration
 
-# With custom Firefox path
-FIREFOX_PATH=/path/to/firefox make test-with-firefox
+# With custom Firefox path (if needed)
+FIREFOX_PATH=/path/to/firefox make test-integration
 ```
 
-This creates a temporary Firefox profile, installs the extension, runs Firefox in background, and executes the test suite with the extension loaded.
+The integration tests automatically create temporary Firefox profiles, install the extension, and run comprehensive testing with proper resource cleanup.
 
 ### Run Tests with Coverage
 
@@ -81,7 +81,7 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
 
 - **test_mcp_handler.py**: Tests MCP integration
   - Tool registration
-  - Request forwarding  
+  - Request forwarding
   - Action mapping
   - Parameter validation
 
@@ -133,7 +133,7 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - Concurrent ping operations
   - Protocol compliance verification
 
-- **test_mcp_integration.py**: Tests FastMCP server integration  
+- **test_mcp_integration.py**: Tests FastMCP server integration
   - MCP tools initialization and configuration
   - Server startup with dual port architecture (WebSocket + MCP)
   - MCP tool call simulation with mock WebSocket responses
@@ -171,10 +171,10 @@ def test_new_functionality(self, fixture_name):
     """Test description"""
     # Arrange
     input_data = {"key": "value"}
-    
+
     # Act
     result = function_under_test(input_data)
-    
+
     # Assert
     assert result["status"] == "success"
 ```
@@ -267,8 +267,8 @@ All tests must pass before merging changes.
 For comprehensive testing including Firefox integration:
 
 ```bash
-# Run all tests with coverage and Firefox integration
-FIREFOX_PATH=/path/to/firefox make test-with-firefox
+# Run all tests with coverage
+make test
 
 # Run just integration tests
 python -m pytest integration/ -v

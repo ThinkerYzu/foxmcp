@@ -15,8 +15,8 @@ make run-server
 # In another terminal, run tests
 make test
 
-# Run tests with Firefox extension loaded
-make test-with-firefox
+# Run integration tests (includes Firefox extension testing)
+make test-integration
 
 # Load extension in browser
 make load-extension
@@ -297,9 +297,6 @@ The project includes comprehensive test coverage with **91 tests** and **74% cod
 ### Running Tests
 
 ```bash
-# Run all tests with Firefox integration
-make test-with-firefox
-
 # Run all tests with coverage
 make test
 
@@ -308,9 +305,6 @@ make test-unit
 
 # Run integration tests only
 make test-integration
-
-# Custom Firefox path (recommended for testing)
-FIREFOX_PATH=~/tmp/ff2/bin/firefox make test-with-firefox
 
 # Run specific integration test suites
 cd tests && python -m pytest integration/test_live_server_communication.py -v
@@ -373,7 +367,7 @@ This enables **automated testing** of storage synchronization without browser au
 1. **Port conflicts resolved**: Tests now use dynamic port allocation
 2. Install test dependencies: `make setup`
 3. Check Python version compatibility (requires Python 3.7+)
-4. For Firefox tests: Ensure custom Firefox path is correct: `FIREFOX_PATH=/path/to/firefox make test-with-firefox`
+4. For Firefox integration tests: Set custom Firefox path if needed: `FIREFOX_PATH=/path/to/firefox make test-integration`
 
 ### Build Issues
 1. Clean and rebuild: `make clean && make build`

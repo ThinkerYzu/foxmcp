@@ -274,6 +274,8 @@ foxmcp/
   - **Setup and Installation**: `make setup` - Install all dependencies
   - **Building**: `make build` - Build extension package  
   - **Testing**: `make test` - Run comprehensive test suite with coverage
+  - **Unit Testing**: `make test-unit` - Run unit tests only (fast)
+  - **Integration Testing**: `make test-integration` - Run integration tests with Firefox automation
   - **Development**: `make run-server` - Start WebSocket server
   - **Quality Assurance**: `make check` - Run linting and tests
   - **Packaging**: `make package` - Create distributable ZIP files
