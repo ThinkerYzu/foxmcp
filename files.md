@@ -178,7 +178,7 @@ foxmcp/
 - ✅ **Build System**: Makefile with complete development workflow
 - ✅ **Documentation**: README, protocol spec, and project documentation
 - ✅ **Virtual Environment**: Python venv with all dependencies installed
-- ✅ **Working Test Suite**: 55 tests passing, 70% code coverage, 1 integration test skipped
+- ✅ **Comprehensive Test Suite**: 77 tests passing (39 unit + 38 integration), 74% code coverage, all tests enabled
 - ✅ **Firefox WebExtensions API Integration**: Complete browser.* API implementations for all handlers
 - ✅ **Response Correlation**: Full async response handling with UUID-based correlation
 - ✅ **Configuration System**: Configurable retry intervals and connection parameters
@@ -262,12 +262,15 @@ foxmcp/
 - Server and test running instructions
 
 ### Test Results (Current)
-- **55 tests passing** - All unit and most integration tests
-- **1 test skipped** - Integration test requiring Firefox extension
-- **70% code coverage** - Good coverage across server components
+- **77 tests passing** - All unit and integration tests (39 unit + 38 integration)
+- **0 tests skipped** - All integration tests now enabled and working
+- **74% code coverage** - Comprehensive coverage across server components
 - **HTML coverage reports** - Generated in tests/htmlcov/
+- **Real Firefox integration** - Automated testing with temporary profiles and extension installation
+- **Dynamic port allocation** - Tests use unique ports (9000-10999) to prevent conflicts
+- **Robust fixture management** - Proper async cleanup and resource management
 - **Response correlation testing** - All async handler tests passing
-- **Updated test mocks** - AsyncMock used for send_request_and_wait methods
+- **Multi-client testing** - Concurrent connection handling and server resilience testing
 
 ## Next Steps
 

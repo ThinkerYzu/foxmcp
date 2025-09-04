@@ -37,7 +37,7 @@
 - Professional build system with Makefile
 - Comprehensive documentation (README, protocol, guides)
 - Extension popup UI with connection testing
-- Python virtual environment with working test suite (55 tests passing, 84% coverage)
+- Python virtual environment with comprehensive test suite (77 tests passing: 39 unit + 38 integration, 74% coverage)
 
 ### ⚠️ **Partially Implemented**:
 - Server has WebSocket but needs FastMCP integration

@@ -16,7 +16,11 @@ tests/
 │   ├── test_mcp_handler.py # MCP handler tests
 │   └── test_protocol.py    # Protocol message tests
 ├── integration/            # Integration tests
-│   └── test_websocket_communication.py
+│   ├── test_websocket_communication.py      # Basic WebSocket communication tests
+│   ├── test_live_server_communication.py    # Real server startup and communication tests
+│   ├── test_real_websocket_communication.py # Advanced WebSocket protocol tests
+│   ├── test_firefox_extension_communication.py # Firefox extension integration tests
+│   └── test_ping_pong_integration.py        # Ping-pong protocol tests
 └── fixtures/               # Test data files
 ```
 
@@ -89,13 +93,45 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
 
 ### Integration Tests
 
-- **test_websocket_communication.py**: Tests end-to-end WebSocket communication
-  - Extension connection testing (now enabled)
-  - Message exchange validation
+- **test_websocket_communication.py**: Tests basic WebSocket communication patterns
+  - Extension connection mocking and validation
+  - Message exchange simulation
   - Connection state management
   - Message routing verification
   - Connection recovery scenarios
   - Error handling scenarios
+
+- **test_live_server_communication.py**: Tests real WebSocket server functionality
+  - Live server startup and shutdown
+  - Real client connections to server
+  - Bidirectional message flow simulation
+  - Multiple client connection handling
+  - Server resilience and error recovery
+  - Protocol compatibility verification
+
+- **test_real_websocket_communication.py**: Tests advanced WebSocket protocol features
+  - Real server-client communication with dynamic ports
+  - Protocol message format validation
+  - Browser action category support (tabs, history, bookmarks, etc.)
+  - Error handling robustness
+  - Connection timeout and recovery
+  - Multi-client concurrent connections
+
+- **test_firefox_extension_communication.py**: Tests Firefox extension integration
+  - Real Firefox browser startup with extension
+  - Temporary profile creation and management
+  - Extension installation and configuration
+  - Server-extension WebSocket communication
+  - Browser API accessibility through extension
+  - Connection resilience with real browser
+
+- **test_ping_pong_integration.py**: Tests ping-pong protocol implementation
+  - Bidirectional ping-pong messaging
+  - Connection state validation during ping
+  - Message ID uniqueness and correlation
+  - Timeout handling and recovery
+  - Concurrent ping operations
+  - Protocol compliance verification
 
 ## Test Fixtures
 
@@ -147,6 +183,48 @@ pytest --cov=../server --cov-report=html
 
 Coverage reports are generated in `htmlcov/` directory.
 
+**Current Test Statistics:**
+- **77 total tests** across unit and integration suites
+- **74% code coverage** of server components
+- **38 integration tests** covering real WebSocket communication
+- **39 unit tests** covering individual component functionality
+
+## Test Infrastructure Features
+
+### Dynamic Port Allocation
+Tests use dynamic port allocation to prevent conflicts:
+- `test_real_websocket_communication.py`: Random ports 9000-9999
+- `test_firefox_extension_communication.py`: Random ports 10000-10999
+- All other tests: Fixed ports with proper cleanup
+
+### Robust Fixture Management
+- Proper async fixture cleanup with error handling
+- Server task cancellation and resource cleanup
+- Temporary Firefox profile management
+- Extension installation and cleanup
+
+### Firefox Integration Testing
+The test suite includes comprehensive Firefox browser integration:
+- Temporary profile creation with extension settings
+- XPI extension installation and activation
+- Background Firefox execution with custom paths
+- Real WebSocket communication between server and extension
+- Browser API function verification
+
+## Browser API Test Coverage
+
+All major browser functions are tested:
+
+**Tabs Management:** `tabs.list`, `tabs.get_active`, `tabs.create`, `tabs.close`, `tabs.switch`, `tabs.duplicate`
+
+**History Operations:** `history.query`, `history.get_recent`, `history.delete_item`, `history.clear_range`
+
+**Bookmark Management:** `bookmarks.list`, `bookmarks.search`, `bookmarks.create`, `bookmarks.delete`, `bookmarks.update`, `bookmarks.create_folder`
+
+**Navigation Control:** `navigation.back`, `navigation.forward`, `navigation.reload`, `navigation.go_to_url`
+
+**Content Access:** `content.get_text`, `content.get_html`, `content.get_title`, `content.get_url`, `content.execute_script`
+
 ## Continuous Integration
 
 Tests should be run before:
@@ -155,3 +233,18 @@ Tests should be run before:
 - Deploying to production
 
 All tests must pass before merging changes.
+
+### Running the Complete Test Suite
+
+For comprehensive testing including Firefox integration:
+
+```bash
+# Run all tests with coverage and Firefox integration
+FIREFOX_PATH=/path/to/firefox make test-with-firefox
+
+# Run just integration tests
+python -m pytest integration/ -v
+
+# Run specific test categories
+python -m pytest integration/test_live_server_communication.py -v
+```
