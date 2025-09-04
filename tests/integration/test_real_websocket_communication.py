@@ -32,7 +32,8 @@ class TestRealWebSocketCommunication:
         # Use a different port for each test to avoid conflicts
         import random
         port = random.randint(9000, 9999)
-        server = FoxMCPServer(host="localhost", port=port)
+        mcp_port = random.randint(5000, 5999)  # Different range for MCP ports
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)  # Disable MCP for WebSocket tests
         
         # Start server in background task
         server_task = asyncio.create_task(server.start_server())

@@ -1,6 +1,6 @@
 # FoxMCP - Firefox Extension MCP Integration
 
-A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content) to MCP (Model Context Protocol) clients via WebSocket communication.
+A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content) to MCP (Model Context Protocol) clients via WebSocket communication. Features FastMCP server integration for seamless MCP tool access.
 
 ## Quick Start
 
@@ -133,6 +133,61 @@ All communication uses JSON messages over WebSocket:
 ```
 
 See `protocol.md` for complete message specifications.
+
+## MCP Integration
+
+FoxMCP now includes FastMCP integration that transforms browser functions into callable MCP tools:
+
+### MCP Server
+- **WebSocket Server**: Port 8765 (default) for Firefox extension communication
+- **MCP Server**: Port 3000 (default) for MCP client connections
+- **FastMCP Tools**: All browser functions exposed as MCP tools
+
+### Available MCP Tools
+
+#### Tab Management
+- `tabs_list()` - List all open tabs
+- `tabs_create(url, active=True, pinned=False)` - Create new tab
+- `tabs_close(tab_id)` - Close specific tab
+- `tabs_switch(tab_id)` - Switch to specific tab
+
+#### History Operations  
+- `history_query(query, max_results=50)` - Search browser history
+- `history_get_recent(count=10)` - Get recent history items
+- `history_delete_item(url)` - Delete specific history item
+
+#### Bookmark Management
+- `bookmarks_list(folder_id=None)` - List bookmarks
+- `bookmarks_search(query)` - Search bookmarks  
+- `bookmarks_create(title, url, parent_id=None)` - Create bookmark
+- `bookmarks_delete(bookmark_id)` - Delete bookmark
+
+#### Navigation Control
+- `navigation_back(tab_id)` - Navigate back in tab
+- `navigation_forward(tab_id)` - Navigate forward in tab
+- `navigation_reload(tab_id, bypass_cache=False)` - Reload tab
+- `navigation_go_to_url(tab_id, url)` - Navigate to URL
+
+#### Content Access
+- `content_get_text(tab_id)` - Extract page text content
+- `content_get_html(tab_id)` - Get page HTML source
+- `content_execute_script(tab_id, code)` - Execute JavaScript
+
+### Using MCP Tools
+
+1. **Start the server**:
+   ```bash
+   make run-server  # Starts both WebSocket (8765) and MCP (3000) servers
+   ```
+
+2. **Connect Firefox extension** (loads automatically when Firefox starts with extension)
+
+3. **Connect MCP client** to `http://localhost:3000` and use the tools
+
+### Complete Workflow
+```
+MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
+```
 
 ## Development Commands
 

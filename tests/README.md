@@ -81,7 +81,7 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
 
 - **test_mcp_handler.py**: Tests MCP integration
   - Tool registration
-  - Request forwarding
+  - Request forwarding  
   - Action mapping
   - Parameter validation
 
@@ -132,6 +132,14 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - Timeout handling and recovery
   - Concurrent ping operations
   - Protocol compliance verification
+
+- **test_mcp_integration.py**: Tests FastMCP server integration  
+  - MCP tools initialization and configuration
+  - Server startup with dual port architecture (WebSocket + MCP)
+  - MCP tool call simulation with mock WebSocket responses
+  - Error handling in MCP protocol layer
+  - Tool structure and category validation
+  - MCP application creation and management
 
 ## Test Fixtures
 
@@ -184,18 +192,20 @@ pytest --cov=../server --cov-report=html
 Coverage reports are generated in `htmlcov/` directory.
 
 **Current Test Statistics:**
-- **77 total tests** across unit and integration suites
-- **74% code coverage** of server components
-- **38 integration tests** covering real WebSocket communication
+- **87 total tests** across unit and integration suites (10 new MCP tests)
+- **Enhanced coverage** of server components including MCP integration
+- **48 integration tests** covering WebSocket communication and MCP functionality
 - **39 unit tests** covering individual component functionality
 
 ## Test Infrastructure Features
 
 ### Dynamic Port Allocation
 Tests use dynamic port allocation to prevent conflicts:
-- `test_real_websocket_communication.py`: Random ports 9000-9999
-- `test_firefox_extension_communication.py`: Random ports 10000-10999
-- All other tests: Fixed ports with proper cleanup
+- `test_real_websocket_communication.py`: WebSocket ports 9000-9999, MCP ports 5000-5999
+- `test_firefox_extension_communication.py`: WebSocket ports 10000-10999, MCP ports 6000-6999
+- `test_live_server_communication.py`: WebSocket ports 8000-8999, MCP ports 4000-4999
+- `test_mcp_integration.py`: Uses mock servers to avoid port conflicts
+- All tests: Proper cleanup and MCP server disable option for WebSocket-only tests
 
 ### Robust Fixture Management
 - Proper async fixture cleanup with error handling

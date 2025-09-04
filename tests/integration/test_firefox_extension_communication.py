@@ -66,7 +66,8 @@ user_pref("browser.tabs.remote.autostart", false);
         # Use unique port to avoid conflicts
         import random
         port = random.randint(10000, 10999)
-        server = FoxMCPServer(host="localhost", port=port)
+        mcp_port = random.randint(6000, 6999)
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)  # Disable MCP for extension tests
         server_task = asyncio.create_task(server.start_server())
         
         # Wait for server to start
@@ -334,7 +335,10 @@ class TestFirefoxConnectionResilience:
     @pytest.mark.asyncio
     async def test_server_handles_connection_loss(self):
         """Test server handles connection loss gracefully"""
-        server = FoxMCPServer(host="localhost", port=8769)
+        import random
+        port = random.randint(10000, 10999)
+        mcp_port = random.randint(6000, 6999)
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
         server_task = asyncio.create_task(server.start_server())
@@ -343,7 +347,7 @@ class TestFirefoxConnectionResilience:
         try:
             # Connect and disconnect multiple times
             for i in range(3):
-                websocket = await websockets.connect("ws://localhost:8769")
+                websocket = await websockets.connect(f"ws://localhost:{port}")
                 
                 # Send message
                 msg = {
@@ -374,7 +378,10 @@ class TestFirefoxConnectionResilience:
     @pytest.mark.asyncio
     async def test_multiple_connection_attempts(self):
         """Test server can handle multiple connection attempts"""
-        server = FoxMCPServer(host="localhost", port=8770)
+        import random
+        port = random.randint(10000, 10999)
+        mcp_port = random.randint(6000, 6999)
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         server_task = asyncio.create_task(server.start_server())
         await asyncio.sleep(0.3)
@@ -384,7 +391,7 @@ class TestFirefoxConnectionResilience:
             connections = []
             
             for i in range(5):
-                websocket = await websockets.connect("ws://localhost:8770")
+                websocket = await websockets.connect(f"ws://localhost:{port}")
                 connections.append(websocket)
                 
                 # Send unique message

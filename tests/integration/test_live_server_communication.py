@@ -23,7 +23,10 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_server_can_start_and_stop(self):
         """Test that server can start and stop cleanly"""
-        server = FoxMCPServer(host="localhost", port=8766)  # Use different port for test
+        import random
+        port = random.randint(8000, 8999)
+        mcp_port = random.randint(4000, 4999)
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)  # Disable MCP for basic tests
         
         # Test server startup
         server_task = asyncio.create_task(server.start_server())
@@ -45,7 +48,10 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_client_can_connect_to_server(self):
         """Test that a WebSocket client can connect to the server"""
-        server = FoxMCPServer(host="localhost", port=8767)
+        import random
+        port = random.randint(8000, 8999)
+        mcp_port = random.randint(4000, 4999)
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
         server_task = asyncio.create_task(server.start_server())
@@ -55,7 +61,7 @@ class TestLiveServerCommunication:
         
         try:
             # Try to connect as a client
-            uri = "ws://localhost:8767"
+            uri = f"ws://localhost:{port}"
             websocket = await websockets.connect(uri)
             
             connection_successful = True
@@ -144,7 +150,10 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_bidirectional_communication_simulation(self):
         """Simulate bidirectional communication between server and extension"""
-        server = FoxMCPServer(host="localhost", port=8768)
+        import random
+        port = random.randint(8000, 8999)
+        mcp_port = random.randint(4000, 4999)
+        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
         server_task = asyncio.create_task(server.start_server())
@@ -154,7 +163,7 @@ class TestLiveServerCommunication:
         
         try:
             # Connect as "extension"
-            uri = "ws://localhost:8768"
+            uri = f"ws://localhost:{port}"
             websocket = await websockets.connect(uri)
             
             # Simulate extension sending a response

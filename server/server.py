@@ -6,21 +6,34 @@ FoxMCP Server - WebSocket server that bridges browser extension with MCP clients
 import asyncio
 import json
 import logging
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
 
 import websockets
+import uvicorn
+try:
+    from .mcp_tools import FoxMCPTools
+except ImportError:
+    from mcp_tools import FoxMCPTools
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FoxMCPServer:
-    def __init__(self, host: str = "localhost", port: int = 8765):
+    def __init__(self, host: str = "localhost", port: int = 8765, mcp_port: int = 3000, start_mcp: bool = True):
         self.host = host
         self.port = port
+        self.mcp_port = mcp_port
+        self.start_mcp = start_mcp
         self.extension_connection = None
         self.pending_requests = {}  # Map of request IDs to Future objects
+        
+        # Initialize MCP tools
+        self.mcp_tools = FoxMCPTools(self)
+        self.mcp_app = self.mcp_tools.get_mcp_app()
+        self.mcp_server_task = None
         
     async def handle_extension_connection(self, websocket):
         """Handle WebSocket connection from browser extension"""
@@ -163,9 +176,39 @@ class FoxMCPServer:
             self.pending_requests.pop(request_id, None)
             return {"error": f"Request failed: {str(e)}"}
     
+    async def start_mcp_server(self):
+        """Start the MCP server in a separate thread"""
+        def run_mcp_server():
+            try:
+                logger.info(f"Starting MCP server on port {self.mcp_port}")
+                uvicorn.run(
+                    self.mcp_app,
+                    host="0.0.0.0",
+                    port=self.mcp_port,
+                    log_level="error"  # Reduce log noise during tests
+                )
+            except Exception as e:
+                logger.warning(f"MCP server failed to start on port {self.mcp_port}: {e}")
+                # Don't crash the whole server if MCP fails - this is important for tests
+        
+        # Run MCP server in separate thread
+        mcp_thread = threading.Thread(target=run_mcp_server, daemon=True)
+        mcp_thread.start()
+        logger.info(f"MCP server thread started for port {self.mcp_port}")
+        
+        # Give MCP server time to start (reduced time for faster tests)
+        await asyncio.sleep(0.5)
+    
     async def start_server(self):
-        """Start the WebSocket server"""
+        """Start both WebSocket and MCP servers"""
         logger.info(f"Starting FoxMCP server on {self.host}:{self.port}")
+        
+        # Start MCP server first (if enabled)
+        if self.start_mcp:
+            await self.start_mcp_server()
+            logger.info(f"MCP tools available at http://localhost:{self.mcp_port}/")
+        else:
+            logger.info("MCP server disabled for this instance")
         
         # Use modern websockets API
         server = await websockets.serve(
@@ -174,7 +217,7 @@ class FoxMCPServer:
             self.port
         )
         
-        logger.info("FoxMCP server is running...")
+        logger.info("FoxMCP WebSocket server is running...")
         await server.wait_closed()
 
 async def main():
