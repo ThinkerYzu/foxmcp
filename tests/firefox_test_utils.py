@@ -105,7 +105,7 @@ user_pref("dom.max_chrome_script_run_time", 0);
         print(f"✓ Pre-configured extension for test server port {self.test_port}")
     
     def install_extension(self, extension_path):
-        """Install extension to the test profile"""
+        """Install extension to the test profile and initialize extensions.json"""
         if not self.profile_dir:
             raise ValueError("Test profile not created. Call create_test_profile() first.")
             
@@ -113,14 +113,119 @@ user_pref("dom.max_chrome_script_run_time", 0);
         os.makedirs(extensions_dir, exist_ok=True)
         
         # Copy extension XPI to extensions directory
-        if os.path.exists(extension_path):
-            extension_name = 'foxmcp@codemud.org.xpi'
-            dest_path = os.path.join(extensions_dir, extension_name)
-            shutil.copy2(extension_path, dest_path)
-            print(f"✓ Extension installed to test profile: {extension_name}")
-            return True
-        else:
+        if not os.path.exists(extension_path):
             print(f"✗ Extension not found: {extension_path}")
+            return False
+            
+        extension_name = 'foxmcp@codemud.org.xpi'
+        dest_path = os.path.join(extensions_dir, extension_name)
+        shutil.copy2(extension_path, dest_path)
+        print(f"✓ Extension copied to test profile: {extension_name}")
+        
+        # Run Firefox temporarily to initialize extensions.json
+        if not self._initialize_extensions_json():
+            return False
+            
+        # Enable the extension in extensions.json
+        if not self._enable_extension_in_profile():
+            return False
+            
+        print(f"✓ Extension installed and enabled in test profile")
+        return True
+    
+    def _initialize_extensions_json(self):
+        """Run Firefox temporarily to create extensions.json"""
+        firefox_path = os.path.expanduser(self.firefox_path)
+        
+        # Start Firefox temporarily with timeout
+        firefox_cmd = [
+            firefox_path,
+            '-profile', self.profile_dir,
+            '-no-remote',
+            '-headless'
+        ]
+        
+        print("⏳ Running Firefox temporarily to initialize extensions.json...")
+        
+        try:
+            # Start Firefox process with timeout
+            proc = subprocess.Popen(
+                firefox_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            
+            # Wait for extensions.json to be created (up to 20 seconds)
+            extensions_json_path = os.path.join(self.profile_dir, 'extensions.json')
+            timeout = 20
+            waited = 0
+            
+            while not os.path.exists(extensions_json_path) and waited < timeout:
+                time.sleep(1)
+                waited += 1
+                
+            # Give it one more second after creation
+            if os.path.exists(extensions_json_path):
+                time.sleep(1)
+                print("✓ extensions.json created")
+            else:
+                print(f"✗ extensions.json not created after {timeout} seconds")
+                proc.terminate()
+                proc.wait(timeout=5)
+                return False
+                
+            # Kill the Firefox process
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            
+            print("✓ Firefox initialization process stopped")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Failed to initialize extensions.json: {e}")
+            return False
+    
+    def _enable_extension_in_profile(self):
+        """Enable the extension by modifying extensions.json"""
+        extensions_json_path = os.path.join(self.profile_dir, 'extensions.json')
+        
+        if not os.path.exists(extensions_json_path):
+            print("✗ extensions.json not found")
+            return False
+        
+        try:
+            # Check if jq is available
+            result = subprocess.run(['which', 'jq'], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("✗ jq command not found - required for enabling extension")
+                return False
+            
+            # Use jq to enable the extension
+            jq_command = [
+                'jq',
+                '.addons[] |= if .id == "foxmcp@codemud.org" then .userDisabled = false | .active = true else . end',
+                extensions_json_path
+            ]
+            
+            # Run jq and capture output
+            result = subprocess.run(jq_command, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"✗ Failed to modify extensions.json with jq: {result.stderr}")
+                return False
+            
+            # Write the modified JSON back to the file
+            with open(extensions_json_path, 'w') as f:
+                f.write(result.stdout)
+            
+            print("✓ Extension enabled in extensions.json")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Failed to enable extension: {e}")
             return False
     
     def start_firefox(self, headless=True, wait_for_startup=True):
@@ -199,7 +304,7 @@ user_pref("dom.max_chrome_script_run_time", 0);
         
         if self.profile_dir and os.path.exists(self.profile_dir):
             try:
-                shutil.rmtree(self.profile_dir)
+                #shutil.rmtree(self.profile_dir)
                 print("✓ Test profile cleaned up")
             except Exception as e:
                 print(f"⚠ Error cleaning up profile: {e}")
