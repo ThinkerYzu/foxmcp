@@ -176,6 +176,116 @@ class FoxMCPServer:
             self.pending_requests.pop(request_id, None)
             return {"error": f"Request failed: {str(e)}"}
     
+    # Test Helper Methods
+    async def get_popup_state(self, timeout: float = 5.0) -> Dict[str, Any]:
+        """Get current popup display state from extension"""
+        request = {
+            "id": f"test_popup_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.get_popup_state",
+            "data": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def get_options_state(self, timeout: float = 5.0) -> Dict[str, Any]:
+        """Get current options page display state from extension"""
+        request = {
+            "id": f"test_options_{datetime.now().isoformat()}",
+            "type": "request", 
+            "action": "test.get_options_state",
+            "data": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def get_storage_values(self, timeout: float = 5.0) -> Dict[str, Any]:
+        """Get raw storage.sync values from extension"""
+        request = {
+            "id": f"test_storage_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.get_storage_values", 
+            "data": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def validate_ui_sync(self, expected_values: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
+        """Validate UI-storage synchronization with expected values"""
+        request = {
+            "id": f"test_validate_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.validate_ui_sync",
+            "data": {"expectedValues": expected_values},
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def refresh_ui_state(self, timeout: float = 5.0) -> Dict[str, Any]:
+        """Trigger UI state refresh in extension"""
+        request = {
+            "id": f"test_refresh_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.refresh_ui_state",
+            "data": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def test_storage_sync_workflow(self, test_values: Dict[str, Any], timeout: float = 10.0) -> Dict[str, Any]:
+        """Complete test workflow: set values, validate sync, return results"""
+        results = {
+            "workflow_success": False,
+            "steps": {},
+            "errors": []
+        }
+        
+        try:
+            # Step 1: Get initial state
+            initial_storage = await self.get_storage_values(timeout)
+            if "error" in initial_storage:
+                results["errors"].append(f"Failed to get initial storage: {initial_storage['error']}")
+                return results
+            results["steps"]["initial_storage"] = initial_storage
+            
+            # Step 2: Get popup state
+            popup_state = await self.get_popup_state(timeout)
+            if "error" in popup_state:
+                results["errors"].append(f"Failed to get popup state: {popup_state['error']}")
+                return results
+            results["steps"]["popup_state"] = popup_state
+            
+            # Step 3: Get options state
+            options_state = await self.get_options_state(timeout)
+            if "error" in options_state:
+                results["errors"].append(f"Failed to get options state: {options_state['error']}")
+                return results
+            results["steps"]["options_state"] = options_state
+            
+            # Step 4: Validate synchronization
+            validation_result = await self.validate_ui_sync(test_values, timeout)
+            if "error" in validation_result:
+                results["errors"].append(f"Failed to validate UI sync: {validation_result['error']}")
+                return results
+            results["steps"]["validation"] = validation_result
+            
+            # Check if validation passed
+            if validation_result.get("popupSyncValid") and validation_result.get("optionsSyncValid") and validation_result.get("storageMatches"):
+                results["workflow_success"] = True
+            else:
+                results["errors"].extend(validation_result.get("issues", []))
+                
+            return results
+            
+        except Exception as e:
+            results["errors"].append(f"Workflow exception: {str(e)}")
+            return results
+    
     async def start_mcp_server(self):
         """Start the MCP server in a separate thread"""
         def run_mcp_server():

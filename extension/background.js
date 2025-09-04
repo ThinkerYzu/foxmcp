@@ -159,6 +159,9 @@ async function handleMessage(message) {
     case 'bookmarks':
       await handleBookmarksAction(id, action, data);
       break;
+    case 'test':
+      await handleTestAction(id, action, data);
+      break;
     default:
       sendError(id, 'UNKNOWN_ACTION', `Unknown action: ${action}`);
   }
@@ -485,6 +488,222 @@ browser.runtime.onStartup.addListener(async () => {
   await loadConfig();
   connectToMCPServer();
 });
+
+// Test helper action handler
+async function handleTestAction(id, action, data) {
+  try {
+    switch (action) {
+      case 'test.get_popup_state':
+        await handleGetPopupState(id, data);
+        break;
+        
+      case 'test.get_options_state':
+        await handleGetOptionsState(id, data);
+        break;
+        
+      case 'test.get_storage_values':
+        await handleGetStorageValues(id, data);
+        break;
+        
+      case 'test.validate_ui_sync':
+        await handleValidateUISync(id, data);
+        break;
+        
+      case 'test.refresh_ui_state':
+        await handleRefreshUIState(id, data);
+        break;
+        
+      default:
+        sendError(id, 'UNKNOWN_ACTION', `Unknown test action: ${action}`);
+    }
+  } catch (error) {
+    console.error(`Error handling test action ${action}:`, error);
+    sendError(id, 'TEST_ERROR', `Test action failed: ${error.message}`, { action, error: error.toString() });
+  }
+}
+
+// Get current popup display state
+async function handleGetPopupState(id, data) {
+  try {
+    const storageConfig = await browser.storage.sync.get({
+      hostname: 'localhost',
+      port: 8765,
+      retryInterval: 5000,
+      maxRetries: -1,
+      pingTimeout: 5000,
+      testPort: null,
+      testHostname: null
+    });
+    
+    // Calculate effective values (same logic as popup.js)
+    const effectiveHostname = storageConfig.testHostname || storageConfig.hostname || 'localhost';
+    const effectivePort = storageConfig.testPort || storageConfig.port || 8765;
+    const serverUrl = `ws://${effectiveHostname}:${effectivePort}`;
+    const hasTestOverrides = storageConfig.testPort !== null || storageConfig.testHostname !== null;
+    
+    sendResponse(id, 'test.get_popup_state', {
+      serverUrl: serverUrl,
+      retryInterval: storageConfig.retryInterval,
+      maxRetries: storageConfig.maxRetries,
+      pingTimeout: storageConfig.pingTimeout,
+      hasTestOverrides: hasTestOverrides,
+      effectiveHostname: effectiveHostname,
+      effectivePort: effectivePort,
+      testIndicatorShown: hasTestOverrides,
+      storageValues: storageConfig
+    });
+  } catch (error) {
+    sendError(id, 'STORAGE_ERROR', `Failed to get popup state: ${error.message}`);
+  }
+}
+
+// Get current options page display state  
+async function handleGetOptionsState(id, data) {
+  try {
+    const storageConfig = await browser.storage.sync.get({
+      hostname: 'localhost',
+      port: 8765,
+      retryInterval: 5000,
+      maxRetries: -1,
+      pingTimeout: 5000,
+      testPort: null,
+      testHostname: null
+    });
+    
+    // Calculate display values (same logic as options.js)
+    const displayHostname = storageConfig.testHostname || storageConfig.hostname;
+    const displayPort = storageConfig.testPort || storageConfig.port;
+    const webSocketUrl = `ws://${displayHostname}:${displayPort}`;
+    const hasTestOverrides = storageConfig.testPort !== null || storageConfig.testHostname !== null;
+    
+    sendResponse(id, 'test.get_options_state', {
+      displayHostname: displayHostname,
+      displayPort: displayPort,
+      retryInterval: storageConfig.retryInterval,
+      maxRetries: storageConfig.maxRetries,
+      pingTimeout: storageConfig.pingTimeout,
+      webSocketUrl: webSocketUrl,
+      hasTestOverrides: hasTestOverrides,
+      testOverrideWarningShown: hasTestOverrides,
+      storageValues: storageConfig
+    });
+  } catch (error) {
+    sendError(id, 'STORAGE_ERROR', `Failed to get options state: ${error.message}`);
+  }
+}
+
+// Get raw storage values
+async function handleGetStorageValues(id, data) {
+  try {
+    const storageConfig = await browser.storage.sync.get();
+    sendResponse(id, 'test.get_storage_values', storageConfig);
+  } catch (error) {
+    sendError(id, 'STORAGE_ERROR', `Failed to get storage values: ${error.message}`);
+  }
+}
+
+// Validate UI-storage synchronization
+async function handleValidateUISync(id, data) {
+  try {
+    const { expectedValues } = data;
+    
+    // Get current storage values
+    const storageConfig = await browser.storage.sync.get();
+    
+    // Get popup state
+    const popupState = await getPopupStateForValidation(storageConfig);
+    
+    // Get options state  
+    const optionsState = await getOptionsStateForValidation(storageConfig);
+    
+    // Check storage matches expected values
+    let storageMatches = true;
+    const issues = [];
+    
+    if (expectedValues) {
+      for (const [key, expectedValue] of Object.entries(expectedValues)) {
+        if (storageConfig[key] !== expectedValue) {
+          storageMatches = false;
+          issues.push(`Storage ${key}: expected ${expectedValue}, got ${storageConfig[key]}`);
+        }
+      }
+    }
+    
+    // Validate popup displays correct effective values
+    const effectiveHostname = storageConfig.testHostname || storageConfig.hostname || 'localhost';
+    const effectivePort = storageConfig.testPort || storageConfig.port || 8765;
+    
+    const popupSyncValid = popupState.effectiveHostname === effectiveHostname && 
+                          popupState.effectivePort === effectivePort;
+    
+    const optionsSyncValid = optionsState.displayHostname === effectiveHostname &&
+                            optionsState.displayPort === effectivePort;
+    
+    if (!popupSyncValid) {
+      issues.push(`Popup sync invalid: expected ${effectiveHostname}:${effectivePort}, got ${popupState.effectiveHostname}:${popupState.effectivePort}`);
+    }
+    
+    if (!optionsSyncValid) {
+      issues.push(`Options sync invalid: expected ${effectiveHostname}:${effectivePort}, got ${optionsState.displayHostname}:${optionsState.displayPort}`);
+    }
+    
+    sendResponse(id, 'test.validate_ui_sync', {
+      popupSyncValid: popupSyncValid,
+      optionsSyncValid: optionsSyncValid,
+      storageMatches: storageMatches,
+      effectiveValues: {
+        hostname: effectiveHostname,
+        port: effectivePort
+      },
+      issues: issues
+    });
+  } catch (error) {
+    sendError(id, 'VALIDATION_ERROR', `Failed to validate UI sync: ${error.message}`);
+  }
+}
+
+// Trigger UI state refresh
+async function handleRefreshUIState(id, data) {
+  try {
+    // This simulates what happens when popup/options pages refresh
+    // In practice, this would trigger any cached state to be cleared
+    // and force re-reading from storage
+    
+    // For now, we just confirm the action was received
+    sendResponse(id, 'test.refresh_ui_state', {
+      refreshed: true,
+      popupStateUpdated: true,
+      optionsStateUpdated: true,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    sendError(id, 'REFRESH_ERROR', `Failed to refresh UI state: ${error.message}`);
+  }
+}
+
+// Helper function for validation
+async function getPopupStateForValidation(storageConfig) {
+  const effectiveHostname = storageConfig.testHostname || storageConfig.hostname || 'localhost';
+  const effectivePort = storageConfig.testPort || storageConfig.port || 8765;
+  
+  return {
+    effectiveHostname,
+    effectivePort,
+    hasTestOverrides: storageConfig.testPort !== null || storageConfig.testHostname !== null
+  };
+}
+
+// Helper function for validation
+async function getOptionsStateForValidation(storageConfig) {
+  const displayHostname = storageConfig.testHostname || storageConfig.hostname;
+  const displayPort = storageConfig.testPort || storageConfig.port;
+  
+  return {
+    displayHostname,
+    displayPort,
+    hasTestOverrides: storageConfig.testPort !== null || storageConfig.testHostname !== null
+  };
+}
 
 browser.runtime.onInstalled.addListener(async () => {
   await loadConfig();

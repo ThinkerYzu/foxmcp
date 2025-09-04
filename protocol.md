@@ -457,3 +457,200 @@ All messages follow this JSON structure:
 - `WEBSOCKET_ERROR` - Connection or communication error
 - `INVALID_REQUEST` - Malformed request message
 - `UNKNOWN_ACTION` - Unsupported action requested
+
+## Test Helper Messages
+
+The extension provides test helper messages for automated testing and validation of UI state synchronization.
+
+### Get Popup Display State
+
+**Request:**
+```json
+{
+  "id": "test_001",
+  "type": "request", 
+  "action": "test.get_popup_state",
+  "data": {},
+  "timestamp": "2025-09-04T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_001",
+  "type": "response",
+  "action": "test.get_popup_state", 
+  "data": {
+    "serverUrl": "ws://localhost:7777",
+    "retryInterval": 1000,
+    "maxRetries": 5,
+    "pingTimeout": 2000,
+    "hasTestOverrides": true,
+    "effectiveHostname": "localhost",
+    "effectivePort": 7777,
+    "testIndicatorShown": true,
+    "storageValues": {
+      "hostname": "localhost",
+      "port": 8765,
+      "testPort": 7777,
+      "testHostname": "localhost"
+    }
+  },
+  "timestamp": "2025-09-04T12:00:00.500Z"
+}
+```
+
+### Get Options Page State
+
+**Request:**
+```json
+{
+  "id": "test_002", 
+  "type": "request",
+  "action": "test.get_options_state",
+  "data": {},
+  "timestamp": "2025-09-04T12:00:01.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_002",
+  "type": "response",
+  "action": "test.get_options_state",
+  "data": {
+    "displayHostname": "localhost",
+    "displayPort": 7777,
+    "retryInterval": 1000,
+    "maxRetries": 5,
+    "pingTimeout": 2000,
+    "webSocketUrl": "ws://localhost:7777",
+    "hasTestOverrides": true,
+    "testOverrideWarningShown": true,
+    "storageValues": {
+      "hostname": "localhost", 
+      "port": 8765,
+      "testPort": 7777,
+      "testHostname": "localhost"
+    }
+  },
+  "timestamp": "2025-09-04T12:00:01.500Z"
+}
+```
+
+### Get Raw Storage Values
+
+**Request:**
+```json
+{
+  "id": "test_003",
+  "type": "request",
+  "action": "test.get_storage_values",
+  "data": {},
+  "timestamp": "2025-09-04T12:00:02.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_003",
+  "type": "response", 
+  "action": "test.get_storage_values",
+  "data": {
+    "hostname": "localhost",
+    "port": 8765,
+    "retryInterval": 1000,
+    "maxRetries": 5,
+    "pingTimeout": 2000,
+    "testPort": 7777,
+    "testHostname": "localhost"
+  },
+  "timestamp": "2025-09-04T12:00:02.500Z"
+}
+```
+
+### Validate UI-Storage Sync
+
+**Request:**
+```json
+{
+  "id": "test_004",
+  "type": "request",
+  "action": "test.validate_ui_sync",
+  "data": {
+    "expectedValues": {
+      "hostname": "example.com",
+      "port": 9000,
+      "testPort": 7777,
+      "testHostname": "test.local"
+    }
+  },
+  "timestamp": "2025-09-04T12:00:03.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_004", 
+  "type": "response",
+  "action": "test.validate_ui_sync",
+  "data": {
+    "popupSyncValid": true,
+    "optionsSyncValid": true,
+    "storageMatches": true,
+    "effectiveValues": {
+      "hostname": "test.local",
+      "port": 7777
+    },
+    "issues": []
+  },
+  "timestamp": "2025-09-04T12:00:03.500Z"
+}
+```
+
+### Trigger UI State Refresh
+
+**Request:**
+```json
+{
+  "id": "test_005",
+  "type": "request",
+  "action": "test.refresh_ui_state",
+  "data": {},
+  "timestamp": "2025-09-04T12:00:04.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_005",
+  "type": "response",
+  "action": "test.refresh_ui_state", 
+  "data": {
+    "refreshed": true,
+    "popupStateUpdated": true,
+    "optionsStateUpdated": true
+  },
+  "timestamp": "2025-09-04T12:00:04.500Z"
+}
+```
+
+## Test Helper Usage
+
+Test helpers enable automated validation of:
+
+- **Storage-UI Synchronization**: Verify popup and options pages display current storage values
+- **Test Override Priority**: Confirm test configurations take precedence over regular settings
+- **Configuration Persistence**: Validate that UI changes preserve test overrides
+- **State Consistency**: Ensure all UI components reflect the same effective configuration
+
+Example test workflow:
+1. Set test configuration via storage
+2. Use `test.get_popup_state` to verify popup displays test values
+3. Use `test.validate_ui_sync` to confirm UI-storage alignment
+4. Modify configuration and verify persistence

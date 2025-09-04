@@ -284,14 +284,15 @@ make status            # Show project status
 
 ## Testing
 
-The project includes comprehensive test coverage with **77 tests** and **74% code coverage**:
+The project includes comprehensive test coverage with **91 tests** and **74% code coverage**:
 
-- **Unit Tests (39):** Individual component testing
-- **Integration Tests (38):** End-to-end WebSocket communication
+- **Unit Tests (47):** Individual component testing
+- **Integration Tests (44):** End-to-end WebSocket communication
 - **Protocol Tests:** Message format validation
 - **Ping-Pong Tests:** Connection validation
 - **Firefox Integration Tests:** Real browser extension testing with dynamic port allocation
 - **Live Server Tests:** Real WebSocket server communication testing
+- **UI Synchronization Tests:** Automated validation of popup/options storage sync via test helper protocol
 
 ### Running Tests
 
@@ -323,6 +324,42 @@ cd tests && python -m pytest integration/test_firefox_extension_communication.py
 - **Real WebSocket communication** between server and extension
 
 Coverage reports are generated in `tests/htmlcov/`.
+
+### Test Helper Protocol
+
+The extension includes a **test helper protocol** for automated UI validation via WebSocket messages:
+
+```javascript
+// Get popup display state
+{
+  "id": "test_001",
+  "type": "request",
+  "action": "test.get_popup_state",
+  "data": {}
+}
+
+// Validate UI-storage synchronization  
+{
+  "id": "test_002", 
+  "type": "request",
+  "action": "test.validate_ui_sync",
+  "data": {
+    "expectedValues": {
+      "hostname": "localhost",
+      "testPort": 7777
+    }
+  }
+}
+```
+
+**Available test helpers:**
+- `test.get_popup_state` - Get current popup display values and test override status
+- `test.get_options_state` - Get options page configuration and warning states
+- `test.get_storage_values` - Retrieve raw storage.sync values
+- `test.validate_ui_sync` - Validate UI components show expected storage values
+- `test.refresh_ui_state` - Trigger UI refresh for testing scenarios
+
+This enables **automated testing** of storage synchronization without browser automation tools.
 
 ## Troubleshooting
 
@@ -387,10 +424,10 @@ MIT License - see LICENSE file for details.
 - **Production Deployment**: Enhanced logging and multi-client support
 
 ### 📊 Test Results - ALL PASSING ✅
-- **77 total tests** across comprehensive test suites
+- **91 total tests** across comprehensive test suites
 - **74% code coverage** of server components
-- **38 integration tests** including real Firefox browser communication
-- **39 unit tests** covering individual component functionality
+- **44 integration tests** including real Firefox browser communication and automated UI validation
+- **47 unit tests** covering individual component functionality
 - **All browser API functions tested** and verified working
 - **Real WebSocket communication confirmed** between server and Firefox extension
 

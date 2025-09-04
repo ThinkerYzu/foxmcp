@@ -44,7 +44,9 @@ foxmcp/
     ├── integration/   # Integration tests
     │   ├── test_websocket_communication.py # WebSocket communication tests
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests
-    │   └── test_real_firefox_communication.py # Real Firefox extension tests
+    │   ├── test_real_firefox_communication.py # Real Firefox extension tests
+    │   ├── test_ui_storage_sync.py        # UI storage synchronization tests with Firefox
+    │   └── test_test_helper_protocol.py   # Test helper protocol unit tests
     └── fixtures/      # Test data files
 ```
 
@@ -79,6 +81,12 @@ foxmcp/
     - **Content extraction**: Text and HTML extraction from pages via browser.tabs.sendMessage
     - **Navigation control**: URL navigation, back/forward, reload via browser.tabs
     - **Bookmark management**: List, search, create, remove bookmarks via browser.bookmarks
+  - **Test Helper Protocol** - WebSocket messages for automated UI testing:
+    - **test.get_popup_state**: Get current popup display values and test override status
+    - **test.get_options_state**: Get options page display values and configuration state
+    - **test.get_storage_values**: Retrieve raw storage.sync values for validation
+    - **test.validate_ui_sync**: Validate UI-storage synchronization with expected values
+    - **test.refresh_ui_state**: Trigger UI state refresh for testing scenarios
 
 ### `content.js`
 - **Purpose**: Content script injected into web pages
@@ -156,6 +164,12 @@ foxmcp/
   - **Bidirectional ping functionality** (server can ping extension)
   - **send_request_and_wait method** with configurable timeouts
   - **Async ping testing methods** with correlation
+  - **Test helper protocol** with 5 WebSocket test commands for automated UI validation:
+    - `test.get_popup_state` - Get popup display state and test override status
+    - `test.get_options_state` - Get options page configuration and warnings  
+    - `test.get_storage_values` - Get raw storage.sync values
+    - `test.validate_ui_sync` - Validate UI synchronization with expected values
+    - `test.refresh_ui_state` - Trigger UI state refresh
   - **Response type handling** (success, error, timeout scenarios)
   - Message handling and comprehensive logging
   - Connection state tracking
@@ -203,7 +217,7 @@ foxmcp/
 - ✅ **Build System**: Makefile with complete development workflow
 - ✅ **Documentation**: README, protocol spec, and project documentation
 - ✅ **Virtual Environment**: Python venv with all dependencies installed
-- ✅ **Comprehensive Test Suite**: 77 tests passing (39 unit + 38 integration), 74% code coverage, all tests enabled
+- ✅ **Comprehensive Test Suite**: 91 tests passing (47 unit + 44 integration), 74% code coverage, all tests enabled including automated UI validation
 - ✅ **Firefox WebExtensions API Integration**: Complete browser.* API implementations for all handlers
 - ✅ **Response Correlation**: Full async response handling with UUID-based correlation
 - ✅ **Configuration System**: Configurable retry intervals and connection parameters
@@ -249,6 +263,8 @@ foxmcp/
 ### Integration Tests (`/integration`)
 - **`test_websocket_communication.py`**: End-to-end WebSocket communication tests
 - **`test_ping_pong_integration.py`**: Ping-pong functionality integration tests
+- **`test_ui_storage_sync.py`**: UI storage synchronization tests with real Firefox extension using test helper protocol
+- **`test_test_helper_protocol.py`**: Unit tests for test helper protocol with mock WebSocket
 
 ## Build and Development System
 
@@ -287,7 +303,7 @@ foxmcp/
 - Server and test running instructions
 
 ### Test Results (Current)
-- **77 tests passing** - All unit and integration tests (39 unit + 38 integration)
+- **91 tests passing** - All unit and integration tests (47 unit + 44 integration) including automated UI validation
 - **0 tests skipped** - All integration tests now enabled and working
 - **74% code coverage** - Comprehensive coverage across server components
 - **HTML coverage reports** - Generated in tests/htmlcov/
