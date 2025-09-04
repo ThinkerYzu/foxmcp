@@ -247,7 +247,7 @@ class TestFirefoxExtensionIntegration:
             }
         ]
         
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         for message in valid_messages:
             message_json = json.dumps(message)
@@ -269,7 +269,7 @@ class TestFirefoxExtensionIntegration:
             "content.get_text", "content.get_html", "content.get_title", "content.execute_script"
         ]
         
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         for action in action_categories:
             message = {
@@ -292,7 +292,7 @@ class TestFirefoxExtensionIntegration:
     async def test_response_correlation(self):
         """Test that responses can be correlated with requests"""
         
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # Simulate a request-response cycle
         request_id = "correlation-test-001"

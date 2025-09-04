@@ -25,6 +25,10 @@
     "default_popup": "popup/popup.html",
     "default_title": "FoxMCP"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "foxmcp@codemud.org"

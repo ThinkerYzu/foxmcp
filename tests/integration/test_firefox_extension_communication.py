@@ -21,6 +21,11 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from server.server import FoxMCPServer
 
+# Import test utilities
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from test_config import TEST_PORTS
+from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+
 
 class TestFirefoxExtensionCommunication:
     """Test real communication with Firefox extension"""
@@ -62,18 +67,21 @@ user_pref("browser.tabs.remote.autostart", false);
 
     @pytest_asyncio.fixture
     async def running_server(self):
-        """Start FoxMCPServer for testing"""
-        # Use unique port to avoid conflicts
-        import random
-        port = random.randint(10000, 10999)
-        mcp_port = random.randint(6000, 6999)
-        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)  # Disable MCP for extension tests
+        """Start FoxMCPServer for testing with fixed Firefox test port"""
+        # Use fixed ports for Firefox extension testing
+        ports = TEST_PORTS['integration_firefox']
+        server = FoxMCPServer(
+            host="localhost", 
+            port=ports['websocket'],
+            mcp_port=ports['mcp'], 
+            start_mcp=False  # Disable MCP for extension tests
+        )
         server_task = asyncio.create_task(server.start_server())
         
         # Wait for server to start
         await asyncio.sleep(0.5)
         
-        server._test_port = port
+        server._test_port = ports['websocket']
         yield server
         
         # Cleanup
@@ -148,44 +156,42 @@ user_pref("browser.tabs.remote.autostart", false);
             pytest.fail(f"Server should be accessible: {e}")
 
     @pytest.mark.asyncio 
-    async def test_extension_can_connect_to_server(self, running_server, firefox_path, temp_profile, extension_xpi):
-        """Test that Firefox extension can connect to server"""
+    async def test_extension_can_connect_to_server(self, running_server):
+        """Test that Firefox extension can connect to server using coordinated ports"""
         
-        firefox_process = None
+        firefox_manager = None
         connection_detected = False
         
         try:
-            # Start Firefox with extension
-            firefox_process = self.start_firefox_with_extension(
-                firefox_path, temp_profile, extension_xpi
+            # Get extension XPI path
+            extension_xpi = get_extension_xpi_path()
+            if not extension_xpi or not os.path.exists(extension_xpi):
+                pytest.skip("Extension XPI not found. Run 'make package' first.")
+            
+            # Create Firefox test manager with coordinated port
+            firefox_manager = FirefoxTestManager(
+                firefox_path=os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox'),
+                test_port=running_server._test_port
             )
             
-            # Wait for extension to potentially connect
-            await asyncio.sleep(5)
+            # Set up Firefox with extension
+            firefox_manager.create_test_profile()
+            firefox_manager.install_extension(extension_xpi)
             
-            # Check if server received any connection
-            # This is indirect - we test if server state changed
-            # In real implementation, server would track connections
+            # Start Firefox and wait for extension connection
+            if firefox_manager.start_firefox(headless=True):
+                connection_detected = firefox_manager.wait_for_extension_connection(timeout=10.0)
             
-            # For now, just verify Firefox started successfully
-            if firefox_process and firefox_process.poll() is None:
-                connection_detected = True
-                
         except Exception as e:
             print(f"Extension connection test error: {e}")
             
         finally:
             # Cleanup Firefox
-            if firefox_process:
-                try:
-                    firefox_process.terminate()
-                    firefox_process.wait(timeout=5)
-                except:
-                    firefox_process.kill()
+            if firefox_manager:
+                firefox_manager.cleanup()
         
-        # This test verifies the setup works - actual connection detection 
-        # would require server-side connection tracking
-        assert True  # Test infrastructure works
+        # Verify test infrastructure worked
+        assert connection_detected, "Firefox should start successfully with extension"
 
     @pytest.mark.asyncio
     async def test_bidirectional_message_flow(self, running_server, firefox_path, temp_profile, extension_xpi):
@@ -335,9 +341,10 @@ class TestFirefoxConnectionResilience:
     @pytest.mark.asyncio
     async def test_server_handles_connection_loss(self):
         """Test server handles connection loss gracefully"""
-        import random
-        port = random.randint(10000, 10999)
-        mcp_port = random.randint(6000, 6999)
+        # Use fixed ports for resilience testing
+        ports = TEST_PORTS['integration_firefox']
+        port = ports['websocket'] + 1  # Offset to avoid conflict with main test
+        mcp_port = ports['mcp'] + 1
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
@@ -378,9 +385,10 @@ class TestFirefoxConnectionResilience:
     @pytest.mark.asyncio
     async def test_multiple_connection_attempts(self):
         """Test server can handle multiple connection attempts"""
-        import random
-        port = random.randint(10000, 10999)
-        mcp_port = random.randint(6000, 6999)
+        # Use fixed ports for multiple connection testing
+        ports = TEST_PORTS['integration_firefox']
+        port = ports['websocket'] + 2  # Different offset to avoid conflict
+        mcp_port = ports['mcp'] + 2
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         server_task = asyncio.create_task(server.start_server())

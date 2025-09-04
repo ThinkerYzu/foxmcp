@@ -119,7 +119,7 @@ class TestMessageRouting:
     @pytest.mark.asyncio
     async def test_request_routing(self):
         """Test that requests are routed correctly"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
 
         # Test different action categories
         test_cases = [
@@ -178,7 +178,7 @@ class TestConnectionRecovery:
     @pytest.mark.asyncio
     async def test_connection_cleanup(self):
         """Test connection cleanup on disconnect"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
 
         # Mock connection
         mock_ws = Mock()

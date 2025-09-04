@@ -194,7 +194,7 @@ class TestMCPServerConfiguration:
     
     def test_default_ports(self):
         """Test default port configuration"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         assert server.port == 8765  # Default WebSocket port
         assert server.mcp_port == 3000  # Default MCP port
@@ -208,7 +208,7 @@ class TestMCPServerConfiguration:
     
     def test_mcp_components_initialized(self):
         """Test that MCP components are properly initialized"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # MCP tools should be initialized
         assert hasattr(server, 'mcp_tools')

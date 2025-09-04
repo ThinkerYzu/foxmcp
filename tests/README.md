@@ -141,6 +141,14 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - Tool structure and category validation
   - MCP application creation and management
 
+- **test_real_firefox_communication.py**: Tests actual Firefox browser integration
+  - Real Firefox process startup with extension installed
+  - Extension-server communication with coordinated ports
+  - Message exchange verification between extension and server
+  - Connection tracking and response validation
+  - Firefox test profile management and cleanup
+  - Extension configuration persistence testing
+
 ## Test Fixtures
 
 The `conftest.py` file provides shared test fixtures:
@@ -199,13 +207,23 @@ Coverage reports are generated in `htmlcov/` directory.
 
 ## Test Infrastructure Features
 
-### Dynamic Port Allocation
-Tests use dynamic port allocation to prevent conflicts:
-- `test_real_websocket_communication.py`: WebSocket ports 9000-9999, MCP ports 5000-5999
-- `test_firefox_extension_communication.py`: WebSocket ports 10000-10999, MCP ports 6000-6999
-- `test_live_server_communication.py`: WebSocket ports 8000-8999, MCP ports 4000-4999
-- `test_mcp_integration.py`: Uses mock servers to avoid port conflicts
-- All tests: Proper cleanup and MCP server disable option for WebSocket-only tests
+### Fixed Port Allocation for Test Coordination
+Tests use **fixed, coordinated ports** to enable reliable extension-server communication:
+
+#### Test Suite Port Assignments
+- `unit_tests`: WebSocket 8700, MCP 3100
+- `integration_basic`: WebSocket 8701, MCP 3101
+- `integration_live`: WebSocket 8702, MCP 3102
+- `integration_websocket`: WebSocket 8703, MCP 3103
+- `integration_firefox`: WebSocket **8704**, MCP 3104 ← **Extension connects here**
+- `integration_mcp`: WebSocket 8705, MCP 3105
+- `integration_ping_pong`: WebSocket 8706, MCP 3106
+
+#### Extension-Server Coordination
+- **Firefox Extension Test Port**: `8704` (fixed)
+- **Real Firefox Tests**: Use `FirefoxTestManager` to pre-configure extension with correct port
+- **Extension Configuration**: Automatically set during test profile creation
+- **Port Conflicts**: Avoided by test suite separation and cleanup
 
 ### Robust Fixture Management
 - Proper async fixture cleanup with error handling

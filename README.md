@@ -178,15 +178,58 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 1. **Start the server**:
    ```bash
    make run-server  # Starts both WebSocket (8765) and MCP (3000) servers
+   
+   # Or with custom ports:
+   python server/server.py --port 9000 --mcp-port 4000
    ```
 
-2. **Connect Firefox extension** (loads automatically when Firefox starts with extension)
+2. **Configure Firefox extension** (if using non-default ports):
+   - Right-click extension icon → **"Manage Extension"** → **"Preferences"**
+   - Set **Hostname**: `localhost` 
+   - Set **WebSocket Port**: `8765` (or your custom port)
+   - Click **"Save Settings"** → Extension automatically reconnects
 
-3. **Connect MCP client** to `http://localhost:3000` and use the tools
+3. **Connect Firefox extension** (loads automatically when Firefox starts with extension)
+
+4. **Connect MCP client** to `http://localhost:3000` and use the tools
 
 ### Complete Workflow
 ```
 MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
+```
+
+## Port Configuration
+
+### Server Ports
+- **WebSocket Port**: Default `8765` - Used for Firefox extension communication
+- **MCP Port**: Default `3000` - Used for MCP client connections
+
+### Configuring Extension
+The Firefox extension includes an **Options Page** for easy port configuration:
+
+1. **Access Options**:
+   - Firefox: Right-click extension → "Manage Extension" → "Preferences"
+   - Or go to `about:addons` → FoxMCP → "Preferences"
+
+2. **Configure Connection**:
+   - **Hostname**: Server hostname (default: `localhost`)
+   - **WebSocket Port**: Server WebSocket port (default: `8765`)
+   - **Advanced Options**: Retry intervals, timeouts, etc.
+
+3. **Test Connection**: Built-in connection test with status indicator
+
+4. **Automatic Reconnection**: Extension automatically reconnects when settings change
+
+### Server Configuration
+```python
+# Default configuration
+server = FoxMCPServer()  # WebSocket: 8765, MCP: 3000
+
+# Custom ports
+server = FoxMCPServer(port=9000, mcp_port=4000)
+
+# WebSocket only (disable MCP)
+server = FoxMCPServer(port=8765, start_mcp=False)
 ```
 
 ## Development Commands

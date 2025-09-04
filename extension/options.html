@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>FoxMCP Extension Options</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 20px;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .form-row .form-group:last-child {
+            flex: 0 0 100px;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+        
+        .status-indicator.connected {
+            background-color: #4CAF50;
+        }
+        
+        .status-indicator.disconnected {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🦊 FoxMCP Extension Options</h1>
+        <p>Configure your connection to the FoxMCP server</p>
+    </div>
+
+    <div class="section">
+        <h3>Server Configuration</h3>
+        <form id="optionsForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="hostname">Hostname:</label>
+                    <input type="text" id="hostname" value="localhost" required>
+                    <div class="help-text">Server hostname or IP address</div>
+                </div>
+                <div class="form-group">
+                    <label for="port">WebSocket Port:</label>
+                    <input type="number" id="port" value="8765" min="1" max="65535" required>
+                    <div class="help-text">Default: 8765</div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="wsUrl">WebSocket URL:</label>
+                <input type="text" id="wsUrl" readonly style="background-color: #f0f0f0;">
+                <div class="help-text">This URL is automatically generated from hostname and port</div>
+            </div>
+            
+            <button type="submit">Save Settings</button>
+            <button type="button" id="testConnection">Test Connection</button>
+        </form>
+        
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="section">
+        <h3>Connection Status</h3>
+        <div class="connection-status">
+            <div id="connectionIndicator" class="status-indicator disconnected"></div>
+            <span id="connectionText">Disconnected</span>
+            <button type="button" id="refreshStatus">Refresh</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Advanced Options</h3>
+        <div class="form-group">
+            <label for="retryInterval">Retry Interval (ms):</label>
+            <input type="number" id="retryInterval" value="5000" min="1000" max="60000">
+            <div class="help-text">Time between reconnection attempts (1000-60000ms)</div>
+        </div>
+        
+        <div class="form-group">
+            <label for="maxRetries">Max Retry Attempts:</label>
+            <input type="number" id="maxRetries" value="-1" min="-1" max="100">
+            <div class="help-text">Maximum reconnection attempts (-1 for unlimited)</div>
+        </div>
+        
+        <div class="form-group">
+            <label for="pingTimeout">Ping Timeout (ms):</label>
+            <input type="number" id="pingTimeout" value="5000" min="1000" max="30000">
+            <div class="help-text">Timeout for ping requests (1000-30000ms)</div>
+        </div>
+        
+        <button type="button" id="saveAdvanced">Save Advanced Settings</button>
+        <button type="button" id="resetDefaults">Reset to Defaults</button>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>

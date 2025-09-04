@@ -69,7 +69,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_connection_state_during_ping(self):
         """Test connection state is properly checked during ping"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # Test with no connection
         result = await server.test_ping_extension()
@@ -86,7 +86,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_ping_message_id_uniqueness(self):
         """Test that ping message IDs are unique"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         server.extension_connection = AsyncMock()
         
         # Generate multiple pings
@@ -102,7 +102,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_ping_data_integrity(self):
         """Test ping message data integrity"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         mock_websocket = AsyncMock()
         server.extension_connection = mock_websocket
         
@@ -126,7 +126,7 @@ class TestPingPongErrorHandling:
     @pytest.mark.asyncio
     async def test_malformed_ping_message(self):
         """Test handling of malformed ping messages"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         server.extension_connection = AsyncMock()
         
         malformed_messages = [
@@ -145,7 +145,7 @@ class TestPingPongErrorHandling:
     @pytest.mark.asyncio 
     async def test_connection_lost_during_ping(self):
         """Test ping behavior when connection is lost"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         mock_websocket = AsyncMock()
         
         # Simulate connection loss during send
@@ -161,7 +161,7 @@ class TestPingPongErrorHandling:
     @pytest.mark.asyncio
     async def test_concurrent_pings(self):
         """Test handling of concurrent ping requests"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         server.extension_connection = AsyncMock()
         
         # Send multiple pings concurrently

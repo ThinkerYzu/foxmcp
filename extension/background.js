@@ -1,20 +1,24 @@
 let websocket = null;
 let isConnected = false;
 
-// Configuration - make these configurable
-const CONFIG = {
-  WS_URL: 'ws://localhost:8765',
-  RETRY_INTERVAL: 5000, // milliseconds (5 seconds default)
-  MAX_RETRY_ATTEMPTS: -1, // -1 for infinite retries, or set a number
-  PING_TIMEOUT: 5000 // ping timeout in milliseconds
+// Default configuration - will be loaded from storage
+let CONFIG = {
+  hostname: 'localhost',
+  port: 8765,
+  retryInterval: 5000, // milliseconds (5 seconds default)
+  maxRetries: -1, // -1 for infinite retries, or set a number
+  pingTimeout: 5000 // ping timeout in milliseconds
 };
+
+// Computed WebSocket URL
+let WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
 
 let retryAttempts = 0;
 
 function connectToMCPServer() {
   try {
-    console.log(`Attempting to connect to ${CONFIG.WS_URL} (attempt ${retryAttempts + 1})`);
-    websocket = new WebSocket(CONFIG.WS_URL);
+    console.log(`Attempting to connect to ${WS_URL} (attempt ${retryAttempts + 1})`);
+    websocket = new WebSocket(WS_URL);
     
     websocket.onopen = () => {
       console.log('Connected to MCP server');
@@ -45,13 +49,13 @@ function scheduleReconnect() {
   retryAttempts++;
   
   // Check if we've exceeded max retry attempts
-  if (CONFIG.MAX_RETRY_ATTEMPTS > 0 && retryAttempts > CONFIG.MAX_RETRY_ATTEMPTS) {
-    console.error(`Max retry attempts (${CONFIG.MAX_RETRY_ATTEMPTS}) exceeded. Stopping reconnection attempts.`);
+  if (CONFIG.maxRetries > 0 && retryAttempts > CONFIG.maxRetries) {
+    console.error(`Max retry attempts (${CONFIG.maxRetries}) exceeded. Stopping reconnection attempts.`);
     return;
   }
   
-  console.log(`Scheduling reconnection attempt ${retryAttempts} in ${CONFIG.RETRY_INTERVAL}ms`);
-  setTimeout(connectToMCPServer, CONFIG.RETRY_INTERVAL);
+  console.log(`Scheduling reconnection attempt ${retryAttempts} in ${CONFIG.retryInterval}ms`);
+  setTimeout(connectToMCPServer, CONFIG.retryInterval);
 }
 
 // Function to update configuration (can be called from popup or other scripts)
@@ -59,21 +63,60 @@ function updateConfig(newConfig) {
   Object.assign(CONFIG, newConfig);
   console.log('Configuration updated:', CONFIG);
   
+  // Update WebSocket URL
+  WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
+  
   // Save to storage for persistence
-  browser.storage.local.set({ foxmcpConfig: CONFIG });
+  browser.storage.sync.set({
+    hostname: CONFIG.hostname,
+    port: CONFIG.port,
+    retryInterval: CONFIG.retryInterval,
+    maxRetries: CONFIG.maxRetries,
+    pingTimeout: CONFIG.pingTimeout
+  });
+  
+  // Reconnect with new settings if currently connected
+  if (isConnected || websocket) {
+    console.log('Reconnecting with new configuration...');
+    disconnect();
+    connectToMCPServer();
+  }
 }
 
 // Load configuration from storage on startup
 async function loadConfig() {
   try {
-    const result = await browser.storage.local.get(['foxmcpConfig']);
-    if (result.foxmcpConfig) {
-      Object.assign(CONFIG, result.foxmcpConfig);
-      console.log('Configuration loaded from storage:', CONFIG);
-    }
+    const result = await browser.storage.sync.get({
+      hostname: 'localhost',
+      port: 8765,
+      retryInterval: 5000,
+      maxRetries: -1,
+      pingTimeout: 5000
+    });
+    
+    CONFIG.hostname = result.hostname;
+    CONFIG.port = result.port;
+    CONFIG.retryInterval = result.retryInterval;
+    CONFIG.maxRetries = result.maxRetries;
+    CONFIG.pingTimeout = result.pingTimeout;
+    
+    // Update WebSocket URL with loaded configuration
+    WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
+    
+    console.log('Configuration loaded from storage:', CONFIG);
+    console.log('WebSocket URL:', WS_URL);
   } catch (error) {
     console.error('Error loading configuration:', error);
   }
+}
+
+// Disconnect function
+function disconnect() {
+  if (websocket) {
+    websocket.close();
+    websocket = null;
+  }
+  isConnected = false;
 }
 
 async function handleMessage(message) {
@@ -149,6 +192,36 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
       retryAttempts: retryAttempts,
       config: CONFIG 
     });
+    return true;
+  }
+  
+  // Handle options page configuration updates
+  if (request.type === 'configUpdated') {
+    updateConfig(request.config);
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  // Handle advanced configuration updates
+  if (request.type === 'advancedConfigUpdated') {
+    updateConfig(request.config);
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  // Handle connection test from options page
+  if (request.type === 'testConnection') {
+    testPingPong().then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // Keep message channel open for async response
+  }
+  
+  // Handle connection status request from options page
+  if (request.type === 'getConnectionStatus') {
+    sendResponse({ connected: isConnected });
     return true;
   }
   

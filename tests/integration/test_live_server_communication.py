@@ -16,6 +16,10 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from server.server import FoxMCPServer
 
+# Import test configuration
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from test_config import TEST_PORTS
+
 
 class TestLiveServerCommunication:
     """Test live server communication"""
@@ -23,10 +27,9 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_server_can_start_and_stop(self):
         """Test that server can start and stop cleanly"""
-        import random
-        port = random.randint(8000, 8999)
-        mcp_port = random.randint(4000, 4999)
-        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)  # Disable MCP for basic tests
+        # Use fixed ports for reliable testing
+        ports = TEST_PORTS['integration_live']
+        server = FoxMCPServer(host="localhost", port=ports['websocket'], mcp_port=ports['mcp'], start_mcp=False)  # Disable MCP for basic tests
         
         # Test server startup
         server_task = asyncio.create_task(server.start_server())
@@ -48,9 +51,10 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_client_can_connect_to_server(self):
         """Test that a WebSocket client can connect to the server"""
-        import random
-        port = random.randint(8000, 8999)
-        mcp_port = random.randint(4000, 4999)
+        # Use fixed ports with offset to avoid conflicts
+        ports = TEST_PORTS['integration_live']
+        port = ports['websocket'] + 1
+        mcp_port = ports['mcp'] + 1
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
@@ -96,7 +100,7 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_server_message_handling(self):
         """Test server can handle messages correctly"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # Test different message types
         messages = [
@@ -134,7 +138,7 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_server_state_management(self):
         """Test server state is managed correctly"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # Initially no connection
         assert server.extension_connection is None
@@ -150,64 +154,70 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_bidirectional_communication_simulation(self):
         """Simulate bidirectional communication between server and extension"""
-        import random
-        port = random.randint(8000, 8999)
-        mcp_port = random.randint(4000, 4999)
-        server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
-        
-        # Start server
-        server_task = asyncio.create_task(server.start_server())
-        await asyncio.sleep(0.3)
-        
-        communication_successful = False
-        
+        # Use port coordinator to avoid conflicts
         try:
-            # Connect as "extension"
-            uri = f"ws://localhost:{port}"
-            websocket = await websockets.connect(uri)
-            
-            # Simulate extension sending a response
-            extension_response = {
-                "id": "bidirectional-001",
-                "type": "response",
-                "action": "tabs.list",
-                "data": {
-                    "tabs": [
-                        {"id": 1, "url": "https://example.com", "title": "Example"},
-                        {"id": 2, "url": "https://test.com", "title": "Test"}
-                    ]
-                },
-                "timestamp": time.time()
-            }
-            
-            await websocket.send(json.dumps(extension_response))
-            
-            # Simulate server sending a request (this would normally come from MCP)
-            server_request = {
-                "id": "bidirectional-002", 
-                "type": "request",
-                "action": "history.query",
-                "data": {"query": "search term", "maxResults": 10},
-                "timestamp": time.time()
-            }
-            
-            await websocket.send(json.dumps(server_request))
-            
-            communication_successful = True
-            await websocket.close()
-            
-        except Exception as e:
-            print(f"Bidirectional communication test failed: {e}")
-            
-        finally:
-            # Cleanup
-            server_task.cancel()
-            try:
-                await server_task
-            except asyncio.CancelledError:
-                pass
+            from ..port_coordinator import coordinated_test_ports
+        except ImportError:
+            from port_coordinator import coordinated_test_ports
         
-        assert communication_successful, "Bidirectional communication should work"
+        with coordinated_test_ports() as (ports, coord_file):
+            port = ports['websocket']
+            mcp_port = ports['mcp']
+            server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
+            
+            # Start server
+            server_task = asyncio.create_task(server.start_server())
+            await asyncio.sleep(0.3)
+            
+            communication_successful = False
+            
+            try:
+                # Connect as "extension"
+                uri = f"ws://localhost:{port}"
+                websocket = await websockets.connect(uri)
+                
+                # Simulate extension sending a response
+                extension_response = {
+                    "id": "bidirectional-001",
+                    "type": "response",
+                    "action": "tabs.list",
+                    "data": {
+                        "tabs": [
+                            {"id": 1, "url": "https://example.com", "title": "Example"},
+                            {"id": 2, "url": "https://test.com", "title": "Test"}
+                        ]
+                    },
+                    "timestamp": time.time()
+                }
+                
+                await websocket.send(json.dumps(extension_response))
+                
+                # Simulate server sending a request (this would normally come from MCP)
+                server_request = {
+                    "id": "bidirectional-002", 
+                    "type": "request",
+                    "action": "history.query",
+                    "data": {"query": "search term", "maxResults": 10},
+                    "timestamp": time.time()
+                }
+                
+                await websocket.send(json.dumps(server_request))
+                
+                communication_successful = True
+                await websocket.close()
+                
+            except Exception as e:
+                print(f"Bidirectional communication test failed: {e}")
+                
+            finally:
+                # Cleanup
+                server_task.cancel()
+                try:
+                    await server_task
+                except asyncio.CancelledError:
+                    pass
+            
+            assert communication_successful, "Bidirectional communication should work"
 
 
 class TestFirefoxExtensionProtocol:
@@ -216,7 +226,7 @@ class TestFirefoxExtensionProtocol:
     @pytest.mark.asyncio
     async def test_all_browser_actions_supported(self):
         """Test that all expected browser actions are supported"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # All browser actions that should be supported
         browser_actions = [
@@ -264,7 +274,7 @@ class TestFirefoxExtensionProtocol:
     @pytest.mark.asyncio
     async def test_error_handling_robustness(self):
         """Test that server handles various error conditions"""
-        server = FoxMCPServer()
+        server = FoxMCPServer(start_mcp=False)
         
         # Test various problematic inputs
         problematic_inputs = [
