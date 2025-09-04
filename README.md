@@ -15,6 +15,9 @@ make run-server
 # In another terminal, run tests
 make test
 
+# Run tests with Firefox extension loaded
+make test-with-firefox
+
 # Load extension in browser
 make load-extension
 ```
@@ -184,12 +187,28 @@ The project includes comprehensive test coverage:
 - **Integration Tests:** End-to-end WebSocket communication
 - **Protocol Tests:** Message format validation
 - **Ping-Pong Tests:** Connection validation
+- **Firefox Integration Tests:** Real browser extension testing
 
-Run with coverage:
+### Running Tests
+
 ```bash
+# Run all tests
 make test
-# Coverage report generated in tests/htmlcov/
+
+# Run tests with Firefox extension loaded
+make test-with-firefox
+
+# Run unit tests only
+make test-unit
+
+# Run integration tests only
+make test-integration
+
+# Custom Firefox path
+FIREFOX_PATH=/path/to/firefox make test-with-firefox
 ```
+
+Coverage reports are generated in `tests/htmlcov/`.
 
 ## Troubleshooting
 

@@ -47,6 +47,18 @@ python run_tests.py unit
 python run_tests.py integration
 ```
 
+### Run Tests with Firefox Extension
+
+```bash
+# From project root directory
+make test-with-firefox
+
+# With custom Firefox path
+FIREFOX_PATH=/path/to/firefox make test-with-firefox
+```
+
+This creates a temporary Firefox profile, installs the extension, runs Firefox in background, and executes the test suite with the extension loaded.
+
 ### Run Tests with Coverage
 
 ```bash
@@ -78,10 +90,12 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
 ### Integration Tests
 
 - **test_websocket_communication.py**: Tests end-to-end WebSocket communication
-  - Client-server connection
-  - Message exchange
-  - Connection recovery
-  - Error scenarios
+  - Extension connection testing (now enabled)
+  - Message exchange validation
+  - Connection state management
+  - Message routing verification
+  - Connection recovery scenarios
+  - Error handling scenarios
 
 ## Test Fixtures
 

@@ -10,6 +10,7 @@ NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 NEVER create git commits unless explicitly requested by the User.
+NEVER add Claude Code attribution or "Generated with Claude Code" footer in git commit messages.
 
 # Documentation Files Reference
 
