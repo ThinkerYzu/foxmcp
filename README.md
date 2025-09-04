@@ -27,7 +27,7 @@ make load-extension
 ```
 foxmcp/
 ├── extension/          # Firefox extension (WebExtensions API)
-├── server/            # Python WebSocket server  
+├── server/            # Python WebSocket server
 ├── tests/             # Unit and integration tests
 ├── Makefile          # Build and development commands
 └── docs/             # Documentation files
@@ -89,7 +89,7 @@ make test-integration # Integration tests only
 - `history.delete_item` - Remove specific history entry
 - `history.clear_range` - Clear history for time range
 
-### Tab Management  
+### Tab Management
 - `tabs.list` - Get all open tabs
 - `tabs.get_active` - Get currently active tab
 - `tabs.create` - Open new tab
@@ -106,7 +106,7 @@ make test-integration # Integration tests only
 
 ### Navigation Control
 - `navigation.back` - Go back in history
-- `navigation.forward` - Go forward in history  
+- `navigation.forward` - Go forward in history
 - `navigation.reload` - Reload current page
 - `navigation.go_to_url` - Navigate to specific URL
 
@@ -126,7 +126,7 @@ All communication uses JSON messages over WebSocket:
 {
   "id": "unique-request-id",
   "type": "request|response|error",
-  "action": "function_name", 
+  "action": "function_name",
   "data": {...},
   "timestamp": "ISO-8601"
 }
@@ -151,14 +151,14 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 - `tabs_close(tab_id)` - Close specific tab
 - `tabs_switch(tab_id)` - Switch to specific tab
 
-#### History Operations  
+#### History Operations
 - `history_query(query, max_results=50)` - Search browser history
 - `history_get_recent(count=10)` - Get recent history items
 - `history_delete_item(url)` - Delete specific history item
 
 #### Bookmark Management
 - `bookmarks_list(folder_id=None)` - List bookmarks
-- `bookmarks_search(query)` - Search bookmarks  
+- `bookmarks_search(query)` - Search bookmarks
 - `bookmarks_create(title, url, parent_id=None)` - Create bookmark
 - `bookmarks_delete(bookmark_id)` - Delete bookmark
 
@@ -178,14 +178,14 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 1. **Start the server**:
    ```bash
    make run-server  # Starts both WebSocket (8765) and MCP (3000) servers
-   
+
    # Or with custom ports:
    python server/server.py --port 9000 --mcp-port 4000
    ```
 
 2. **Configure Firefox extension** (if using non-default ports):
    - Right-click extension icon → **"Manage Extension"** → **"Preferences"**
-   - Set **Hostname**: `localhost` 
+   - Set **Hostname**: `localhost`
    - Set **WebSocket Port**: `8765` (or your custom port)
    - Click **"Save Settings"** → Extension automatically reconnects
 
@@ -205,20 +205,25 @@ MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser AP
 - **MCP Port**: Default `3000` - Used for MCP client connections
 
 ### Configuring Extension
-The Firefox extension includes an **Options Page** for easy port configuration:
+The Firefox extension includes comprehensive configuration options with **storage.sync** persistence:
 
 1. **Access Options**:
-   - Firefox: Right-click extension → "Manage Extension" → "Preferences"
+   - **Options Page**: Right-click extension → "Manage Extension" → "Preferences"
+   - **Popup Interface**: Click extension icon for quick configuration
    - Or go to `about:addons` → FoxMCP → "Preferences"
 
 2. **Configure Connection**:
    - **Hostname**: Server hostname (default: `localhost`)
    - **WebSocket Port**: Server WebSocket port (default: `8765`)
-   - **Advanced Options**: Retry intervals, timeouts, etc.
+   - **Advanced Options**: Retry intervals, max retries, ping timeouts
+   - **Test Configuration**: Built-in test override system for development
 
-3. **Test Connection**: Built-in connection test with status indicator
-
-4. **Automatic Reconnection**: Extension automatically reconnects when settings change
+3. **Features**:
+   - **Real-time storage sync**: Configuration changes persist across browser restarts
+   - **Test Connection**: Built-in ping-pong connection testing with detailed feedback
+   - **Status Indicators**: Live connection status with retry attempt information
+   - **Automatic Reconnection**: Extension automatically reconnects when settings change
+   - **Configuration Preservation**: Test settings maintained during normal use
 
 ### Server Configuration
 ```python
@@ -240,7 +245,7 @@ make setup              # Install all dependencies
 make install           # Install server dependencies only
 make dev               # Setup development environment
 
-# Building and Packaging  
+# Building and Packaging
 make build             # Build extension package
 make package           # Create distributable ZIP files
 
@@ -272,7 +277,7 @@ make status            # Show project status
 ### Firefox Extension Permissions
 - `tabs` - Tab management
 - `history` - Browser history access
-- `bookmarks` - Bookmark management  
+- `bookmarks` - Bookmark management
 - `activeTab` - Current tab content
 - `storage` - Extension storage
 - `<all_urls>` - All website access
@@ -300,7 +305,7 @@ make test
 # Run unit tests only
 make test-unit
 
-# Run integration tests only  
+# Run integration tests only
 make test-integration
 
 # Custom Firefox path (recommended for testing)
@@ -362,14 +367,15 @@ MIT License - see LICENSE file for details.
 - **WebSocket Communication**: Bidirectional communication with auto-reconnect and configurable retry intervals
 - **Browser API Integration**: Full WebExtensions API implementations for history, tabs, content, navigation, and bookmarks
 - **Response Correlation**: UUID-based request/response correlation with async handling and timeouts
-- **Configuration System**: Persistent configuration with UI controls for connection parameters
+- **Configuration System**: Complete storage.sync integration with test override support, popup and options page configuration
 - **Comprehensive Test Suite**: 77 tests with 74% code coverage and robust Firefox integration
 - **Build System**: Complete Makefile with development, testing, and XPI packaging commands
 - **Production-Ready WebSocket Server**: Robust server with proper error handling and connection management
 
-### ✅ Advanced Testing Infrastructure  
-- **Real Firefox Integration**: Automated testing with temporary profiles and extension installation
+### ✅ Advanced Testing Infrastructure
+- **Real Firefox Integration**: Automated testing with temporary profiles, extension installation, and SQLite configuration injection
 - **Dynamic Port Allocation**: Conflict-free test execution with unique ports per test suite
+- **Test Configuration System**: SQLite-based extension configuration with test override support
 - **Robust Fixture Management**: Proper async cleanup and resource management
 - **Multi-Client Testing**: Concurrent connection handling and server resilience testing
 - **Protocol Compliance**: Comprehensive message format and browser API coverage validation
@@ -382,7 +388,7 @@ MIT License - see LICENSE file for details.
 
 ### 📊 Test Results - ALL PASSING ✅
 - **77 total tests** across comprehensive test suites
-- **74% code coverage** of server components  
+- **74% code coverage** of server components
 - **38 integration tests** including real Firefox browser communication
 - **39 unit tests** covering individual component functionality
 - **All browser API functions tested** and verified working

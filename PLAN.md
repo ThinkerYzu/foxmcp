@@ -42,7 +42,8 @@
 - **Build System**: Complete Makefile with development, testing, and packaging workflows
 - **Documentation**: Comprehensive README, protocol specs, and development guides
 - **Extension UI**: Popup interface with connection testing and configuration
-- **Dynamic Testing**: Real Firefox integration with temporary profiles and extension installation
+- **Extension Configuration System**: Complete storage.sync integration with test override support
+- **Dynamic Testing**: Real Firefox integration with temporary profiles, extension installation, and SQLite configuration injection
 - **FastMCP Server Integration**: Complete MCP protocol implementation with FastMCP
 - **MCP Tool Definitions**: All browser functions exposed as callable MCP tools (20+ tools)
 - **End-to-End MCP Testing**: Verified MCP tool calls work with simulated and real WebSocket communication

@@ -33,14 +33,18 @@ foxmcp/
     ├── run_tests.py   # Test runner script (with PYTHONPATH fix)
     ├── README.md      # Test documentation
     ├── htmlcov/       # Coverage HTML reports (generated)
+    ├── firefox_test_utils.py   # Firefox testing utilities with SQLite configuration
+    ├── test_config.py          # Test configuration and port allocation
+    ├── port_coordinator.py     # Test port coordination system
     ├── unit/          # Unit tests
     │   ├── test_server.py      # Server component tests
     │   ├── test_mcp_handler.py # MCP handler tests
     │   ├── test_protocol.py    # Protocol message tests
     │   └── test_ping_pong.py   # Ping-pong functionality tests
     ├── integration/   # Integration tests
-    │   ├── test_websocket_communication.py (1 test skipped)
-    │   └── test_ping_pong_integration.py  # End-to-end ping tests
+    │   ├── test_websocket_communication.py # WebSocket communication tests
+    │   ├── test_ping_pong_integration.py  # End-to-end ping tests
+    │   └── test_real_firefox_communication.py # Real Firefox extension tests
     └── fixtures/      # Test data files
 ```
 
@@ -59,13 +63,15 @@ foxmcp/
 - **Purpose**: Extension persistent background script
 - **Key Features**:
   - WebSocket client connection to MCP server (ws://localhost:8765)
-  - **Configurable connection parameters** with persistent storage
+  - **Configurable connection parameters** with persistent storage via browser.storage.sync
+  - **Test configuration override system** - reads testPort/testHostname with priority over regular settings
   - Automatic reconnection with configurable retry intervals and limits
   - Message routing to appropriate handler functions
   - Request/response message handling with async support
   - **Ping-pong functionality** for connection testing
-  - **Runtime message handling** for popup communication
+  - **Runtime message handling** for popup and options page communication
   - **Async ping testing** with timeout and correlation
+  - **Configuration loading and updating** with test environment support
   - Error handling and logging
   - **Complete WebExtensions API implementations** for all function categories:
     - **History management**: Query history, get recent items via browser.history
@@ -101,14 +107,33 @@ foxmcp/
 ### `popup/popup.js`
 - **Purpose**: Popup interface logic
 - **Key Features**:
+  - **Direct storage.sync access** for accurate configuration reading and writing
+  - **Test configuration override support** - displays effective values with priority handling
   - **Real-time connection status checking** with retry information display
   - **Ping test functionality** with visual feedback and detailed results
-  - **Configuration management** with form validation and persistence via browser.storage
+  - **Configuration management** with WebSocket URL parsing/building and form validation
+  - **Test override preservation** - saves maintain test configurations during normal use
+  - **Test indicator display** - shows when test configuration overrides are active
   - **Force reconnect functionality** for manual connection control
   - **Async communication** with background script using browser.runtime.sendMessage
   - **Comprehensive error handling** with browser.runtime.lastError checks
   - **Dynamic UI updates** based on connection state and configuration
   - **Button state management** during testing and configuration operations
+
+### `options.html` & `options.js`
+- **Purpose**: Extension options/preferences page
+- **Key Features**:
+  - **Comprehensive configuration interface** with server settings and advanced options
+  - **Direct storage.sync integration** for reading and writing configuration
+  - **Test configuration override support** - displays effective values and warns when test overrides are active
+  - **Server configuration**: Hostname, port, and WebSocket URL management
+  - **Advanced settings**: Retry intervals, max retries, ping timeout configuration
+  - **Connection testing** with real ping-pong functionality
+  - **Connection status display** with real-time updates
+  - **Configuration preservation** - all saves maintain test overrides and existing settings
+  - **Form validation** with comprehensive error checking and user feedback
+  - **Reset to defaults** functionality with confirmation
+  - **Professional UI design** with organized sections and help text
 
 ## Server Directory (`/server`)
 
@@ -271,6 +296,21 @@ foxmcp/
 - **Robust fixture management** - Proper async cleanup and resource management
 - **Response correlation testing** - All async handler tests passing
 - **Multi-client testing** - Concurrent connection handling and server resilience testing
+- **Extension configuration testing** - SQLite storage-based configuration injection and testing
+- **Test override system** - Test configurations preserve and override regular extension settings
+
+### Firefox Test Infrastructure (`tests/firefox_test_utils.py`)
+- **Purpose**: Complete Firefox testing framework with automatic extension configuration
+- **Key Features**:
+  - **Temporary Firefox profile creation** with test-optimized preferences
+  - **Extension installation and enablement** via extensions.json modification using jq
+  - **SQLite storage configuration injection** - directly modifies storage-sync-v2.sqlite database
+  - **Test configuration override system** - injects testPort/testHostname with priority over regular settings
+  - **Firefox process management** - automated startup, initialization, and cleanup
+  - **Dynamic port allocation integration** - works with port coordination system
+  - **Context manager support** - automatic resource cleanup with proper error handling
+  - **Extension XPI detection** - automatic location of built extension packages
+  - **Profile isolation** - each test gets clean temporary profile to prevent conflicts
 
 ## Next Steps
 
