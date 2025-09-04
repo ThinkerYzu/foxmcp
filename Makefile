@@ -97,11 +97,11 @@ run-tests: package
 
 test-unit:
 	@echo "Running unit tests..."
-	cd tests && python run_tests.py unit
+	cd tests && PYTHONPATH=.. python run_tests.py unit
 
-test-integration:
+test-integration: package
 	@echo "Running integration tests..."
-	cd tests && python run_tests.py integration
+	cd tests && PYTHONPATH=.. python run_tests.py integration
 
 test-with-firefox: package
 	@echo "Running tests with temporary Firefox profile and extension..."

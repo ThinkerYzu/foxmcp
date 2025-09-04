@@ -43,13 +43,37 @@ def run_tests():
 
 def run_unit_tests_only():
     """Run only unit tests"""
+    # Change to tests directory
+    test_dir = Path(__file__).parent
+    os.chdir(test_dir)
+    
+    # Add project root to Python path so we can import server module
+    project_root = test_dir.parent
+    sys.path.insert(0, str(project_root))
+    
+    # Set PYTHONPATH environment variable
+    env = os.environ.copy()
+    env['PYTHONPATH'] = str(project_root)
+    
     cmd = [sys.executable, "-m", "pytest", "unit/", "-v"]
-    return subprocess.run(cmd).returncode
+    return subprocess.run(cmd, env=env).returncode
 
 def run_integration_tests_only():
     """Run only integration tests"""
+    # Change to tests directory
+    test_dir = Path(__file__).parent
+    os.chdir(test_dir)
+    
+    # Add project root to Python path so we can import server module
+    project_root = test_dir.parent
+    sys.path.insert(0, str(project_root))
+    
+    # Set PYTHONPATH environment variable
+    env = os.environ.copy()
+    env['PYTHONPATH'] = str(project_root)
+    
     cmd = [sys.executable, "-m", "pytest", "integration/", "-v"]  
-    return subprocess.run(cmd).returncode
+    return subprocess.run(cmd, env=env).returncode
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
