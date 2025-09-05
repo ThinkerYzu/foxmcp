@@ -135,7 +135,6 @@ clean:
 	@rm -rf tests/htmlcov/
 	@rm -rf tests/.coverage
 	@rm -rf /tmp/foxmcp-test-profile
-	@pkill -f "firefox.*foxmcp-test-profile" >/dev/null 2>&1 || true
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
