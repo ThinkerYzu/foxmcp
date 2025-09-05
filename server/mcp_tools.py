@@ -167,25 +167,30 @@ class FoxMCPTools:
         """Setup history management tools"""
         
         # History Query Tool
-        class HistoryQueryParams(BaseModel):
-            """Parameters for querying browser history"""
-            query: str = Field(description="Search query for history")
-            max_results: int = Field(default=50, description="Maximum number of results")
-            start_time: Optional[str] = Field(default=None, description="Start time filter (ISO format)")
-            end_time: Optional[str] = Field(default=None, description="End time filter (ISO format)")
-        
         @self.mcp.tool()
-        async def history_query(params: HistoryQueryParams) -> str:
-            """Search browser history"""
+        async def history_query(
+            query: str,
+            max_results: int = 50,
+            start_time: Optional[str] = None,
+            end_time: Optional[str] = None
+        ) -> str:
+            """Search browser history
+            
+            Args:
+                query: Search query for history
+                max_results: Maximum number of results (default: 50)
+                start_time: Start time filter (ISO format, optional)
+                end_time: End time filter (ISO format, optional)
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "history.query",
                 "data": {
-                    "query": params.query,
-                    "maxResults": params.max_results,
-                    **({"startTime": params.start_time} if params.start_time else {}),
-                    **({"endTime": params.end_time} if params.end_time else {})
+                    "query": query,
+                    "maxResults": max_results,
+                    **({"startTime": start_time} if start_time else {}),
+                    **({"endTime": end_time} if end_time else {})
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -212,25 +217,45 @@ class FoxMCPTools:
             
             return f"Unable to query history for: {params.query}"
         
-        # Get Recent History Tool
-        class HistoryRecentParams(BaseModel):
-            """Parameters for getting recent history"""
-            count: int = Field(default=10, description="Number of recent items to get")
-        
+        # WebSocket Connection Status Tool (for debugging)
         @self.mcp.tool()
-        async def history_get_recent(params: HistoryRecentParams) -> str:
-            """Get recent browser history"""
+        async def debug_websocket_status() -> str:
+            """Debug WebSocket connection status
+            
+            Returns information about the browser extension connection
+            """
+            if not hasattr(self.websocket_server, 'connected_clients'):
+                return "WebSocket server doesn't track connected clients"
+            
+            try:
+                client_count = len(getattr(self.websocket_server, 'connected_clients', []))
+                return f"WebSocket status: {client_count} browser extension(s) connected"
+            except Exception as e:
+                return f"WebSocket status check failed: {e}"
+
+        # Get Recent History Tool
+        @self.mcp.tool()
+        async def history_get_recent(count: int = 10) -> str:
+            """Get recent browser history
+            
+            Args:
+                count: Number of recent items to get (default: 10)
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
-                "action": "history.get_recent",
+                "action": "history.recent",
                 "data": {
-                    "count": params.count
+                    "count": count
                 },
                 "timestamp": datetime.now().isoformat()
             }
             
             response = await self.websocket_server.send_request_and_wait(request)
+            
+            # Debug logging for troubleshooting
+            import json
+            print(f"🔍 DEBUG - Recent history WebSocket response: {json.dumps(response, indent=2)}")
             
             if "error" in response:
                 return f"Error getting recent history: {response['error']}"
@@ -248,22 +273,23 @@ class FoxMCPTools:
                 
                 return result
             
-            return "Unable to get recent history"
+            # More detailed error message for debugging
+            return f"Unable to get recent history. Response type: {response.get('type')}, has_data: {'data' in response}, keys: {list(response.keys())}"
         
-        # Delete History Item Tool
-        class HistoryDeleteParams(BaseModel):
-            """Parameters for deleting a history item"""
-            url: str = Field(description="URL of the history item to delete")
-        
+        # Delete History Item Tool  
         @self.mcp.tool()
-        async def history_delete_item(params: HistoryDeleteParams) -> str:
-            """Delete a specific history item"""
+        async def history_delete_item(url: str) -> str:
+            """Delete a specific history item
+            
+            Args:
+                url: URL of the history item to delete
+            """
             request = {
                 "id": str(uuid.uuid4()),
-                "type": "request",
+                "type": "request", 
                 "action": "history.delete_item",
                 "data": {
-                    "url": params.url
+                    "url": url
                 },
                 "timestamp": datetime.now().isoformat()
             }

@@ -148,6 +148,8 @@ class DirectMCPTestClient:
             "switch_to_tab",
             "update_tab",
             "get_history",
+            "history_get_recent",
+            "debug_websocket_status",
             "search_history", 
             "delete_history",
             "list_bookmarks",
@@ -180,6 +182,8 @@ class DirectMCPTestClient:
                 "switch_to_tab": self._call_switch_to_tab,
                 "update_tab": self._call_update_tab,
                 "get_history": self._call_get_history,
+                "history_get_recent": self._call_get_recent_history,
+                "debug_websocket_status": self._call_debug_websocket_status,
                 "search_history": self._call_search_history,
                 "delete_history": self._call_delete_history,
                 "list_bookmarks": self._call_list_bookmarks,
@@ -326,6 +330,33 @@ class DirectMCPTestClient:
         
         response = await self.mcp_tools.websocket_server.send_request_and_wait(request)
         return response.get("data", {})
+    
+    async def _call_get_recent_history(self, args: Dict) -> Dict:
+        """Call history.recent through WebSocket"""
+        request = {
+            "id": str(uuid.uuid4()),
+            "type": "request",
+            "action": "history.recent",
+            "data": {
+                "count": args.get("count", 10)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self.mcp_tools.websocket_server.send_request_and_wait(request)
+        return response.get("data", {})
+    
+    async def _call_debug_websocket_status(self, args: Dict) -> Dict:
+        """Call debug WebSocket status check"""
+        # This is a direct call to the server, no WebSocket needed
+        try:
+            if hasattr(self.mcp_tools.websocket_server, 'connected_clients'):
+                client_count = len(getattr(self.mcp_tools.websocket_server, 'connected_clients', []))
+                return {"status": f"WebSocket status: {client_count} browser extension(s) connected"}
+            else:
+                return {"status": "WebSocket server doesn't track connected clients"}
+        except Exception as e:
+            return {"status": f"WebSocket status check failed: {e}"}
     
     async def _call_search_history(self, args: Dict) -> Dict:
         """Call history.search through WebSocket"""

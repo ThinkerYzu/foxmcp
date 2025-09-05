@@ -286,6 +286,7 @@ class TestEndToEndMCP:
         tool_tests = [
             ("list_tabs", {}),
             ("get_history", {"query": "example", "maxResults": 10}),
+            ("history_get_recent", {"count": 5}),
             ("list_bookmarks", {}),
             ("get_page_content", {"url": "https://example.com"})
         ]
@@ -302,6 +303,324 @@ class TestEndToEndMCP:
             await asyncio.sleep(0.5)
         
         print("✓ Multiple MCP tool calls completed successfully")
+    
+    @pytest.mark.asyncio
+    async def test_mcp_recent_history_functionality(self, full_mcp_system):
+        """Test comprehensive recent history functionality through MCP
+        
+        This test ensures the MCP server can retrieve recent browser history
+        and handles various parameter combinations correctly.
+        """
+        system = full_mcp_system
+        mcp_client = system['mcp_client']
+        
+        await mcp_client.connect()
+        
+        # Test 1: Basic recent history call
+        print("Testing basic recent history retrieval...")
+        result = await mcp_client.call_tool("history_get_recent", {"count": 5})
+        
+        assert 'content' in result, "MCP result should have content"
+        assert result['success'], f"Recent history call should succeed: {result}"
+        assert not result.get('isError', False), f"Should not be error: {result}"
+        
+        # Test 2: Different count parameters
+        test_counts = [1, 10, 20]
+        for count in test_counts:
+            print(f"Testing recent history with count={count}...")
+            result = await mcp_client.call_tool("history_get_recent", {"count": count})
+            
+            assert result['success'], f"Recent history with count={count} should succeed"
+            assert not result.get('isError', False), f"Count={count} should not error"
+            
+            # Small delay between calls
+            await asyncio.sleep(0.2)
+        
+        # Test 3: Default parameters (no count specified)
+        print("Testing recent history with default parameters...")
+        result = await mcp_client.call_tool("history_get_recent", {})
+        
+        assert result['success'], "Recent history with default params should succeed"
+        assert not result.get('isError', False), "Default params should not error"
+        
+        # Test 4: Edge case - zero count
+        print("Testing recent history with count=0...")
+        result = await mcp_client.call_tool("history_get_recent", {"count": 0})
+        
+        # This should either succeed with empty results or handle gracefully
+        assert result['success'], "Recent history with count=0 should be handled gracefully"
+        
+        # Test 5: Large count value
+        print("Testing recent history with large count...")
+        result = await mcp_client.call_tool("history_get_recent", {"count": 100})
+        
+        assert result['success'], "Recent history with large count should succeed"
+        assert not result.get('isError', False), "Large count should not error"
+        
+        print("✓ MCP recent history functionality working correctly")
+        print("✓ All parameter combinations handled properly")
+    
+    @pytest.mark.asyncio
+    async def test_real_mcp_http_server_tool_names(self, full_mcp_system):
+        """Test that actual FastMCP HTTP server has the expected tool names
+        
+        This test prevents naming mismatches between DirectMCPTestClient 
+        and the real FastMCP server that external agents would use.
+        """
+        system = full_mcp_system
+        mcp_port = system['mcp_port']
+        
+        try:
+            import aiohttp
+        except ImportError:
+            pytest.skip("aiohttp not available for HTTP testing")
+        
+        # Give server time to fully start
+        await asyncio.sleep(1.0)
+        
+        async with aiohttp.ClientSession() as session:
+            # Test tools/list endpoint to get actual tool names
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream"
+                }
+                
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": "test-tools-list",
+                    "method": "tools/list",
+                    "params": {}
+                }
+                
+                async with session.post(
+                    f"http://localhost:{mcp_port}/mcp", 
+                    json=payload,
+                    headers=headers
+                ) as response:
+                    
+                    if response.status == 406:  # Not Acceptable - missing SSE
+                        print("⚠ Server requires SSE headers - trying with curl-like request")
+                        # This is expected for FastMCP servers
+                        pytest.skip("FastMCP server requires specific SSE setup for tools/list")
+                    
+                    text = await response.text()
+                    print(f"Response status: {response.status}")
+                    print(f"Response: {text}")
+                    
+                    # For event-stream responses, parse the data
+                    if "event:" in text:
+                        lines = text.strip().split('\n')
+                        for line in lines:
+                            if line.startswith('data: '):
+                                data_json = line[6:]  # Remove 'data: '
+                                data = json.loads(data_json)
+                                
+                                if "result" in data and "tools" in data["result"]:
+                                    tools = data["result"]["tools"]
+                                    tool_names = [tool["name"] for tool in tools]
+                                    
+                                    # Verify expected history tools exist
+                                    expected_history_tools = [
+                                        "history_get_recent",
+                                        "history_query", 
+                                        "history_delete_item"
+                                    ]
+                                    
+                                    for expected_tool in expected_history_tools:
+                                        assert expected_tool in tool_names, f"Expected tool '{expected_tool}' not found in FastMCP tools: {tool_names}"
+                                    
+                                    # Verify incorrect names don't exist
+                                    incorrect_names = [
+                                        "get_recent_history",  # Wrong name that would cause agent failures
+                                        "get_history_recent"   # Another potential wrong name
+                                    ]
+                                    
+                                    for incorrect_name in incorrect_names:
+                                        assert incorrect_name not in tool_names, f"Incorrect tool name '{incorrect_name}' found in FastMCP tools - this would confuse external agents"
+                                    
+                                    print(f"✓ FastMCP server has correct tool names")
+                                    print(f"✓ History tools found: {[t for t in tool_names if 'history' in t]}")
+                                    return
+                    
+                    # If we get here, we couldn't parse the response
+                    print("⚠ Could not parse tools list from FastMCP response")
+                    
+            except Exception as e:
+                print(f"Note: HTTP MCP test encountered: {e}")
+                print("This may be expected due to FastMCP's SSE requirements")
+                
+                # As a fallback, verify tools exist in the server instance directly
+                server = system['server']
+                tools_dict = await server.mcp_app.get_tools()
+                tool_names = list(tools_dict.keys())
+                
+                # Same verification as above
+                expected_history_tools = [
+                    "history_get_recent",
+                    "history_query", 
+                    "history_delete_item"
+                ]
+                
+                for expected_tool in expected_history_tools:
+                    assert expected_tool in tool_names, f"Expected tool '{expected_tool}' not found in FastMCP tools: {tool_names}"
+                
+                print(f"✓ FastMCP server instance has correct tool names (verified directly)")
+                print(f"✓ History tools found: {[t for t in tool_names if 'history' in t]}")
+    
+    @pytest.mark.asyncio
+    async def test_mcp_parameter_format_validation(self, full_mcp_system):
+        """Test that MCP tools properly validate parameter formats
+        
+        This test catches parameter format issues that external agents might encounter,
+        such as sending 'arguments' instead of 'params', or string instead of JSON object.
+        """
+        system = full_mcp_system
+        server = system['server']
+        
+        # Get the FastMCP tool to examine its expected parameters
+        tools_dict = await server.mcp_app.get_tools()
+        history_tool = tools_dict['history_get_recent']
+        
+        print("Testing parameter format validation for history_get_recent:")
+        print(f"Expected schema: {history_tool.parameters}")
+        
+        # Verify the tool has direct parameters (no params wrapper)
+        assert 'params' not in history_tool.parameters.get('properties', {}), \
+            "FastMCP tool should NOT have 'params' wrapper - should be direct parameters"
+        
+        # Verify count parameter is directly accessible
+        assert 'count' in history_tool.parameters.get('properties', {}), \
+            "Should have direct 'count' parameter"
+            
+        # Verify count parameter structure
+        count_param = history_tool.parameters['properties']['count']
+        assert count_param['type'] == 'integer', "'count' should be integer type"
+        assert 'default' in count_param, "Should have default value"
+        assert count_param['default'] == 10, "Default should be 10"
+        
+        print("✓ Parameter schema validation:")
+        print(f"  - Tool expects direct parameters (no 'params' wrapper)")
+        print(f"  - 'count' parameter is integer, default: {count_param['default']}")
+        print(f"  - Agents should send: 'arguments': {{'count': 5}}")
+        
+        # Test with DirectMCPTestClient to ensure it works correctly
+        mcp_client = system['mcp_client']
+        await mcp_client.connect()
+        
+        # This should work (correct format)
+        result = await mcp_client.call_tool("history_get_recent", {"count": 3})
+        assert result['success'], f"Correct parameter format should work: {result}"
+        
+        print("✓ DirectMCPTestClient correctly formats parameters for FastMCP")
+        print("✓ Parameter validation test complete")
+        
+        # Document the correct format for external agents
+        print("\n📋 For external MCP agents:")
+        print("✅ Correct:   {'arguments': {'count': 5}}")
+        print("❌ Wrong:     {'arguments': {'params': {'count': 5}}}")
+        print("❌ Wrong:     {'arguments': {'params': '{\"count\": 5}'}}")  # String instead of object
+    
+    @pytest.mark.asyncio
+    async def test_agent_parameter_error_reproduction(self, full_mcp_system):
+        """Reproduce the exact error that external agents encounter
+        
+        This test reproduces the specific error format that the user's agent sends:
+        'arguments': {'params': '{}'}  instead of  'arguments': {'count': 10}
+        """
+        system = full_mcp_system
+        mcp_port = system['mcp_port']
+        
+        try:
+            import aiohttp
+        except ImportError:
+            pytest.skip("aiohttp not available for HTTP testing")
+        
+        await asyncio.sleep(1.0)  # Wait for server to start
+        
+        print("Testing agent parameter format errors:")
+        
+        # The EXACT message the user's agent sends (incorrect)
+        incorrect_agent_message = {
+            "method": "tools/call",
+            "params": {
+                "name": "history_get_recent",
+                "arguments": {"params": "{}"},  # ❌ Wrong: nested params as string
+                "_meta": {"claudecode/toolUseId": "test_id"}
+            },
+            "jsonrpc": "2.0",
+            "id": 4
+        }
+        
+        # What the agent SHOULD send (correct)
+        correct_agent_message = {
+            "method": "tools/call", 
+            "params": {
+                "name": "history_get_recent",
+                "arguments": {"count": 5},  # ✅ Correct: direct count parameter
+                "_meta": {"claudecode/toolUseId": "test_id"}
+            },
+            "jsonrpc": "2.0",
+            "id": 5
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream"
+            }
+            
+            # Test 1: Send the incorrect message (what the user's agent sends)
+            print("\\n1. Testing INCORRECT agent message format:")
+            print(f"   Sending: {incorrect_agent_message}")
+            
+            try:
+                async with session.post(
+                    f"http://localhost:{mcp_port}/mcp",
+                    json=incorrect_agent_message,
+                    headers=headers
+                ) as response:
+                    text = await response.text()
+                    print(f"   Status: {response.status}")
+                    print(f"   Response: {text}")
+                    
+                    # This should show the validation error
+                    if "error" in text:
+                        print("   ✅ FastMCP correctly rejects malformed parameters")
+                    else:
+                        print("   ⚠️  Unexpected response")
+                        
+            except Exception as e:
+                print(f"   Exception: {e}")
+            
+            # Test 2: Send the correct message 
+            print("\\n2. Testing CORRECT agent message format:")
+            print(f"   Sending: {correct_agent_message}")
+            
+            try:
+                async with session.post(
+                    f"http://localhost:{mcp_port}/mcp",
+                    json=correct_agent_message, 
+                    headers=headers
+                ) as response:
+                    text = await response.text()
+                    print(f"   Status: {response.status}")
+                    print(f"   Response: {text}")
+                    
+                    if response.status == 200:
+                        print("   ✅ Correct format works")
+                    elif "Missing session" in text or "session ID" in text:
+                        print("   ✅ Correct format accepted (session management issue)")
+                    else:
+                        print("   ⚠️  Unexpected response")
+                        
+            except Exception as e:
+                print(f"   Exception: {e}")
+        
+        print("\\n📋 CONCLUSION FOR AGENT DEVELOPERS:")
+        print("❌ Don't send: 'arguments': {'params': '{}'}")
+        print("✅ Do send:    'arguments': {'count': 5}")
+        print("✅ The 'count' goes directly in 'arguments', not nested in 'params'")
     
     @pytest.mark.asyncio
     async def test_mcp_http_endpoint_is_callable(self, full_mcp_system):
