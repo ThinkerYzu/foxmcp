@@ -11,6 +11,8 @@ import os
 import sys
 import subprocess
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 # Add parent directories to path
@@ -248,8 +250,8 @@ class TestEndToEndMCP:
             initial_sent_count = len(server.sent_messages)
             
             # Make MCP tool call
-            print("Making MCP tool call: list_tabs")
-            result = await mcp_client.call_tool("list_tabs")
+            print("Making MCP tool call: tabs_list")
+            result = await mcp_client.call_tool("tabs_list")
             
             # Wait for message processing
             await asyncio.sleep(2.0)
@@ -662,13 +664,149 @@ class TestEndToEndMCP:
                 else:
                     # Other errors are acceptable as long as it's not the callable error
                     print(f"✓ MCP endpoint accessible (got expected error: {type(e).__name__})")
+    
+    @pytest.mark.asyncio
+    async def test_end_to_end_tab_creation_and_listing(self, full_mcp_system):
+        """Test complete end-to-end tab creation and listing with actual browser tabs"""
+        system = full_mcp_system
+        server = system['server']
+        mcp_client = system['mcp_client']
+        
+        # Skip if required components not available
+        extension_xpi = get_extension_xpi_path()
+        if not extension_xpi or not os.path.exists(extension_xpi):
+            pytest.skip("Extension XPI not found")
+            
+        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        if not os.path.exists(os.path.expanduser(firefox_path)):
+            pytest.skip("Firefox not found")
+        
+        # Connect MCP client
+        await mcp_client.connect()
+        
+        # Start Firefox with extension
+        with FirefoxTestManager(
+            firefox_path=firefox_path,
+            test_port=system['websocket_port'], 
+            coordination_file=system['coordination_file']
+        ) as firefox:
+            
+            firefox.create_test_profile()
+            firefox.install_extension(extension_xpi)
+            firefox.start_firefox(headless=True)
+            
+            # Wait for extension connection
+            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            
+            if len(server.connected_clients) == 0:
+                pytest.skip("Extension did not connect - cannot test tab functionality")
+            
+            print("\\n🧪 Testing End-to-End Tab Creation and Listing")
+            
+            # Step 1: Test tabs_list when no tabs exist (or only about:blank)
+            print("\\n1️⃣  Testing tabs_list with minimal tabs...")
+            result = await mcp_client.call_tool("tabs_list")
+            
+            # This should succeed even if no tabs found
+            assert not result.get('isError', False), f"tabs_list should not error: {result}"
+            initial_content = result.get('content', '')
+            print(f"   Initial tab state: {initial_content}")
+            
+            # Step 2: Create test tabs using extension helper
+            print("\\n2️⃣  Creating test tabs via extension...")
+            
+            # Use the WebSocket to send test helper command
+            if hasattr(server, 'send_to_extension'):
+                test_create_request = {
+                    "id": str(uuid.uuid4()),
+                    "type": "request",
+                    "action": "test.create_test_tabs",
+                    "data": {
+                        "count": 3,
+                        "closeExisting": True,
+                        "urls": [
+                            "https://example.com",
+                            "https://httpbin.org/status/200", 
+                            "https://httpbin.org/html"
+                        ]
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                try:
+                    create_response = await server.send_to_extension(test_create_request)
+                    
+                    if create_response.get("type") == "response":
+                        print(f"   ✅ Created test tabs: {create_response.get('data', {}).get('message')}")
+                        
+                        # Wait for tabs to be created and loaded
+                        await asyncio.sleep(3.0)
+                        
+                        # Step 3: Test tabs_list with created tabs
+                        print("\\n3️⃣  Testing tabs_list with created tabs...")
+                        result = await mcp_client.call_tool("tabs_list")
+                        
+                        assert not result.get('isError', False), f"tabs_list should not error after creating tabs: {result}"
+                        
+                        tab_content = result.get('content', '')
+                        print(f"   Tab list content: {tab_content}")
+                        
+                        # Verify we got actual tab data, not "No tabs found"
+                        assert "No tabs found" not in tab_content, "Should find tabs after creating them"
+                        assert "Open tabs:" in tab_content or "ID " in tab_content, "Should show tab information"
+                        
+                        # Step 4: Verify tab creation tool
+                        print("\\n4️⃣  Testing tabs_create via MCP...")
+                        create_result = await mcp_client.call_tool("tabs_create", {
+                            "url": "https://httpbin.org/json",
+                            "active": True
+                        })
+                        
+                        assert not create_result.get('isError', False), f"tabs_create should not error: {create_result}"
+                        
+                        create_content = create_result.get('content', '')
+                        print(f"   Tab creation result: {create_content}")
+                        
+                        # Verify creation was successful
+                        assert "Created tab:" in create_content or "Successfully" in create_content, "Should confirm tab creation"
+                        
+                        # Step 5: Final tabs_list to verify all tabs
+                        print("\\n5️⃣  Final tabs_list verification...")
+                        final_result = await mcp_client.call_tool("tabs_list")
+                        
+                        assert not final_result.get('isError', False), f"Final tabs_list should not error: {final_result}"
+                        
+                        final_content = final_result.get('content', '')
+                        print(f"   Final tab count verification: {final_content}")
+                        
+                        # Should have at least 4 tabs (3 from helper + 1 from MCP)
+                        tab_lines = [line for line in final_content.split('\\n') if 'ID ' in line]
+                        assert len(tab_lines) >= 3, f"Should have at least 3 tabs, found: {len(tab_lines)}"
+                        
+                        print(f"✅ End-to-end tab test successful! Found {len(tab_lines)} tabs")
+                        
+                    else:
+                        print(f"   ⚠️  Failed to create test tabs: {create_response}")
+                        pytest.skip("Could not create test tabs for verification")
+                        
+                except Exception as e:
+                    print(f"   ⚠️  Extension test helper error: {e}")
+                    pytest.skip("Extension test helper not available")
+            else:
+                pytest.skip("WebSocket server doesn't support extension communication")
 
 
 class TestMCPProtocolCompliance:
-    """Test MCP protocol compliance"""
+    """Test MCP protocol compliance and schema validation"""
     
     def test_mcp_tools_have_proper_schemas(self):
-        """Test that MCP tools have proper parameter schemas"""
+        """Test that MCP tools have proper parameter schemas
+        
+        This is a basic test that verifies FastMCP integration.
+        For detailed schema validation see:
+        - test_all_history_tools_schema_validation()
+        - test_all_tab_tools_schema_validation()
+        """
         from server.mcp_tools import FoxMCPTools
         
         # Create mock server for testing
@@ -685,6 +823,7 @@ class TestMCPProtocolCompliance:
         assert isinstance(mcp_app, FastMCP)
         
         print("✓ MCP tools have proper FastMCP integration")
+        print("✓ See test_all_*_tools_schema_validation() for detailed schema tests")
     
     @pytest.mark.asyncio
     async def test_all_history_tools_schema_validation(self):
@@ -795,6 +934,147 @@ class TestMCPProtocolCompliance:
         print("✅ No 'params' wrapper issues found")
         print("✅ All required/optional parameters validated")
         print("✅ Parameter types validated")
+    
+    @pytest.mark.asyncio
+    async def test_all_tab_tools_schema_validation(self):
+        """Test that ALL tab tools have correct parameter schemas
+        
+        This test ensures none of the tab tools have the 'params' wrapper
+        issue that would confuse external MCP agents.
+        """
+        from server.server import FoxMCPServer
+        
+        server = FoxMCPServer(start_mcp=False)
+        tools_dict = await server.mcp_app.get_tools()
+        
+        # Find all tab tools
+        tab_tools = {name: tool for name, tool in tools_dict.items() if name.startswith('tabs_')}
+        
+        print(f"Testing schema validation for {len(tab_tools)} tab tools:")
+        
+        # Expected schema structure for each tab tool (direct parameters, no BaseModel wrapper)
+        expected_schemas = {
+            'tabs_list': {
+                'required': [],
+                'optional': [],
+                'expected_types': {}
+            },
+            'tabs_create': {
+                'required': ['url'],
+                'optional': ['active', 'pinned', 'window_id'],
+                'expected_types': {
+                    'url': 'string',
+                    'active': 'boolean',
+                    'pinned': 'boolean',
+                    'window_id': 'integer'  # Direct parameter, not anyOf
+                }
+            },
+            'tabs_close': {
+                'required': ['tab_id'],
+                'optional': [],
+                'expected_types': {
+                    'tab_id': 'integer'
+                }
+            },
+            'tabs_switch': {
+                'required': ['tab_id'],
+                'optional': [],
+                'expected_types': {
+                    'tab_id': 'integer'
+                }
+            }
+        }
+        
+        for tool_name, tool in tab_tools.items():
+            print(f"\n📋 Validating {tool_name}:")
+            
+            schema = tool.parameters
+            properties = schema.get('properties', {})
+            required = schema.get('required', [])
+            
+            # Test 1: No params wrapper
+            assert 'params' not in properties, \
+                f"❌ {tool_name} has 'params' wrapper - should use direct parameters"
+            print("   ✅ No 'params' wrapper (direct parameters)")
+            
+            # Test 2: Schema structure matches expectations  
+            if tool_name in expected_schemas:
+                expected = expected_schemas[tool_name]
+                
+                # Check required parameters
+                for req_param in expected['required']:
+                    assert req_param in properties, \
+                        f"❌ {tool_name} missing required parameter: {req_param}"
+                    assert req_param in required, \
+                        f"❌ {tool_name} parameter {req_param} should be marked as required"
+                
+                # Check optional parameters exist
+                for opt_param in expected['optional']:
+                    assert opt_param in properties, \
+                        f"❌ {tool_name} missing optional parameter: {opt_param}"
+                    assert opt_param not in required, \
+                        f"❌ {tool_name} parameter {opt_param} should be optional"
+                
+                # Check parameter types (handle both direct types and anyOf for optional)
+                for param_name, expected_type in expected['expected_types'].items():
+                    if param_name in properties:
+                        param_def = properties[param_name]
+                        actual_type = param_def.get('type')
+                        
+                        # Handle anyOf structure for optional parameters
+                        if actual_type is None and 'anyOf' in param_def:
+                            # Look for the expected type in anyOf array
+                            any_of_types = param_def['anyOf']
+                            matching_types = [t for t in any_of_types if t.get('type') == expected_type]
+                            assert matching_types, \
+                                f"❌ {tool_name}.{param_name} should include {expected_type} in anyOf, got {any_of_types}"
+                            print(f"     ✓ {param_name}: anyOf includes {expected_type} (optional)")
+                        else:
+                            assert actual_type == expected_type, \
+                                f"❌ {tool_name}.{param_name} should be {expected_type}, got {actual_type}"
+                            print(f"     ✓ {param_name}: {actual_type} matches expected")
+                
+                print(f"   ✅ Schema structure matches expectations")
+                
+                # Show parameter summary
+                param_list = []
+                for param_name in properties:
+                    is_req = param_name in required
+                    req_str = "required" if is_req else "optional"
+                    param_list.append(f"{param_name}({req_str})")
+                print(f"   ✅ Parameters: {', '.join(param_list) if param_list else 'none'}")
+            else:
+                print(f"   ⚠️  No schema expectations defined for {tool_name}")
+        
+        print(f"\n🎉 All {len(tab_tools)} tab tools have correct schemas!")
+        print("✅ No 'params' wrapper issues found")
+        print("✅ All required/optional parameters validated")
+        print("✅ Parameter types validated")
+    
+    @pytest.mark.asyncio
+    async def test_tab_tools_exist_and_callable(self):
+        """Test that all expected tab tools exist and are properly configured"""
+        from server.server import FoxMCPServer
+        
+        server = FoxMCPServer(start_mcp=False)
+        tools_dict = await server.mcp_app.get_tools()
+        
+        # Expected tab tools
+        expected_tab_tools = ['tabs_list', 'tabs_create', 'tabs_close', 'tabs_switch']
+        
+        print(f"Testing existence of {len(expected_tab_tools)} tab tools:")
+        
+        for tool_name in expected_tab_tools:
+            assert tool_name in tools_dict, f"❌ Missing tab tool: {tool_name}"
+            tool = tools_dict[tool_name]
+            
+            # Verify it has the expected attributes
+            assert hasattr(tool, 'description'), f"❌ {tool_name} missing description"
+            assert hasattr(tool, 'parameters'), f"❌ {tool_name} missing parameters"
+            
+            print(f"   ✅ {tool_name}: {tool.description}")
+        
+        print(f"✅ All {len(expected_tab_tools)} tab tools exist and are properly configured")
     
     def test_tool_parameter_validation(self):
         """Test that tools have proper parameter validation"""

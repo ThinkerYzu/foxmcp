@@ -157,11 +157,12 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - End-to-end MCP tool workflow validation
 
 - **test_end_to_end_mcp.py**: Comprehensive MCP protocol compliance tests
-  - **Schema validation**: All history tools have correct parameter schemas
+  - **Schema validation**: All history and tab tools have correct parameter schemas
   - **Parameter format validation**: Direct parameters (no `params` wrapper)
   - **Agent error reproduction**: Tests for common external agent issues
   - **HTTP endpoint validation**: FastMCP server accessibility testing
   - **Tool naming validation**: Prevents naming mismatches between test and production
+  - **End-to-end tab testing**: Creates actual browser tabs and verifies tab listing functionality
 
 ## Test Fixtures
 
@@ -259,7 +260,7 @@ The test suite includes comprehensive Firefox browser integration:
 
 All major browser functions are tested:
 
-**Tabs Management:** `tabs.list`, `tabs.get_active`, `tabs.create`, `tabs.close`, `tabs.switch`, `tabs.duplicate`
+**Tabs Management:** `tabs_list`, `tabs_create`, `tabs_close`, `tabs_switch` (with end-to-end tab creation and listing tests) - ✅ All implemented in extension
 
 **History Operations:** `history.query`, `history.get_recent`, `history.delete_item`, `history.clear_range`
 

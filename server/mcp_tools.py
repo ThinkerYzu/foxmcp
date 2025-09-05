@@ -33,12 +33,8 @@ class FoxMCPTools:
         """Setup tab management tools"""
         
         # Tab List Tool
-        class TabListParams(BaseModel):
-            """Parameters for listing tabs"""
-            pass
-        
         @self.mcp.tool()
-        async def tabs_list(params: TabListParams) -> str:
+        async def tabs_list() -> str:
             """List all open browser tabs"""
             request = {
                 "id": str(uuid.uuid4()),
@@ -56,9 +52,10 @@ class FoxMCPTools:
             if response.get("type") == "response" and "data" in response:
                 tabs = response["data"].get("tabs", [])
                 if not tabs:
-                    return "No tabs found"
+                    # More informative message for debugging
+                    return f"No tabs found. Extension response: {response.get('data', {})}"
                 
-                result = "Open tabs:\n"
+                result = f"Open tabs ({len(tabs)} found):\n"
                 for tab in tabs:
                     active = " (active)" if tab.get("active") else ""
                     result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}\n"
@@ -67,25 +64,30 @@ class FoxMCPTools:
             return "Unable to retrieve tabs"
         
         # Tab Create Tool
-        class TabCreateParams(BaseModel):
-            """Parameters for creating a new tab"""
-            url: str = Field(description="URL to open in the new tab")
-            active: bool = Field(default=True, description="Whether the tab should be active")
-            pinned: bool = Field(default=False, description="Whether the tab should be pinned")
-            window_id: Optional[int] = Field(default=None, description="Window ID to create tab in")
-        
         @self.mcp.tool()
-        async def tabs_create(params: TabCreateParams) -> str:
-            """Create a new browser tab"""
+        async def tabs_create(
+            url: str,
+            active: bool = True,
+            pinned: bool = False,
+            window_id: Optional[int] = None
+        ) -> str:
+            """Create a new browser tab
+            
+            Args:
+                url: URL to open in the new tab
+                active: Whether the tab should be active (default: True)
+                pinned: Whether the tab should be pinned (default: False)
+                window_id: Window ID to create tab in (optional)
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request", 
                 "action": "tabs.create",
                 "data": {
-                    "url": params.url,
-                    "active": params.active,
-                    "pinned": params.pinned,
-                    **({"windowId": params.window_id} if params.window_id else {})
+                    "url": url,
+                    "active": active,
+                    "pinned": pinned,
+                    **({"windowId": window_id} if window_id else {})
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -97,24 +99,24 @@ class FoxMCPTools:
             
             if response.get("type") == "response" and "data" in response:
                 tab = response["data"].get("tab", {})
-                return f"Created tab: ID {tab.get('id')} - {tab.get('title', 'Loading...')} - {tab.get('url', params.url)}"
+                return f"Created tab: ID {tab.get('id')} - {tab.get('title', 'Loading...')} - {tab.get('url', url)}"
             
             return "Unable to create tab"
         
         # Tab Close Tool
-        class TabCloseParams(BaseModel):
-            """Parameters for closing a tab"""
-            tab_id: int = Field(description="ID of the tab to close")
-        
         @self.mcp.tool()
-        async def tabs_close(params: TabCloseParams) -> str:
-            """Close a browser tab"""
+        async def tabs_close(tab_id: int) -> str:
+            """Close a browser tab
+            
+            Args:
+                tab_id: ID of the tab to close
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "tabs.close", 
                 "data": {
-                    "tabId": params.tab_id
+                    "tabId": tab_id
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -125,27 +127,27 @@ class FoxMCPTools:
                 return f"Error closing tab: {response['error']}"
             
             if response.get("type") == "response":
-                return f"Successfully closed tab {params.tab_id}"
+                return f"Successfully closed tab {tab_id}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to close tab: {error_msg}"
             
-            return f"Unable to close tab {params.tab_id}"
+            return f"Unable to close tab {tab_id}"
         
         # Tab Switch Tool
-        class TabSwitchParams(BaseModel):
-            """Parameters for switching to a tab"""
-            tab_id: int = Field(description="ID of the tab to switch to")
-        
         @self.mcp.tool()
-        async def tabs_switch(params: TabSwitchParams) -> str:
-            """Switch to a specific browser tab"""
+        async def tabs_switch(tab_id: int) -> str:
+            """Switch to a specific browser tab
+            
+            Args:
+                tab_id: ID of the tab to switch to
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "tabs.switch",
                 "data": {
-                    "tabId": params.tab_id
+                    "tabId": tab_id
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -156,12 +158,12 @@ class FoxMCPTools:
                 return f"Error switching to tab: {response['error']}"
             
             if response.get("type") == "response":
-                return f"Successfully switched to tab {params.tab_id}"
+                return f"Successfully switched to tab {tab_id}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error") 
                 return f"Failed to switch to tab: {error_msg}"
             
-            return f"Unable to switch to tab {params.tab_id}"
+            return f"Unable to switch to tab {tab_id}"
     
     def _setup_history_tools(self):
         """Setup history management tools"""

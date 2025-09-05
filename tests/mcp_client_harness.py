@@ -138,34 +138,89 @@ class DirectMCPTestClient:
         return True
     
     async def list_tools(self) -> List[str]:
-        """List available tool names"""
-        # Return known tool names from our MCP tools implementation
-        return [
-            "list_tabs",
-            "get_active_tab", 
-            "create_tab",
-            "close_tab",
-            "switch_to_tab",
-            "update_tab",
-            "get_history",
-            "history_get_recent",
-            "debug_websocket_status",
-            "search_history", 
-            "delete_history",
-            "list_bookmarks",
-            "create_bookmark",
-            "delete_bookmark",
-            "navigate_to",
-            "go_back",
-            "go_forward",
-            "reload_page",
-            "get_page_content",
-            "execute_script",
-            "take_screenshot"
-        ]
+        """List available tool names from actual MCP tools"""
+        try:
+            # Get actual tool names from FastMCP
+            mcp_app = self.mcp_tools.get_mcp_app()
+            tools = await mcp_app.get_tools()
+            return list(tools.keys())
+        except Exception:
+            # Fallback to known MCP tool names if FastMCP fails
+            return [
+                "tabs_list",
+                "tabs_create", 
+                "tabs_close",
+                "tabs_switch",
+                "history_query",
+                "history_get_recent", 
+                "history_delete_item",
+                "debug_websocket_status",
+                "bookmarks_list",
+                "bookmarks_search",
+                "bookmarks_create",
+                "bookmarks_delete",
+                "navigation_back",
+                "navigation_forward", 
+                "navigation_reload",
+                "navigation_go_to_url",
+                "content_get_text",
+                "content_get_html",
+                "content_execute_script"
+            ]
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Call an MCP tool directly"""
+        """Call an MCP tool directly via FastMCP"""
+        if not self.connected:
+            raise RuntimeError("Not connected")
+            
+        if arguments is None:
+            arguments = {}
+        
+        try:
+            # Get the FastMCP app from the MCP tools
+            mcp_app = self.mcp_tools.get_mcp_app()
+            tools = await mcp_app.get_tools()
+            
+            # Check if the tool exists
+            if tool_name not in tools:
+                return {
+                    'content': f"Tool '{tool_name}' not found. Available tools: {list(tools.keys())}",
+                    'isError': True,
+                    'success': False
+                }
+            
+            # Get the tool and call it directly
+            tool = tools[tool_name]
+            
+            try:
+                # Call the tool function directly with the arguments
+                # FastMCP tools have a fn attribute with the actual function
+                result = await tool.fn(**arguments)
+                
+                return {
+                    'content': result,
+                    'isError': False,
+                    'success': True
+                }
+                
+            except Exception as tool_error:
+                return {
+                    'content': f"Tool execution error: {tool_error}",
+                    'isError': True,
+                    'success': False,
+                    'error': str(tool_error)
+                }
+        
+        except Exception as e:
+            return {
+                'content': f"Error calling tool '{tool_name}': {e}",
+                'isError': True,
+                'success': False,
+                'error': str(e)
+            }
+    
+    async def _old_call_tool_websocket(self, tool_name: str, arguments: Dict[str, Any] = None) -> Dict[str, Any]:
+        """OLD METHOD - Call tools via WebSocket (bypasses MCP layer)"""
         if not self.connected:
             raise RuntimeError("Not connected")
             
@@ -578,7 +633,7 @@ if __name__ == "__main__":
                 print(f"✓ Found {len(tools)} tools")
                 
                 # Test a tool call
-                result = await client.call_tool("list_tabs")
+                result = await client.call_tool("tabs_list")
                 print(f"✓ Tool call result: {result}")
                 
             else:

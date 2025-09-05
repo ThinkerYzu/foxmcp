@@ -105,11 +105,11 @@ async def test_mcp_client_direct():
         
         # Test different tool categories
         test_cases = [
-            ("list_tabs", {}),
-            ("create_tab", {"url": "https://google.com", "active": True}),
-            ("get_history", {"query": "example", "maxResults": 10}),
-            ("list_bookmarks", {}),
-            ("get_active_tab", {})
+            ("tabs_list", {}),
+            ("tabs_create", {"url": "https://google.com", "active": True}),
+            ("history_query", {"query": "example", "max_results": 10}),
+            ("bookmarks_list", {}),
+            ("debug_websocket_status", {})
         ]
         
         print("\n🧪 Testing MCP Tool Calls...")
@@ -163,9 +163,9 @@ async def test_mcp_error_handling():
         
         # Test error scenarios
         error_tests = [
-            ("list_tabs", {}),
-            ("close_tab", {"tabId": 999}),  # Invalid tab ID
-            ("create_bookmark", {}),  # Missing required args
+            ("tabs_list", {}),
+            ("tabs_close", {"tab_id": 999}),  # Invalid tab ID
+            ("bookmarks_create", {}),  # Missing required args
         ]
         
         for tool_name, args in error_tests:

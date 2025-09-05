@@ -154,39 +154,39 @@ async def test_complete_mcp_to_firefox_chain():
                 test_results = []
                 
                 # Test 1: List tabs (should work immediately)
-                print("\n1️⃣  Testing list_tabs...")
+                print("\n1️⃣  Testing tabs_list...")
                 try:
-                    result = await mcp_client.call_tool("list_tabs")
+                    result = await mcp_client.call_tool("tabs_list")
                     if result["success"]:
-                        print("✅ list_tabs succeeded")
-                        test_results.append(("list_tabs", True))
+                        print("✅ tabs_list succeeded")
+                        test_results.append(("tabs_list", True))
                     else:
-                        print(f"❌ list_tabs failed: {result.get('error')}")
-                        test_results.append(("list_tabs", False))
+                        print(f"❌ tabs_list failed: {result.get('error')}")
+                        test_results.append(("tabs_list", False))
                 except Exception as e:
-                    print(f"❌ list_tabs exception: {e}")
-                    test_results.append(("list_tabs", False))
+                    print(f"❌ tabs_list exception: {e}")
+                    test_results.append(("tabs_list", False))
                 
                 # Small delay between tests
                 await asyncio.sleep(2.0)
                 
                 # Test 2: Create new tab  
-                print("\n2️⃣  Testing create_tab...")
+                print("\n2️⃣  Testing tabs_create...")
                 try:
-                    result = await mcp_client.call_tool("create_tab", {
+                    result = await mcp_client.call_tool("tabs_create", {
                         "url": "https://example.com",
                         "active": True
                     })
                     
                     if result["success"]:
-                        print("✅ create_tab succeeded")
-                        test_results.append(("create_tab", True))
+                        print("✅ tabs_create succeeded")
+                        test_results.append(("tabs_create", True))
                     else:
-                        print(f"❌ create_tab failed: {result.get('error')}")
-                        test_results.append(("create_tab", False))
+                        print(f"❌ tabs_create failed: {result.get('error')}")
+                        test_results.append(("tabs_create", False))
                 except Exception as e:
-                    print(f"❌ create_tab exception: {e}")
-                    test_results.append(("create_tab", False))
+                    print(f"❌ tabs_create exception: {e}")
+                    test_results.append(("tabs_create", False))
                 
                 await asyncio.sleep(2.0)
                 
@@ -292,7 +292,7 @@ async def test_mcp_tools_direct():
         
         try:
             # Test core MCP functionality
-            tools = ["list_tabs", "create_tab", "get_history"]
+            tools = ["tabs_list", "tabs_create", "history_query"]
             
             for tool in tools:
                 try:
