@@ -13,7 +13,6 @@ tests/
 ├── README.md               # This file
 ├── unit/                   # Unit tests
 │   ├── test_server.py      # Server component tests
-│   ├── test_mcp_handler.py # MCP handler tests
 │   └── test_protocol.py    # Protocol message tests
 ├── integration/            # Integration tests
 │   ├── test_websocket_communication.py      # Basic WebSocket communication tests
@@ -79,11 +78,6 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - Message processing
   - Error handling
 
-- **test_mcp_handler.py**: Tests MCP integration
-  - Tool registration
-  - Request forwarding
-  - Action mapping
-  - Parameter validation
 
 - **test_protocol.py**: Tests message protocol
   - Message structure validation
@@ -213,10 +207,11 @@ pytest --cov=../server --cov-report=html
 Coverage reports are generated in `htmlcov/` directory.
 
 **Current Test Statistics:**
-- **87 total tests** across unit and integration suites (10 new MCP tests)
-- **Enhanced coverage** of server components including MCP integration
-- **48 integration tests** covering WebSocket communication and MCP functionality
-- **39 unit tests** covering individual component functionality
+- **128 total tests** across unit and integration suites (includes history content testing)
+- **Enhanced coverage** of server components including FastMCP integration
+- **91 integration tests** covering WebSocket communication and MCP functionality
+- **29 unit tests** covering individual component functionality
+- **8 additional tests** in root test directory for end-to-end coordination
 
 ## Test Infrastructure Features
 

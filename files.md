@@ -25,7 +25,7 @@ foxmcp/
 │   ├── __init__.py    # Python package init (for imports)
 │   ├── requirements.txt # Python dependencies
 │   ├── server.py       # WebSocket server implementation with ping-pong
-│   └── mcp_handler.py  # MCP tool definitions and handlers
+│   └── mcp_tools.py    # FastMCP tool definitions and handlers
 └── tests/             # Test suite directory
     ├── conftest.py    # Pytest configuration and fixtures
     ├── pytest.ini     # Pytest settings
@@ -38,7 +38,6 @@ foxmcp/
     ├── port_coordinator.py     # Test port coordination system
     ├── unit/          # Unit tests
     │   ├── test_server.py      # Server component tests
-    │   ├── test_mcp_handler.py # MCP handler tests
     │   ├── test_protocol.py    # Protocol message tests
     │   └── test_ping_pong.py   # Ping-pong functionality tests
     ├── integration/   # Integration tests
@@ -177,9 +176,10 @@ foxmcp/
   - Async/await architecture
   - Graceful shutdown handling
 
-### `mcp_handler.py`
-- **Purpose**: MCP protocol integration and tool definitions
+### `mcp_tools.py`
+- **Purpose**: FastMCP protocol integration and tool definitions
 - **Key Features**:
+  - **Modern FastMCP framework integration** with decorator-based tool definitions
   - **Complete MCP tool registry** with all browser functions:
     - **History**: query with search terms/time ranges, recent items
     - **Tabs**: list all tabs, create new tabs, close tabs, update tabs
@@ -256,7 +256,7 @@ foxmcp/
 
 ### Unit Tests (`/unit`)
 - **`test_server.py`**: WebSocket server functionality tests
-- **`test_mcp_handler.py`**: MCP tool registration and request handling tests  
+  
 - **`test_protocol.py`**: Message format and data structure validation tests
 - **`test_ping_pong.py`**: Ping-pong message handling and protocol tests
 
