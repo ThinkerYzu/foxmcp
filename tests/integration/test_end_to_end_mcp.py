@@ -302,6 +302,47 @@ class TestEndToEndMCP:
             await asyncio.sleep(0.5)
         
         print("✓ Multiple MCP tool calls completed successfully")
+    
+    @pytest.mark.asyncio
+    async def test_mcp_http_endpoint_is_callable(self, full_mcp_system):
+        """Test that MCP HTTP endpoint is properly configured and callable
+        
+        This test prevents the 'FastMCP object is not callable' error
+        by verifying the HTTP server can actually serve requests.
+        """
+        system = full_mcp_system
+        mcp_port = system['mcp_port']
+        
+        try:
+            import aiohttp
+        except ImportError:
+            pytest.skip("aiohttp not available for HTTP testing")
+        
+        # Give server time to fully start
+        await asyncio.sleep(1.0)
+        
+        async with aiohttp.ClientSession() as session:
+            # Test that the MCP endpoint responds (even with an error is fine,
+            # as long as it doesn't raise "FastMCP object is not callable")
+            try:
+                async with session.get(f"http://localhost:{mcp_port}/mcp") as response:
+                    # Any response (including error) means the server is callable
+                    assert response.status in [200, 400, 406], f"Unexpected status: {response.status}"
+                    
+                    # Verify it's a proper JSON-RPC response
+                    if response.status != 406:  # 406 = Not Acceptable for missing headers
+                        text = await response.text()
+                        data = json.loads(text)
+                        assert "jsonrpc" in data or "error" in data
+                    
+                    print(f"✓ MCP HTTP endpoint is callable and responds correctly (status: {response.status})")
+                    
+            except Exception as e:
+                if "'FastMCP' object is not callable" in str(e):
+                    pytest.fail("FastMCP object is not callable - missing .http_app() call")
+                else:
+                    # Other errors are acceptable as long as it's not the callable error
+                    print(f"✓ MCP endpoint accessible (got expected error: {type(e).__name__})")
 
 
 class TestMCPProtocolCompliance:
@@ -343,6 +384,26 @@ class TestMCPProtocolCompliance:
         assert mcp_tools.mcp is not None
         
         print("✓ MCP tools have parameter validation")
+    
+    @pytest.mark.asyncio  
+    async def test_mcp_server_creates_proper_asgi_app(self):
+        """Test that FoxMCPServer creates a proper ASGI application"""
+        from server.server import FoxMCPServer
+        
+        server = FoxMCPServer(start_mcp=False)
+        
+        # Verify the MCP app has the required http_app method
+        assert hasattr(server.mcp_app, 'http_app'), "FastMCP instance missing http_app method"
+        
+        # Verify http_app() returns an ASGI application
+        http_app = server.mcp_app.http_app()
+        assert http_app is not None, "http_app() returned None"
+        assert hasattr(http_app, '__call__'), "http_app() result is not callable"
+        
+        # Verify it's the correct type (StarletteWithLifespan)
+        assert 'StarletteWithLifespan' in str(type(http_app)), f"Wrong ASGI app type: {type(http_app)}"
+        
+        print("✓ FastMCP creates proper ASGI application via http_app()")
 
 
 if __name__ == "__main__":

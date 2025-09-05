@@ -338,7 +338,7 @@ class FoxMCPServer:
             try:
                 logger.info(f"Starting MCP server on port {self.mcp_port}")
                 uvicorn.run(
-                    self.mcp_app,
+                    self.mcp_app.http_app(),
                     host="0.0.0.0",
                     port=self.mcp_port,
                     log_level="error"  # Reduce log noise during tests
