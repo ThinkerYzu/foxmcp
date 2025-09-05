@@ -87,15 +87,18 @@ The FoxMCP project has successfully achieved its primary goal:
 
 **✅ Available MCP Tool Categories:**
 - **Tab Management**: 4 tools (list, create, close, switch)
-- **History Operations**: 3 tools (query, recent, delete)
+- **History Operations**: 3 tools (query, recent, delete) + debugging tools
 - **Bookmark Management**: 4 tools (list, search, create, delete)
 - **Navigation Control**: 4 tools (back, forward, reload, go_to_url)
 - **Content Access**: 3 tools (get_text, get_html, execute_script)
+- **Debugging Tools**: WebSocket connection status and diagnostics
 
 **✅ Ready for Production Use:**
 - MCP clients can connect to `http://localhost:3000`
 - All browser functions accessible via standardized MCP protocol
+- **Direct parameter format** - no `params` wrapper issues
 - Complete WebSocket communication with Firefox extension
 - Comprehensive error handling and timeout management
+- **Enhanced debugging tools** for troubleshooting agent connections
 
 This completes the core implementation objectives. The project now provides a fully functional MCP server that enables programmatic control of Firefox browsers through the Model Context Protocol.

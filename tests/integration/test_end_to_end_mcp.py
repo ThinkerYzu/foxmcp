@@ -686,6 +686,116 @@ class TestMCPProtocolCompliance:
         
         print("✓ MCP tools have proper FastMCP integration")
     
+    @pytest.mark.asyncio
+    async def test_all_history_tools_schema_validation(self):
+        """Test that ALL history tools have correct parameter schemas
+        
+        This test ensures none of the history tools have the 'params' wrapper
+        issue that would confuse external MCP agents.
+        """
+        from server.server import FoxMCPServer
+        
+        server = FoxMCPServer(start_mcp=False)
+        tools_dict = await server.mcp_app.get_tools()
+        
+        # Find all history tools
+        history_tools = {name: tool for name, tool in tools_dict.items() if 'history' in name}
+        
+        print(f"Testing schema validation for {len(history_tools)} history tools:")
+        
+        # Expected schema structure for each history tool
+        expected_schemas = {
+            'history_query': {
+                'required': ['query'],
+                'optional': ['max_results', 'start_time', 'end_time'],
+                'expected_types': {
+                    'query': 'string',
+                    'max_results': 'integer', 
+                    'start_time': ['string', 'null'],
+                    'end_time': ['string', 'null']
+                }
+            },
+            'history_get_recent': {
+                'required': [],
+                'optional': ['count'],
+                'expected_types': {
+                    'count': 'integer'
+                }
+            },
+            'history_delete_item': {
+                'required': ['url'],
+                'optional': [],
+                'expected_types': {
+                    'url': 'string'
+                }
+            }
+        }
+        
+        for tool_name, tool in history_tools.items():
+            print(f"\n📋 Validating {tool_name}:")
+            
+            schema = tool.parameters
+            properties = schema.get('properties', {})
+            required = schema.get('required', [])
+            
+            # Test 1: No params wrapper
+            assert 'params' not in properties, \
+                f"❌ {tool_name} has 'params' wrapper - should use direct parameters"
+            print("   ✅ No 'params' wrapper (direct parameters)")
+            
+            # Test 2: Schema structure matches expectations  
+            if tool_name in expected_schemas:
+                expected = expected_schemas[tool_name]
+                
+                # Check required parameters
+                for req_param in expected['required']:
+                    assert req_param in properties, \
+                        f"❌ {tool_name} missing required parameter: {req_param}"
+                    assert req_param in required, \
+                        f"❌ {tool_name} parameter {req_param} should be marked as required"
+                
+                # Check optional parameters exist
+                for opt_param in expected['optional']:
+                    assert opt_param in properties, \
+                        f"❌ {tool_name} missing optional parameter: {opt_param}"
+                    assert opt_param not in required, \
+                        f"❌ {tool_name} parameter {opt_param} should be optional"
+                
+                # Check parameter types
+                for param_name, expected_type in expected['expected_types'].items():
+                    if param_name in properties:
+                        param_def = properties[param_name]
+                        
+                        if isinstance(expected_type, list):
+                            # Handle union types like string|null
+                            if 'anyOf' in param_def:
+                                actual_types = [t.get('type') for t in param_def['anyOf']]
+                                for exp_type in expected_type:
+                                    assert exp_type in actual_types, \
+                                        f"❌ {tool_name}.{param_name} should accept type {exp_type}"
+                        else:
+                            # Handle simple types
+                            actual_type = param_def.get('type')
+                            assert actual_type == expected_type, \
+                                f"❌ {tool_name}.{param_name} should be {expected_type}, got {actual_type}"
+                
+                print(f"   ✅ Schema structure matches expectations")
+                
+                # Show parameter summary
+                param_list = []
+                for param_name in properties:
+                    is_req = param_name in required
+                    req_str = "required" if is_req else "optional"
+                    param_list.append(f"{param_name}({req_str})")
+                print(f"   ✅ Parameters: {', '.join(param_list)}")
+            else:
+                print(f"   ⚠️  No schema expectations defined for {tool_name}")
+        
+        print(f"\n🎉 All {len(history_tools)} history tools have correct schemas!")
+        print("✅ No 'params' wrapper issues found")
+        print("✅ All required/optional parameters validated")
+        print("✅ Parameter types validated")
+    
     def test_tool_parameter_validation(self):
         """Test that tools have proper parameter validation"""
         from server.mcp_tools import FoxMCPTools

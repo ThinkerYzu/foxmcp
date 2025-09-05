@@ -173,6 +173,35 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 - `content_get_html(tab_id)` - Get page HTML source
 - `content_execute_script(tab_id, code)` - Execute JavaScript
 
+#### Debugging Tools
+- `debug_websocket_status()` - Check browser extension connection status
+
+### MCP Parameter Format
+
+FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agents should send:
+
+#### ✅ Correct Format
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "history_get_recent",
+    "arguments": {"count": 10}
+  }
+}
+```
+
+#### ❌ Incorrect Format  
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "history_get_recent", 
+    "arguments": {"params": {"count": 10}}  // Wrong: nested params
+  }
+}
+```
+
 ### Using MCP Tools
 
 1. **Start the server**:
@@ -362,6 +391,40 @@ This enables **automated testing** of storage synchronization without browser au
 2. Verify WebSocket URL in browser console
 3. Check browser permissions granted
 4. Test with ping-pong: Click "Test Connection"
+
+### MCP Agent Issues
+
+#### "Unable to get recent history" Response
+1. **Check WebSocket connection**:
+   ```json
+   {
+     "method": "tools/call",
+     "params": {
+       "name": "debug_websocket_status",
+       "arguments": {}
+     }
+   }
+   ```
+
+2. **Verify parameter format** - Use direct parameters:
+   - ✅ Correct: `{"count": 5}`
+   - ❌ Wrong: `{"params": {"count": 5}}`
+
+3. **Check server logs** for WebSocket response debugging:
+   ```
+   🔍 DEBUG - Recent history WebSocket response: {...}
+   ```
+
+#### Parameter Format Errors
+Common issues with external MCP agents:
+- **Nested params**: Don't wrap parameters in a `params` object
+- **String instead of JSON**: Send JSON objects, not strings
+- **Wrong field names**: Use `arguments` not `params` in MCP requests
+
+#### Tool Discovery Issues
+1. Use `tools/list` to see available tools
+2. History tools: `history_query`, `history_get_recent`, `history_delete_item`
+3. All tools use direct parameter format (no wrapper)
 
 ### Tests Failing
 1. **Port conflicts resolved**: Tests now use dynamic port allocation

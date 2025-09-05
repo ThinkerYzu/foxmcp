@@ -156,6 +156,13 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - MCP-WebSocket layer integration for history operations
   - End-to-end MCP tool workflow validation
 
+- **test_end_to_end_mcp.py**: Comprehensive MCP protocol compliance tests
+  - **Schema validation**: All history tools have correct parameter schemas
+  - **Parameter format validation**: Direct parameters (no `params` wrapper)
+  - **Agent error reproduction**: Tests for common external agent issues
+  - **HTTP endpoint validation**: FastMCP server accessibility testing
+  - **Tool naming validation**: Prevents naming mismatches between test and production
+
 ## Test Fixtures
 
 The `conftest.py` file provides shared test fixtures:
@@ -209,9 +216,10 @@ Coverage reports are generated in `htmlcov/` directory.
 **Current Test Statistics:**
 - **128 total tests** across unit and integration suites (includes history content testing)
 - **Enhanced coverage** of server components including FastMCP integration
-- **91 integration tests** covering WebSocket communication and MCP functionality
+- **95+ integration tests** covering WebSocket communication and MCP functionality
 - **29 unit tests** covering individual component functionality
 - **8 additional tests** in root test directory for end-to-end coordination
+- **Comprehensive MCP schema validation** prevents parameter format issues
 
 ## Test Infrastructure Features
 
