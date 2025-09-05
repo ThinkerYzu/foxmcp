@@ -149,6 +149,19 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - Firefox test profile management and cleanup
   - Extension configuration persistence testing
 
+- **test_history_management.py**: Comprehensive end-to-end history management tests
+  - Complete browser history functionality testing through WebSocket protocol
+  - History query with text search, time ranges, and parameter validation
+  - Recent history retrieval with sorting verification
+  - Concurrent history operations and response correlation
+  - Error handling for unimplemented features (delete_item)
+  - Real Firefox history API integration testing
+
+- **test_history_mcp_integration.py**: MCP protocol integration tests for history
+  - Dual server architecture verification (MCP + WebSocket)
+  - MCP-WebSocket layer integration for history operations
+  - End-to-end MCP tool workflow validation
+
 ## Test Fixtures
 
 The `conftest.py` file provides shared test fixtures:
