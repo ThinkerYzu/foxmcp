@@ -640,6 +640,143 @@ The extension provides test helper messages for automated testing and validation
 }
 ```
 
+### Visit URL for History Testing
+
+**Request:**
+```json
+{
+  "id": "test_006",
+  "type": "request",
+  "action": "test.visit_url",
+  "data": {
+    "url": "https://httpbin.org/json",
+    "waitTime": 2000
+  },
+  "timestamp": "2025-09-05T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_006",
+  "type": "response",
+  "action": "test.visit_url",
+  "data": {
+    "success": true,
+    "url": "https://httpbin.org/json",
+    "tabId": 123,
+    "visitTime": "2025-09-05T12:00:01.000Z",
+    "message": "Successfully visited https://httpbin.org/json"
+  },
+  "timestamp": "2025-09-05T12:00:03.000Z"
+}
+```
+
+### Visit Multiple URLs for History Testing
+
+**Request:**
+```json
+{
+  "id": "test_007",
+  "type": "request",
+  "action": "test.visit_multiple_urls",
+  "data": {
+    "urls": [
+      "https://httpbin.org/status/200",
+      "https://httpbin.org/user-agent",
+      "https://httpbin.org/headers"
+    ],
+    "waitTime": 1500,
+    "delayBetween": 500
+  },
+  "timestamp": "2025-09-05T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_007",
+  "type": "response",
+  "action": "test.visit_multiple_urls",
+  "data": {
+    "success": true,
+    "totalUrls": 3,
+    "successfulVisits": 3,
+    "failedVisits": 0,
+    "results": [
+      {
+        "url": "https://httpbin.org/status/200",
+        "success": true,
+        "tabId": 124,
+        "visitTime": "2025-09-05T12:00:01.500Z"
+      },
+      {
+        "url": "https://httpbin.org/user-agent",
+        "success": true,
+        "tabId": 125,
+        "visitTime": "2025-09-05T12:00:03.000Z"
+      },
+      {
+        "url": "https://httpbin.org/headers",
+        "success": true,
+        "tabId": 126,
+        "visitTime": "2025-09-05T12:00:04.500Z"
+      }
+    ],
+    "message": "Visited 3/3 URLs successfully"
+  },
+  "timestamp": "2025-09-05T12:00:06.000Z"
+}
+```
+
+### Clear Test History
+
+**Request:**
+```json
+{
+  "id": "test_008",
+  "type": "request",
+  "action": "test.clear_test_history",
+  "data": {
+    "urls": [
+      "https://httpbin.org/status/200",
+      "https://httpbin.org/user-agent"
+    ]
+  },
+  "timestamp": "2025-09-05T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "test_008",
+  "type": "response",
+  "action": "test.clear_test_history",
+  "data": {
+    "success": true,
+    "action": "cleared_specific_urls",
+    "totalUrls": 2,
+    "successfulClears": 2,
+    "failedClears": 0,
+    "results": [
+      {
+        "url": "https://httpbin.org/status/200",
+        "success": true
+      },
+      {
+        "url": "https://httpbin.org/user-agent",
+        "success": true
+      }
+    ],
+    "message": "Cleared 2/2 URLs from history"
+  },
+  "timestamp": "2025-09-05T12:00:01.000Z"
+}
+```
+
 ## Test Helper Usage
 
 Test helpers enable automated validation of:
@@ -648,9 +785,20 @@ Test helpers enable automated validation of:
 - **Test Override Priority**: Confirm test configurations take precedence over regular settings
 - **Configuration Persistence**: Validate that UI changes preserve test overrides
 - **State Consistency**: Ensure all UI components reflect the same effective configuration
+- **Browser History Testing**: Create and verify actual browser history content
+- **History Content Validation**: Test history queries with real visited URLs
+- **History Cleanup**: Clean up test history entries for isolated testing
 
-Example test workflow:
+Example test workflows:
+
+**UI Synchronization Testing:**
 1. Set test configuration via storage
 2. Use `test.get_popup_state` to verify popup displays test values
 3. Use `test.validate_ui_sync` to confirm UI-storage alignment
 4. Modify configuration and verify persistence
+
+**History Content Testing:**
+1. Use `test.visit_url` or `test.visit_multiple_urls` to create real browser history
+2. Use `history.query` or `history.recent` to verify the visited URLs appear
+3. Validate history item structure and timestamps
+4. Use `test.clear_test_history` to clean up test data

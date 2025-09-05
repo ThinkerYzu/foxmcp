@@ -328,6 +328,15 @@ async function handleHistoryAction(id, action, data) {
         sendResponse(id, action, { items: recentItems });
         break;
 
+      case 'history.delete_item':
+        if (!data.url) {
+          sendError(id, 'INVALID_PARAMETER', 'URL is required for history.delete_item');
+          return;
+        }
+        await browser.history.deleteUrl({ url: data.url });
+        sendResponse(id, action, { success: true, deletedUrl: data.url });
+        break;
+
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown history action: ${action}`);
     }
@@ -511,6 +520,18 @@ async function handleTestAction(id, action, data) {
         
       case 'test.refresh_ui_state':
         await handleRefreshUIState(id, data);
+        break;
+        
+      case 'test.visit_url':
+        await handleVisitURL(id, data);
+        break;
+        
+      case 'test.visit_multiple_urls':
+        await handleVisitMultipleURLs(id, data);
+        break;
+        
+      case 'test.clear_test_history':
+        await handleClearTestHistory(id, data);
         break;
         
       default:
@@ -703,6 +724,157 @@ async function getOptionsStateForValidation(storageConfig) {
     displayPort,
     hasTestOverrides: storageConfig.testPort !== null || storageConfig.testHostname !== null
   };
+}
+
+// Test Helper: Visit a URL to create browser history
+async function handleVisitURL(id, data) {
+  try {
+    const url = data.url;
+    const waitTime = data.waitTime || 6000; // Default 6 seconds wait
+    
+    if (!url) {
+      sendError(id, 'INVALID_PARAMETERS', 'URL is required for test.visit_url');
+      return;
+    }
+    
+    // Create a new tab with the URL
+    const tab = await browser.tabs.create({
+      url: url,
+      active: false // Don't make it active to avoid disrupting tests
+    });
+    
+    // Wait for the page to load
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    
+    // Close the tab
+    await browser.tabs.remove(tab.id);
+    
+    sendResponse(id, 'test.visit_url', {
+      success: true,
+      url: url,
+      tabId: tab.id,
+      visitTime: new Date().toISOString(),
+      message: `Successfully visited ${url}`
+    });
+    
+  } catch (error) {
+    sendError(id, 'VISIT_URL_ERROR', `Failed to visit URL: ${error.message}`);
+  }
+}
+
+// Test Helper: Visit multiple URLs to create test history
+async function handleVisitMultipleURLs(id, data) {
+  try {
+    const urls = data.urls || [];
+    const waitTime = data.waitTime || 6000; // Time to wait at each URL (increased)
+    const delayBetween = data.delayBetween || 2000; // Delay between visits (increased)
+    
+    if (!Array.isArray(urls) || urls.length === 0) {
+      sendError(id, 'INVALID_PARAMETERS', 'urls array is required for test.visit_multiple_urls');
+      return;
+    }
+    
+    const results = [];
+    
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      
+      try {
+        // Create tab and visit URL
+        const tab = await browser.tabs.create({
+          url: url,
+          active: false
+        });
+        
+        // Wait for page to load
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        
+        // Close the tab
+        await browser.tabs.remove(tab.id);
+        
+        results.push({
+          url: url,
+          success: true,
+          tabId: tab.id,
+          visitTime: new Date().toISOString()
+        });
+        
+        // Small delay between visits
+        if (i < urls.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, delayBetween));
+        }
+        
+      } catch (error) {
+        results.push({
+          url: url,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    
+    sendResponse(id, 'test.visit_multiple_urls', {
+      success: true,
+      totalUrls: urls.length,
+      successfulVisits: successCount,
+      failedVisits: urls.length - successCount,
+      results: results,
+      message: `Visited ${successCount}/${urls.length} URLs successfully`
+    });
+    
+  } catch (error) {
+    sendError(id, 'VISIT_MULTIPLE_URLS_ERROR', `Failed to visit multiple URLs: ${error.message}`);
+  }
+}
+
+// Test Helper: Clear test history (for cleanup)
+async function handleClearTestHistory(id, data) {
+  try {
+    const urls = data.urls || [];
+    const clearAll = data.clearAll || false;
+    
+    if (clearAll) {
+      // Clear all history (use with caution in tests)
+      await browser.history.deleteAll();
+      
+      sendResponse(id, 'test.clear_test_history', {
+        success: true,
+        action: 'cleared_all',
+        message: 'All browser history cleared'
+      });
+    } else if (urls.length > 0) {
+      // Clear specific URLs
+      const results = [];
+      
+      for (const url of urls) {
+        try {
+          await browser.history.deleteUrl({ url: url });
+          results.push({ url: url, success: true });
+        } catch (error) {
+          results.push({ url: url, success: false, error: error.message });
+        }
+      }
+      
+      const successCount = results.filter(r => r.success).length;
+      
+      sendResponse(id, 'test.clear_test_history', {
+        success: true,
+        action: 'cleared_specific_urls',
+        totalUrls: urls.length,
+        successfulClears: successCount,
+        failedClears: urls.length - successCount,
+        results: results,
+        message: `Cleared ${successCount}/${urls.length} URLs from history`
+      });
+    } else {
+      sendError(id, 'INVALID_PARAMETERS', 'Either clearAll:true or urls array is required');
+    }
+    
+  } catch (error) {
+    sendError(id, 'CLEAR_HISTORY_ERROR', `Failed to clear test history: ${error.message}`);
+  }
 }
 
 browser.runtime.onInstalled.addListener(async () => {

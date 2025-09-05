@@ -237,6 +237,52 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
     
+    async def visit_url_for_test(self, url: str, wait_time: float = 6.0, timeout: float = 20.0) -> Dict[str, Any]:
+        """Visit a URL to create browser history entry for testing"""
+        request = {
+            "id": f"test_visit_url_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.visit_url",
+            "data": {
+                "url": url,
+                "waitTime": int(wait_time * 1000)  # Convert to milliseconds
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def visit_multiple_urls_for_test(self, urls: list, wait_time: float = 6.0, delay_between: float = 2.0, timeout: float = 90.0) -> Dict[str, Any]:
+        """Visit multiple URLs to create browser history entries for testing"""
+        request = {
+            "id": f"test_visit_multiple_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.visit_multiple_urls",
+            "data": {
+                "urls": urls,
+                "waitTime": int(wait_time * 1000),  # Convert to milliseconds
+                "delayBetween": int(delay_between * 1000)  # Convert to milliseconds
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+    
+    async def clear_test_history(self, urls: list = None, clear_all: bool = False, timeout: float = 10.0) -> Dict[str, Any]:
+        """Clear test history entries for cleanup"""
+        request = {
+            "id": f"test_clear_history_{datetime.now().isoformat()}",
+            "type": "request",
+            "action": "test.clear_test_history",
+            "data": {
+                "urls": urls or [],
+                "clearAll": clear_all
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        response = await self.send_request_and_wait(request, timeout)
+        return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
+
     async def test_storage_sync_workflow(self, test_values: Dict[str, Any], timeout: float = 10.0) -> Dict[str, Any]:
         """Complete test workflow: set values, validate sync, return results"""
         results = {
