@@ -205,9 +205,9 @@ class FoxMCPTools:
                 total_count = response["data"].get("totalCount", len(items))
                 
                 if not items:
-                    return f"No history items found for query: {params.query}"
+                    return f"No history items found for query: {query}"
                 
-                result = f"Found {total_count} history items for '{params.query}':\n"
+                result = f"Found {total_count} history items for '{query}':\n"
                 for item in items:
                     visit_time = item.get("visitTime", "Unknown time")
                     visit_count = item.get("visitCount", 0)
@@ -215,7 +215,7 @@ class FoxMCPTools:
                 
                 return result
             
-            return f"Unable to query history for: {params.query}"
+            return f"Unable to query history for: {query}"
         
         # WebSocket Connection Status Tool (for debugging)
         @self.mcp.tool()
