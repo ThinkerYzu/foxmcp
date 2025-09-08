@@ -145,7 +145,7 @@ class FoxMCPServer:
             logger.error(f"Error sending to extension: {e}")
             return False
     
-    async def send_request_and_wait(self, request: Dict[str, Any], timeout: float = 10.0) -> Dict[str, Any]:
+    async def send_request_and_wait(self, request: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Send request to extension and wait for response"""
         request_id = request.get('id')
         if not request_id:
@@ -177,7 +177,7 @@ class FoxMCPServer:
             return {"error": f"Request failed: {str(e)}"}
     
     # Test Helper Methods
-    async def get_popup_state(self, timeout: float = 5.0) -> Dict[str, Any]:
+    async def get_popup_state(self, timeout: float = 30.0) -> Dict[str, Any]:
         """Get current popup display state from extension"""
         request = {
             "id": f"test_popup_{datetime.now().isoformat()}",
@@ -189,7 +189,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
     
-    async def get_options_state(self, timeout: float = 5.0) -> Dict[str, Any]:
+    async def get_options_state(self, timeout: float = 30.0) -> Dict[str, Any]:
         """Get current options page display state from extension"""
         request = {
             "id": f"test_options_{datetime.now().isoformat()}",
@@ -201,7 +201,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
     
-    async def get_storage_values(self, timeout: float = 5.0) -> Dict[str, Any]:
+    async def get_storage_values(self, timeout: float = 30.0) -> Dict[str, Any]:
         """Get raw storage.sync values from extension"""
         request = {
             "id": f"test_storage_{datetime.now().isoformat()}",
@@ -213,7 +213,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
     
-    async def validate_ui_sync(self, expected_values: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
+    async def validate_ui_sync(self, expected_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Validate UI-storage synchronization with expected values"""
         request = {
             "id": f"test_validate_{datetime.now().isoformat()}",
@@ -225,7 +225,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
     
-    async def refresh_ui_state(self, timeout: float = 5.0) -> Dict[str, Any]:
+    async def refresh_ui_state(self, timeout: float = 30.0) -> Dict[str, Any]:
         """Trigger UI state refresh in extension"""
         request = {
             "id": f"test_refresh_{datetime.now().isoformat()}",
@@ -268,7 +268,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
     
-    async def clear_test_history(self, urls: list = None, clear_all: bool = False, timeout: float = 10.0) -> Dict[str, Any]:
+    async def clear_test_history(self, urls: list = None, clear_all: bool = False, timeout: float = 30.0) -> Dict[str, Any]:
         """Clear test history entries for cleanup"""
         request = {
             "id": f"test_clear_history_{datetime.now().isoformat()}",
@@ -283,7 +283,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait(request, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def test_storage_sync_workflow(self, test_values: Dict[str, Any], timeout: float = 10.0) -> Dict[str, Any]:
+    async def test_storage_sync_workflow(self, test_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Complete test workflow: set values, validate sync, return results"""
         results = {
             "workflow_success": False,

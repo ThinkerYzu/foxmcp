@@ -7,10 +7,24 @@ These tools bridge browser functions through WebSocket to the Firefox extension
 import asyncio
 import uuid
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TypedDict
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
+
+class TabInfo(TypedDict):
+    """Type definition for tab information from browser extension"""
+    url: str
+    id: int
+    title: str
+    active: bool
+    windowId: int
+    pinned: bool
+
+class TabsListResponse(TypedDict):
+    """Type definition for tabs.list response from browser extension"""
+    tabs: List[TabInfo]
+    debug: Dict[str, Any]
 
 class FoxMCPTools:
     """MCP tools that communicate with Firefox extension via WebSocket"""
@@ -50,7 +64,8 @@ class FoxMCPTools:
                 return f"Error getting tabs: {response['error']}"
             
             if response.get("type") == "response" and "data" in response:
-                tabs = response["data"].get("tabs", [])
+                tabs_data: TabsListResponse = response["data"]
+                tabs: List[TabInfo] = tabs_data.get("tabs", [])
                 if not tabs:
                     # More informative message for debugging
                     return f"No tabs found. Extension response: {response.get('data', {})}"

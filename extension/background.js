@@ -355,7 +355,7 @@ async function handleTabsAction(id, action, data) {
         });
         // Include all tabs, even about:blank for debugging
         sendResponse(id, action, { 
-          tabs: tabs,
+          tabs: tabs.map(tab => ({url: tab.url, id: tab.id, title: tab.title, active: tab.active, windowId: tab.windowId, pinned: tab.pinned})),
           debug: {
             totalFound: tabs.length,
             tabUrls: tabs.map(tab => tab.url)
