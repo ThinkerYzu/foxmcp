@@ -258,6 +258,20 @@ All messages follow this JSON structure:
 }
 ```
 
+**Response:**
+```json
+{
+  "id": "req_010", 
+  "type": "response",
+  "action": "content.execute_script",
+  "data": {
+    "result": "My Page Title",
+    "url": "https://example.com"
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
 ### 4. Navigation
 
 #### Navigate Back

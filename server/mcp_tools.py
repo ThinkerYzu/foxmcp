@@ -572,21 +572,21 @@ class FoxMCPTools:
             return f"Unable to reload tab {params.tab_id}"
         
         # Go to URL Tool
-        class NavigationGoToUrlParams(BaseModel):
-            """Parameters for navigating to a URL"""
-            tab_id: int = Field(description="ID of the tab to navigate")
-            url: str = Field(description="URL to navigate to")
-        
         @self.mcp.tool()
-        async def navigation_go_to_url(params: NavigationGoToUrlParams) -> str:
-            """Navigate to a specific URL in a tab"""
+        async def navigation_go_to_url(tab_id: int, url: str) -> str:
+            """Navigate to a specific URL in a tab
+            
+            Args:
+                tab_id: ID of the tab to navigate
+                url: URL to navigate to
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "navigation.go_to_url",
                 "data": {
-                    "tabId": params.tab_id,
-                    "url": params.url
+                    "tabId": tab_id,
+                    "url": url
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -597,12 +597,12 @@ class FoxMCPTools:
                 return f"Error navigating to URL: {response['error']}"
             
             if response.get("type") == "response":
-                return f"Successfully navigated tab {params.tab_id} to {params.url}"
+                return f"Successfully navigated tab {tab_id} to {url}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to navigate to URL: {error_msg}"
             
-            return f"Unable to navigate tab {params.tab_id} to {params.url}"
+            return f"Unable to navigate tab {tab_id} to {url}"
     
     def _setup_content_tools(self):
         """Setup content access tools"""
@@ -684,21 +684,21 @@ class FoxMCPTools:
             return f"Unable to get HTML content from tab {params.tab_id}"
         
         # Execute Script Tool
-        class ContentExecuteScriptParams(BaseModel):
-            """Parameters for executing JavaScript in a tab"""
-            tab_id: int = Field(description="ID of the tab to execute script in")
-            code: str = Field(description="JavaScript code to execute")
-        
         @self.mcp.tool()
-        async def content_execute_script(params: ContentExecuteScriptParams) -> str:
-            """Execute JavaScript code in a tab"""
+        async def content_execute_script(tab_id: int, code: str) -> str:
+            """Execute JavaScript code in a tab
+            
+            Args:
+                tab_id: ID of the tab to execute script in
+                code: JavaScript code to execute
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "content.execute_script",
                 "data": {
-                    "tabId": params.tab_id,
-                    "code": params.code
+                    "tabId": tab_id,
+                    "script": code
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -713,14 +713,14 @@ class FoxMCPTools:
                 url = response["data"].get("url", "Unknown URL")
                 
                 if result is None:
-                    return f"Script executed successfully in tab {params.tab_id} ({url}) - no return value"
+                    return f"Script executed successfully in tab {tab_id} ({url}) - no return value"
                 
-                return f"Script result from tab {params.tab_id} ({url}):\n{result}"
+                return f"Script result from tab {tab_id} ({url}):\n{result}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to execute script: {error_msg}"
             
-            return f"Unable to execute script in tab {params.tab_id}"
+            return f"Unable to execute script in tab {tab_id}"
     
     def get_mcp_app(self):
         """Get the FastMCP application instance"""

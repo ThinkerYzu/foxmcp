@@ -795,6 +795,187 @@ class TestEndToEndMCP:
             else:
                 pytest.skip("WebSocket server doesn't support extension communication")
 
+    @pytest.mark.asyncio
+    async def test_end_to_end_content_execute_script(self, full_mcp_system):
+        """Test complete end-to-end JavaScript execution in browser tabs via MCP"""
+        system = full_mcp_system
+        server = system['server']
+        mcp_client = system['mcp_client']
+        
+        # Skip if required components not available
+        extension_xpi = get_extension_xpi_path()
+        if not extension_xpi or not os.path.exists(extension_xpi):
+            pytest.skip("Extension XPI not found")
+            
+        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        if not os.path.exists(os.path.expanduser(firefox_path)):
+            pytest.skip("Firefox not found")
+        
+        # Connect MCP client
+        await mcp_client.connect()
+        
+        # Start Firefox with extension
+        with FirefoxTestManager(
+            firefox_path=firefox_path,
+            test_port=system['websocket_port'], 
+            coordination_file=system['coordination_file']
+        ) as firefox:
+            
+            firefox.create_test_profile()
+            firefox.install_extension(extension_xpi)
+            firefox.start_firefox(headless=True)
+            
+            # Wait for extension connection
+            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            
+            if len(server.connected_clients) == 0:
+                pytest.skip("Extension did not connect - cannot test script execution")
+            
+            print("\n🧪 Testing End-to-End JavaScript Execution")
+            
+            # Step 1: Get existing tabs to find one we can test with
+            print("\n1️⃣  Getting existing tabs...")
+            tabs_result = await mcp_client.call_tool("tabs_list")
+            assert not tabs_result.get('isError', False), f"tabs_list should not error: {tabs_result}"
+            
+            tab_content = tabs_result.get('content', '')
+            print(f"   Available tabs: {tab_content}")
+            
+            # Parse tab content to find any tab
+            tab_lines = [line for line in tab_content.split('\n') if 'ID ' in line and ':' in line]
+            
+            if not tab_lines:
+                pytest.skip("No tabs found for script execution test")
+            
+            # Extract tab ID from the first available tab (format: "ID 123: title - url")
+            tab_line = tab_lines[0]
+            import re
+            tab_id_match = re.search(r'ID (\d+):', tab_line)
+            if not tab_id_match:
+                pytest.skip("Could not extract tab ID from tabs list")
+            
+            test_tab_id = int(tab_id_match.group(1))
+            print(f"   ✅ Found test tab ID: {test_tab_id}")
+            
+            # Step 2: Create a new tab with a simple web URL where content scripts can run
+            print("\n2️⃣  Creating tab with web URL...")
+            create_result = await mcp_client.call_tool("tabs_create", {
+                "url": "https://httpbin.org/html",
+                "active": True
+            })
+            
+            if create_result.get('isError', False):
+                print(f"   ⚠️  Tab creation failed: {create_result.get('content', '')}")
+                print("   Using existing tab...")
+            else:
+                print(f"   ✅ Created web tab: {create_result.get('content', '')}")
+                # Wait for tab to load and get new tab list
+                await asyncio.sleep(3.0)
+                
+                # Get updated tab list to find our new tab
+                new_tabs_result = await mcp_client.call_tool("tabs_list")
+                if not new_tabs_result.get('isError', False):
+                    new_tab_content = new_tabs_result.get('content', '')
+                    new_tab_lines = [line for line in new_tab_content.split('\n') if 'httpbin.org' in line]
+                    
+                    if new_tab_lines:
+                        new_tab_line = new_tab_lines[0]
+                        import re
+                        new_tab_id_match = re.search(r'ID (\d+):', new_tab_line)
+                        if new_tab_id_match:
+                            test_tab_id = int(new_tab_id_match.group(1))
+                            print(f"   ✅ Using new web tab ID: {test_tab_id}")
+            
+            # Wait for content script to be fully loaded
+            await asyncio.sleep(2.0)
+            
+            # Step 3: Test simple JavaScript execution
+            print("\n3️⃣  Testing simple JavaScript execution...")
+            script_result = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "document.title"
+            })
+            
+            assert not script_result.get('isError', False), f"Simple script should not error: {script_result}"
+            
+            script_content = script_result.get('content', '')
+            print(f"   Script result: {script_content}")
+            
+            # Verify we got a result
+            assert "Script result from tab" in script_content or "Script executed successfully" in script_content, \
+                "Should get script execution result"
+            
+            # Step 4: Test JavaScript that returns a value
+            print("\n4️⃣  Testing JavaScript with return value...")
+            value_script = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "document.body ? document.body.tagName : 'NO_BODY'"
+            })
+            
+            assert not value_script.get('isError', False), f"Value script should not error: {value_script}"
+            
+            value_content = value_script.get('content', '')
+            print(f"   Value script result: {value_content}")
+            
+            # Should return "BODY" since we're accessing the body element
+            assert "BODY" in value_content, "Should return the body tag name"
+            
+            # Step 5: Test JavaScript that modifies the page
+            print("\n5️⃣  Testing DOM modification JavaScript...")
+            modify_script = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "document.body.style.backgroundColor = 'lightblue'; 'DOM modified'"
+            })
+            
+            assert not modify_script.get('isError', False), f"Modify script should not error: {modify_script}"
+            
+            modify_content = modify_script.get('content', '')
+            print(f"   Modify script result: {modify_content}")
+            
+            # Should show the return value from the script
+            assert "DOM modified" in modify_content, "Should return the script's return value"
+            
+            # Step 6: Verify the modification worked
+            print("\n6️⃣  Verifying DOM modification...")
+            verify_script = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "document.body.style.backgroundColor"
+            })
+            
+            assert not verify_script.get('isError', False), f"Verify script should not error: {verify_script}"
+            
+            verify_content = verify_script.get('content', '')
+            print(f"   Verification result: {verify_content}")
+            
+            # Should show the modified background color
+            assert "lightblue" in verify_content, "DOM modification should persist"
+            
+            # Step 7: Test error handling with invalid JavaScript
+            print("\n7️⃣  Testing error handling...")
+            error_script = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "this.is.invalid.javascript()"
+            })
+            
+            # Error script might error at MCP level or return error message
+            error_content = error_script.get('content', '')
+            print(f"   Error script result: {error_content}")
+            
+            # Should either be an error response or contain error information
+            is_error_response = error_script.get('isError', False)
+            contains_error_info = "error" in error_content.lower() or "failed" in error_content.lower()
+            
+            assert is_error_response or contains_error_info, \
+                "Invalid JavaScript should produce error response or error message"
+            
+            print("✅ End-to-end JavaScript execution test successful!")
+            print("✅ All script execution scenarios tested:")
+            print("  - Simple expressions")
+            print("  - DOM queries with return values")  
+            print("  - DOM modifications")
+            print("  - Verification of changes")
+            print("  - Error handling")
+
 
 class TestMCPProtocolCompliance:
     """Test MCP protocol compliance and schema validation"""

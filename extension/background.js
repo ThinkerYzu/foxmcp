@@ -402,6 +402,16 @@ async function handleTabsAction(id, action, data) {
   }
 }
 
+// Helper function to get current tab URL
+async function getCurrentTabUrl(tabId) {
+  try {
+    const tab = await browser.tabs.get(tabId);
+    return tab.url;
+  } catch (error) {
+    return "Unknown URL";
+  }
+}
+
 // Content handlers
 async function handleContentAction(id, action, data) {
   try {
@@ -424,11 +434,19 @@ async function handleContentAction(id, action, data) {
 
       case 'content.execute':
       case 'content.execute_script':
-        const executeResult = await browser.tabs.sendMessage(data.tabId, {
-          action: 'executeScript',
-          script: data.script
-        });
-        sendResponse(id, action, { result: executeResult });
+        try {
+          const executeResults = await browser.tabs.executeScript(data.tabId, {
+            code: data.script
+          });
+          // executeScript returns an array of results from each frame
+          const result = executeResults && executeResults.length > 0 ? executeResults[0] : null;
+          sendResponse(id, action, { 
+            result: result,
+            url: await getCurrentTabUrl(data.tabId)
+          });
+        } catch (scriptError) {
+          sendError(id, 'SCRIPT_ERROR', `Script execution failed: ${scriptError.message}`);
+        }
         break;
 
       default:
