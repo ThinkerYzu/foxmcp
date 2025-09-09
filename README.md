@@ -1,6 +1,6 @@
 # FoxMCP - Firefox Extension MCP Integration
 
-A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content) to MCP (Model Context Protocol) clients via WebSocket communication. Features FastMCP server integration for seamless MCP tool access.
+A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content, windows) to MCP (Model Context Protocol) clients via WebSocket communication. Features FastMCP server integration for seamless MCP tool access.
 
 ## Quick Start
 
@@ -110,6 +110,16 @@ make test-integration # Integration tests only
 - `navigation.reload` - Reload current page
 - `navigation.go_to_url` - Navigate to specific URL
 
+### Window Management
+- `windows.list` - Get all browser windows
+- `windows.get` - Get specific window information
+- `windows.get_current` - Get current active window
+- `windows.get_last_focused` - Get most recently focused window
+- `windows.create` - Create new browser window
+- `windows.close` - Close specific window
+- `windows.focus` - Bring window to front
+- `windows.update` - Update window properties (resize, move, state)
+
 ### Bookmark Management
 - `bookmarks.list` - Get all bookmarks (flattened from tree structure)
 - `bookmarks.search` - Search bookmarks
@@ -173,6 +183,16 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 - `content_get_html(tab_id)` - Get page HTML source
 - `content_execute_script(tab_id, script)` - Execute JavaScript directly
 - `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
+
+#### Window Management
+- `list_windows(populate=True)` - List all browser windows with optional tab details
+- `get_window(window_id, populate=True)` - Get specific window information
+- `get_current_window(populate=True)` - Get current active window
+- `get_last_focused_window(populate=True)` - Get most recently focused window
+- `create_window(url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
+- `close_window(window_id)` - Close specific window
+- `focus_window(window_id)` - Bring window to front and focus it
+- `update_window(window_id, state=None, focused=None, width=None, height=None, top=None, left=None)` - Update window properties
 
 #### Debugging Tools
 - `debug_websocket_status()` - Check browser extension connection status

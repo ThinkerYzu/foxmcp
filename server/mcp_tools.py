@@ -40,11 +40,199 @@ class FoxMCPTools:
 
     def _setup_tools(self):
         """Set up all MCP tool definitions"""
+        self._setup_window_tools()
         self._setup_tab_tools()
         self._setup_history_tools()
         self._setup_bookmark_tools()
         self._setup_navigation_tools()
         self._setup_content_tools()
+
+    def _setup_window_tools(self):
+        """Setup window management tools"""
+
+        @self.mcp.tool()
+        async def list_windows(populate: bool = True) -> Dict[str, Any]:
+            """
+            List all browser windows
+            
+            Args:
+                populate: Whether to include tab information for each window
+                
+            Returns:
+                Dict containing list of windows with their details
+            """
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.list',
+                'data': {'populate': populate}
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool()
+        async def get_window(window_id: int, populate: bool = True) -> Dict[str, Any]:
+            """
+            Get information about a specific window
+            
+            Args:
+                window_id: The ID of the window to retrieve
+                populate: Whether to include tab information
+                
+            Returns:
+                Dict containing window details
+            """
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.get',
+                'data': {'windowId': window_id, 'populate': populate}
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool()
+        async def get_current_window(populate: bool = True) -> Dict[str, Any]:
+            """
+            Get the current active window
+            
+            Args:
+                populate: Whether to include tab information
+                
+            Returns:
+                Dict containing current window details
+            """
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.get_current',
+                'data': {'populate': populate}
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool()
+        async def get_last_focused_window(populate: bool = True) -> Dict[str, Any]:
+            """
+            Get the last focused window
+            
+            Args:
+                populate: Whether to include tab information
+                
+            Returns:
+                Dict containing last focused window details
+            """
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.get_last_focused',
+                'data': {'populate': populate}
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool()
+        async def create_window(
+            url: Optional[str] = None,
+            window_type: str = "normal",
+            state: str = "normal", 
+            focused: bool = True,
+            width: Optional[int] = None,
+            height: Optional[int] = None,
+            top: Optional[int] = None,
+            left: Optional[int] = None,
+            incognito: bool = False
+        ) -> Dict[str, Any]:
+            """
+            Create a new browser window
+            
+            Args:
+                url: URL to load in the new window
+                window_type: Type of window ("normal", "popup", "panel", "detached_panel")
+                state: Window state ("normal", "minimized", "maximized", "fullscreen")
+                focused: Whether to focus the new window
+                width: Window width in pixels
+                height: Window height in pixels  
+                top: Window top position in pixels
+                left: Window left position in pixels
+                incognito: Whether to create an incognito window
+                
+            Returns:
+                Dict containing created window details
+            """
+            data = {'type': window_type, 'state': state, 'focused': focused, 'incognito': incognito}
+            if url: data['url'] = url
+            if width: data['width'] = width
+            if height: data['height'] = height
+            if top is not None: data['top'] = top
+            if left is not None: data['left'] = left
+            
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.create',
+                'data': data
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool() 
+        async def close_window(window_id: int) -> Dict[str, Any]:
+            """
+            Close a browser window
+            
+            Args:
+                window_id: The ID of the window to close
+                
+            Returns:
+                Dict indicating success/failure
+            """
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.close',
+                'data': {'windowId': window_id}
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool()
+        async def focus_window(window_id: int) -> Dict[str, Any]:
+            """
+            Bring a window to front and focus it
+            
+            Args:
+                window_id: The ID of the window to focus
+                
+            Returns:
+                Dict indicating success/failure
+            """
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.focus',
+                'data': {'windowId': window_id}
+            })
+            return response.get('data', {})
+
+        @self.mcp.tool()
+        async def update_window(
+            window_id: int,
+            state: Optional[str] = None,
+            focused: Optional[bool] = None,
+            width: Optional[int] = None,
+            height: Optional[int] = None,
+            top: Optional[int] = None,
+            left: Optional[int] = None
+        ) -> Dict[str, Any]:
+            """
+            Update window properties
+            
+            Args:
+                window_id: The ID of the window to update
+                state: New window state ("normal", "minimized", "maximized", "fullscreen")
+                focused: Whether to focus the window
+                width: New window width in pixels
+                height: New window height in pixels
+                top: New window top position in pixels
+                left: New window left position in pixels
+                
+            Returns:
+                Dict containing updated window details
+            """
+            data = {'windowId': window_id}
+            if state: data['state'] = state
+            if focused is not None: data['focused'] = focused
+            if width: data['width'] = width
+            if height: data['height'] = height
+            if top is not None: data['top'] = top
+            if left is not None: data['left'] = left
+            
+            response = await self.websocket_server.send_message_and_wait({
+                'action': 'windows.update',
+                'data': data
+            })
+            return response.get('data', {})
 
     def _setup_tab_tools(self):
         """Setup tab management tools"""

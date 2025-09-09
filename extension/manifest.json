@@ -5,6 +5,7 @@
   "description": "Browser extension that exposes data and functions to MCP clients via WebSocket",
   "permissions": [
     "tabs",
+    "windows",
     "history", 
     "bookmarks",
     "activeTab",

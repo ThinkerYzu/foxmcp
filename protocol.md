@@ -378,7 +378,213 @@ All messages follow this JSON structure:
 }
 ```
 
-### 5. Bookmark Management
+### 5. Window Management
+
+#### List All Windows
+**Request:**
+```json
+{
+  "id": "req_020",
+  "type": "request",
+  "action": "windows.list",
+  "data": {},
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_020",
+  "type": "response",
+  "action": "windows.list",
+  "data": {
+    "windows": [
+      {
+        "id": 1,
+        "type": "normal",
+        "state": "normal",
+        "focused": true,
+        "top": 100,
+        "left": 150,
+        "width": 1024,
+        "height": 768,
+        "incognito": false,
+        "sessionId": "session_1",
+        "tabs": [
+          {
+            "id": 123,
+            "url": "https://example.com",
+            "title": "Example Page",
+            "active": true
+          }
+        ]
+      }
+    ]
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Get Window Information
+**Request:**
+```json
+{
+  "id": "req_021",
+  "type": "request",
+  "action": "windows.get",
+  "data": {
+    "windowId": 1,
+    "populate": true
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_021",
+  "type": "response",
+  "action": "windows.get",
+  "data": {
+    "window": {
+      "id": 1,
+      "type": "normal",
+      "state": "normal",
+      "focused": true,
+      "top": 100,
+      "left": 150,
+      "width": 1024,
+      "height": 768,
+      "incognito": false,
+      "sessionId": "session_1",
+      "tabs": [
+        {
+          "id": 123,
+          "url": "https://example.com",
+          "title": "Example Page",
+          "active": true,
+          "index": 0
+        }
+      ]
+    }
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Get Current Window
+**Request:**
+```json
+{
+  "id": "req_022",
+  "type": "request",
+  "action": "windows.get_current",
+  "data": {
+    "populate": false
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+#### Create New Window
+**Request:**
+```json
+{
+  "id": "req_023",
+  "type": "request",
+  "action": "windows.create",
+  "data": {
+    "url": "https://example.com",
+    "type": "normal",
+    "state": "normal",
+    "focused": true,
+    "width": 800,
+    "height": 600,
+    "top": 200,
+    "left": 300,
+    "incognito": false
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_023",
+  "type": "response",
+  "action": "windows.create",
+  "data": {
+    "window": {
+      "id": 2,
+      "type": "normal",
+      "state": "normal",
+      "focused": true,
+      "top": 200,
+      "left": 300,
+      "width": 800,
+      "height": 600,
+      "incognito": false,
+      "tabs": [
+        {
+          "id": 124,
+          "url": "https://example.com",
+          "title": "Loading...",
+          "active": true,
+          "index": 0
+        }
+      ]
+    }
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Close Window
+**Request:**
+```json
+{
+  "id": "req_024",
+  "type": "request",
+  "action": "windows.close",
+  "data": {
+    "windowId": 2
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_024",
+  "type": "response",
+  "action": "windows.close",
+  "data": {
+    "success": true,
+    "windowId": 2
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Focus Window
+**Request:**
+```json
+{
+  "id": "req_025",
+  "type": "request",
+  "action": "windows.focus",
+  "data": {
+    "windowId": 1
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+### 6. Bookmark Management
 
 #### List Bookmarks
 **Request:**
@@ -508,8 +714,12 @@ All messages follow this JSON structure:
 
 - `PERMISSION_DENIED` - Extension lacks required permissions
 - `TAB_NOT_FOUND` - Specified tab ID doesn't exist
+- `WINDOW_NOT_FOUND` - Specified window ID doesn't exist
 - `BOOKMARK_NOT_FOUND` - Specified bookmark ID doesn't exist
 - `INVALID_URL` - Provided URL is malformed
+- `INVALID_WINDOW_STATE` - Invalid window state specified
+- `INVALID_WINDOW_TYPE` - Invalid window type specified
+- `WINDOW_CREATION_FAILED` - Failed to create new window
 - `SCRIPT_EXECUTION_FAILED` - JavaScript execution failed
 - `WEBSOCKET_ERROR` - Connection or communication error
 - `INVALID_REQUEST` - Malformed request message

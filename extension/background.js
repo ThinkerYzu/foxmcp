@@ -156,6 +156,9 @@ async function handleMessage(message) {
     case 'navigation':
       await handleNavigationAction(id, action, data);
       break;
+    case 'windows':
+      await handleWindowsAction(id, action, data);
+      break;
     case 'bookmarks':
       await handleBookmarksAction(id, action, data);
       break;
@@ -544,6 +547,111 @@ async function handleBookmarksAction(id, action, data) {
     }
   } catch (error) {
     sendError(id, 'API_ERROR', `Bookmarks API error: ${error.message}`);
+  }
+}
+
+// Windows handlers
+async function handleWindowsAction(id, action, data) {
+  try {
+    switch (action) {
+      case 'windows.list':
+        const windows = await browser.windows.getAll({
+          populate: data.populate !== false, // default to true
+          windowTypes: ['normal', 'popup', 'panel', 'devtools']
+        });
+        sendResponse(id, action, { windows });
+        break;
+
+      case 'windows.get':
+        if (!data.windowId) {
+          sendError(id, 'INVALID_PARAMETER', 'windowId is required for windows.get');
+          return;
+        }
+        const window = await browser.windows.get(data.windowId, {
+          populate: data.populate !== false
+        });
+        sendResponse(id, action, { window });
+        break;
+
+      case 'windows.get_current':
+        const currentWindow = await browser.windows.getCurrent({
+          populate: data.populate !== false
+        });
+        sendResponse(id, action, { window: currentWindow });
+        break;
+
+      case 'windows.get_last_focused':
+        const lastFocusedWindow = await browser.windows.getLastFocused({
+          populate: data.populate !== false
+        });
+        sendResponse(id, action, { window: lastFocusedWindow });
+        break;
+
+      case 'windows.create':
+        const createOptions = {};
+        if (data.url) createOptions.url = data.url;
+        if (data.type) createOptions.type = data.type;
+        if (data.state) createOptions.state = data.state;
+        if (data.focused !== undefined) createOptions.focused = data.focused;
+        if (data.width) createOptions.width = data.width;
+        if (data.height) createOptions.height = data.height;
+        if (data.top) createOptions.top = data.top;
+        if (data.left) createOptions.left = data.left;
+        if (data.incognito !== undefined) createOptions.incognito = data.incognito;
+        
+        const newWindow = await browser.windows.create(createOptions);
+        sendResponse(id, action, { window: newWindow });
+        break;
+
+      case 'windows.close':
+        if (!data.windowId) {
+          sendError(id, 'INVALID_PARAMETER', 'windowId is required for windows.close');
+          return;
+        }
+        await browser.windows.remove(data.windowId);
+        sendResponse(id, action, { success: true, windowId: data.windowId });
+        break;
+
+      case 'windows.focus':
+        if (!data.windowId) {
+          sendError(id, 'INVALID_PARAMETER', 'windowId is required for windows.focus');
+          return;
+        }
+        await browser.windows.update(data.windowId, { focused: true });
+        sendResponse(id, action, { success: true, windowId: data.windowId });
+        break;
+
+      case 'windows.update':
+        if (!data.windowId) {
+          sendError(id, 'INVALID_PARAMETER', 'windowId is required for windows.update');
+          return;
+        }
+        const updateOptions = {};
+        if (data.state) updateOptions.state = data.state;
+        if (data.focused !== undefined) updateOptions.focused = data.focused;
+        if (data.width) updateOptions.width = data.width;
+        if (data.height) updateOptions.height = data.height;
+        if (data.top !== undefined) updateOptions.top = data.top;
+        if (data.left !== undefined) updateOptions.left = data.left;
+        
+        const updatedWindow = await browser.windows.update(data.windowId, updateOptions);
+        sendResponse(id, action, { window: updatedWindow });
+        break;
+
+      default:
+        sendError(id, 'UNKNOWN_ACTION', `Unknown windows action: ${action}`);
+    }
+  } catch (error) {
+    // Handle specific window errors
+    if (error.message && error.message.includes('No window with id')) {
+      sendError(id, 'WINDOW_NOT_FOUND', `Window with ID ${data.windowId} not found`);
+    } else if (error.message && error.message.includes('Invalid window state')) {
+      sendError(id, 'INVALID_WINDOW_STATE', error.message);
+    } else if (error.message && error.message.includes('Invalid window type')) {
+      sendError(id, 'INVALID_WINDOW_TYPE', error.message);
+    } else {
+      sendError(id, 'API_ERROR', `Windows API error: ${error.message}`);
+    }
   }
 }
 

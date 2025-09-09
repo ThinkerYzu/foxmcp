@@ -39,12 +39,14 @@ foxmcp/
     ├── unit/          # Unit tests
     │   ├── test_server.py      # Server component tests
     │   ├── test_protocol.py    # Protocol message tests
-    │   └── test_ping_pong.py   # Ping-pong functionality tests
+    │   ├── test_ping_pong.py   # Ping-pong functionality tests
+    │   └── test_window_handlers.py # Window management message and MCP tool tests
     ├── integration/   # Integration tests
     │   ├── test_websocket_communication.py # WebSocket communication tests
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests
     │   ├── test_real_firefox_communication.py # Real Firefox extension tests
     │   ├── test_ui_storage_sync.py        # UI storage synchronization tests with Firefox
+    │   ├── test_window_management.py      # End-to-end window management tests with Firefox
     │   ├── test_end_to_end_mcp.py         # Complete MCP tool chain tests
     │   ├── test_test_helper_protocol.py   # Test helper protocol unit tests
     │   └── foxmcp_scripts/    # External scripts for predefined script execution tests
@@ -60,7 +62,7 @@ foxmcp/
 - **Purpose**: Extension configuration file for Firefox
 - **Key Features**:
   - Manifest V2 format for Firefox WebExtensions compatibility
-  - Permissions for tabs, history, bookmarks, activeTab, storage, and all URLs
+  - Permissions for tabs, windows, history, bookmarks, activeTab, storage, and all URLs
   - Persistent background script registration
   - Content script injection for all URLs
   - Browser action popup UI configuration
@@ -82,6 +84,7 @@ foxmcp/
   - **Complete WebExtensions API implementations** for all function categories:
     - **History management**: Query history, get recent items via browser.history
     - **Tab management**: List, create, close, update tabs via browser.tabs
+    - **Window management**: List, get, create, close, focus, update windows via browser.windows
     - **Content extraction**: Text and HTML extraction from pages via browser.tabs.sendMessage
     - **Navigation control**: URL navigation, back/forward, reload via browser.tabs
     - **Bookmark management**: List, search, create, remove bookmarks via browser.bookmarks
