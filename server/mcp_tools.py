@@ -727,7 +727,7 @@ class FoxMCPTools:
 
         # Execute Predefined Script Tool
         @self.mcp.tool()
-        async def content_execute_predefine(
+        async def content_execute_predefined(
             tab_id: int,
             script_name: str,
             script_args: str = ""

@@ -988,7 +988,7 @@ class TestEndToEndMCP:
             print("  - Error handling")
 
     @pytest.mark.asyncio
-    async def test_end_to_end_content_execute_predefine(self, full_mcp_system):
+    async def test_end_to_end_content_execute_predefined(self, full_mcp_system):
         """Test complete end-to-end predefined script execution in browser tabs via MCP"""
         system = full_mcp_system
         server = system['server']
@@ -1096,7 +1096,7 @@ class TestEndToEndMCP:
             
             # Step 3: Test predefined script execution with simple_test.sh (no arguments - empty string)
             print("\n3️⃣  Testing predefined script: simple_test.sh...")
-            simple_result = await mcp_client.call_tool("content_execute_predefine", {
+            simple_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "simple_test.sh",
                 "script_args": ""
@@ -1112,7 +1112,7 @@ class TestEndToEndMCP:
             
             # Step 4: Test predefined script execution with get_page_info.sh for page title
             print("\n4️⃣  Testing predefined script: get_page_info.sh (title)...")
-            title_result = await mcp_client.call_tool("content_execute_predefine", {
+            title_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "get_page_info.sh",
                 "script_args": '["title"]'
@@ -1129,7 +1129,7 @@ class TestEndToEndMCP:
             
             # Step 5: Test predefined script execution with get_page_info.sh for page URL
             print("\n5️⃣  Testing predefined script: get_page_info.sh (url)...")
-            url_result = await mcp_client.call_tool("content_execute_predefine", {
+            url_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "get_page_info.sh",
                 "script_args": '["url"]'
@@ -1147,7 +1147,7 @@ class TestEndToEndMCP:
             # Step 5.5: Test multi-argument script with arguments containing spaces
             if os.path.exists(multi_arg_test_script):
                 print("\n5️⃣.5  Testing predefined script: multi_arg_test.sh (multiple args with spaces)...")
-                multi_arg_result = await mcp_client.call_tool("content_execute_predefine", {
+                multi_arg_result = await mcp_client.call_tool("content_execute_predefined", {
                     "tab_id": target_tab_id,
                     "script_name": "multi_arg_test.sh",
                     "script_args": '["Hello from JSON args!", "test-div", "green"]'
@@ -1163,7 +1163,7 @@ class TestEndToEndMCP:
             
             # Step 6: Test error handling - non-existent script (empty array format)
             print("\n6️⃣  Testing error handling: non-existent script...")
-            error_result = await mcp_client.call_tool("content_execute_predefine", {
+            error_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "nonexistent_script.sh",
                 "script_args": "[]"
@@ -1178,7 +1178,7 @@ class TestEndToEndMCP:
             
             # Step 7: Test security validation - path traversal attack (empty string format)
             print("\n7️⃣  Testing security: path traversal attack...")
-            security_result = await mcp_client.call_tool("content_execute_predefine", {
+            security_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "../../../etc/passwd",
                 "script_args": ""
@@ -1193,7 +1193,7 @@ class TestEndToEndMCP:
             
             # Step 8: Test security validation - invalid characters (empty string format)
             print("\n8️⃣  Testing security: invalid characters...")
-            security_result2 = await mcp_client.call_tool("content_execute_predefine", {
+            security_result2 = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "script;rm -rf /",
                 "script_args": ""
@@ -1208,13 +1208,13 @@ class TestEndToEndMCP:
             
             # Step 8.5: Test empty string vs empty array equivalence
             print("\n8️⃣.5  Testing equivalence: empty string vs empty array...")
-            empty_string_result = await mcp_client.call_tool("content_execute_predefine", {
+            empty_string_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "simple_test.sh",
                 "script_args": ""
             })
             
-            empty_array_result = await mcp_client.call_tool("content_execute_predefine", {
+            empty_array_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "simple_test.sh",
                 "script_args": "[]"
@@ -1229,7 +1229,7 @@ class TestEndToEndMCP:
             
             # Step 9: Test JSON validation - invalid JSON
             print("\n9️⃣  Testing JSON validation: invalid JSON...")
-            json_error_result = await mcp_client.call_tool("content_execute_predefine", {
+            json_error_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "simple_test.sh",
                 "script_args": '["invalid json"'  # Missing closing bracket
@@ -1244,7 +1244,7 @@ class TestEndToEndMCP:
             
             # Step 10: Test JSON validation - non-array JSON
             print("\n🔟  Testing JSON validation: non-array JSON...")
-            non_array_result = await mcp_client.call_tool("content_execute_predefine", {
+            non_array_result = await mcp_client.call_tool("content_execute_predefined", {
                 "tab_id": target_tab_id,
                 "script_name": "simple_test.sh",
                 "script_args": '{"key": "value"}'  # Object instead of array

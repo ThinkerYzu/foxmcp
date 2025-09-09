@@ -198,7 +198,7 @@ foxmcp/
   - **Response type processing** (success data extraction, error handling)
   - **15-second timeout** for extension responses with graceful failure handling
   - **Predefined Script Execution System**:
-    - `content_execute_predefine()` - Execute external scripts that generate JavaScript
+    - `content_execute_predefined()` - Execute external scripts that generate JavaScript
     - **Environment variable configuration**: `FOXMCP_EXT_SCRIPTS` directory path
     - **Security validation**: Path traversal protection, character validation, directory containment
     - **JSON argument support**: JSON array of strings or empty string for no arguments

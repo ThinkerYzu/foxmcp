@@ -278,7 +278,7 @@ All messages follow this JSON structure:
 {
   "id": "req_010b",
   "type": "request",
-  "action": "content.execute_predefine",
+  "action": "content.execute_predefined",
   "data": {
     "tabId": 123,
     "scriptName": "get_page_info.sh",
@@ -293,7 +293,7 @@ All messages follow this JSON structure:
 {
   "id": "req_010b",
   "type": "response", 
-  "action": "content.execute_predefine",
+  "action": "content.execute_predefined",
   "data": {
     "result": "My Page Title",
     "url": "https://example.com",
@@ -309,7 +309,7 @@ All messages follow this JSON structure:
 {
   "id": "req_010c",
   "type": "error",
-  "action": "content.execute_predefine",
+  "action": "content.execute_predefined",
   "data": {
     "code": "INVALID_SCRIPT_NAME",
     "message": "Invalid script name '../../../etc/passwd'. Script names cannot contain path separators or '..' sequences"

@@ -172,14 +172,14 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 - `content_get_text(tab_id)` - Extract page text content
 - `content_get_html(tab_id)` - Get page HTML source
 - `content_execute_script(tab_id, script)` - Execute JavaScript directly
-- `content_execute_predefine(tab_id, script_name, script_args="")` - Execute predefined external scripts
+- `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
 
 #### Debugging Tools
 - `debug_websocket_status()` - Check browser extension connection status
 
 ### Predefined Script Execution
 
-The `content_execute_predefine()` tool allows execution of external scripts that generate JavaScript dynamically. This provides a powerful way to create reusable, parameterized browser automation scripts.
+The `content_execute_predefined()` tool allows execution of external scripts that generate JavaScript dynamically. This provides a powerful way to create reusable, parameterized browser automation scripts.
 
 #### Setup
 1. **Configure Script Directory**: Set the `FOXMCP_EXT_SCRIPTS` environment variable to point to your scripts directory:
@@ -204,7 +204,7 @@ The `content_execute_predefine()` tool allows execution of external scripts that
 **No Arguments (Empty String)**:
 ```json
 {
-  "name": "content_execute_predefine",
+  "name": "content_execute_predefined",
   "arguments": {
     "tab_id": 123,
     "script_name": "simple_script.sh",
@@ -216,7 +216,7 @@ The `content_execute_predefine()` tool allows execution of external scripts that
 **Single Argument**:
 ```json
 {
-  "name": "content_execute_predefine", 
+  "name": "content_execute_predefined", 
   "arguments": {
     "tab_id": 123,
     "script_name": "get_page_info.sh",
@@ -228,7 +228,7 @@ The `content_execute_predefine()` tool allows execution of external scripts that
 **Multiple Arguments with Spaces**:
 ```json
 {
-  "name": "content_execute_predefine",
+  "name": "content_execute_predefined",
   "arguments": {
     "tab_id": 123,
     "script_name": "add_message.sh", 
