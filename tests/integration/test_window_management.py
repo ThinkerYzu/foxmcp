@@ -178,9 +178,11 @@ class TestWindowManagementEndToEnd:
         try:
             # Get initial window count  
             initial_windows = await client.call_tool("list_windows", {"populate": False})
+            # Extract content from MCP client wrapper
+            initial_content = initial_windows.get("content", "")
             # Extract window count from string response like "Browser windows (2 found):"
             import re
-            count_match = re.search(r'Browser windows \((\d+) found\)', initial_windows)
+            count_match = re.search(r'Browser windows \((\d+) found\)', initial_content)
             initial_count = int(count_match.group(1)) if count_match else 0
             
             # Create new window
@@ -192,15 +194,18 @@ class TestWindowManagementEndToEnd:
                 "focused": True
             })
             
+            # Extract content from MCP client wrapper
+            create_content = create_result.get("content", "")
+            
             # Validate creation
-            assert isinstance(create_result, str), "Create result should be a string"
-            assert "Created" in create_result, "Result should indicate creation"
-            assert "ID" in create_result, "Result should contain window ID"
+            assert isinstance(create_content, str), "Create result should be a string"
+            assert "Created" in create_content, "Result should indicate creation"
+            assert "ID" in create_content, "Result should contain window ID"
             
             # Extract window ID from result like "Created normal window (ID 123): ..."
             import re
-            id_match = re.search(r'ID (\d+)', create_result)
-            assert id_match, f"Could not extract window ID from: {create_result}"
+            id_match = re.search(r'ID (\d+)', create_content)
+            assert id_match, f"Could not extract window ID from: {create_content}"
             new_window_id = int(id_match.group(1))
             
             # Wait for window to be created
@@ -208,7 +213,8 @@ class TestWindowManagementEndToEnd:
             
             # Verify window was created
             after_create_windows = await client.call_tool("list_windows", {"populate": False})
-            count_match = re.search(r'Browser windows \((\d+) found\)', after_create_windows)
+            after_create_content = after_create_windows.get("content", "")
+            count_match = re.search(r'Browser windows \((\d+) found\)', after_create_content)
             after_create_count = int(count_match.group(1)) if count_match else 0
             assert after_create_count == initial_count + 1, "Should have one more window"
             
@@ -217,16 +223,18 @@ class TestWindowManagementEndToEnd:
             # Close the window
             close_result = await client.call_tool("close_window", {"window_id": new_window_id})
             
-            # Validate closure
-            assert isinstance(close_result, str), "Close result should be a string"
-            assert "closed successfully" in close_result, "Window should close successfully"
+            # Extract content and validate closure
+            close_content = close_result.get("content", "")
+            assert isinstance(close_content, str), "Close result should be a string"
+            assert "closed successfully" in close_content, "Window should close successfully"
             
             # Wait for window to be closed
             await asyncio.sleep(1.0)
             
             # Verify window was closed
             after_close_windows = await client.call_tool("list_windows", {"populate": False})
-            count_match = re.search(r'Browser windows \((\d+) found\)', after_close_windows)
+            after_close_content = after_close_windows.get("content", "")
+            count_match = re.search(r'Browser windows \((\d+) found\)', after_close_content)
             after_close_count = int(count_match.group(1)) if count_match else 0
             assert after_close_count == initial_count, "Should be back to original count"
             
@@ -247,14 +255,21 @@ class TestWindowManagementEndToEnd:
         try:
             # Get current window
             current_result = await client.call_tool("get_current_window", {"populate": False})
-            current_window_id = current_result["window"]["id"]
+            current_content = current_result.get("content", "")
+            
+            # Extract window ID from current window result
+            import re
+            id_match = re.search(r'ID (\d+)', current_content)
+            assert id_match, f"Could not extract window ID from: {current_content}"
+            current_window_id = int(id_match.group(1))
             
             # Focus the current window (should always succeed)
             focus_result = await client.call_tool("focus_window", {"window_id": current_window_id})
             
-            # Validate focus
-            assert focus_result.get("success") == True, "Focus should succeed"
-            assert focus_result.get("windowId") == current_window_id, "Should return window ID"
+            # Extract content and validate focus
+            focus_content = focus_result.get("content", "")
+            assert isinstance(focus_content, str), "Focus result should be a string"
+            assert "focused successfully" in focus_content, "Focus should succeed"
             
             print(f"Successfully focused window ID: {current_window_id}")
             
@@ -273,7 +288,13 @@ class TestWindowManagementEndToEnd:
         try:
             # Get current window ID
             current_result = await client.call_tool("get_current_window", {"populate": False})
-            window_id = current_result["window"]["id"]
+            current_content = current_result.get("content", "")
+            
+            # Extract window ID from current window result
+            import re
+            id_match = re.search(r'ID (\d+)', current_content)
+            assert id_match, f"Could not extract window ID from: {current_content}"
+            window_id = int(id_match.group(1))
             
             # Get window by ID
             get_result = await client.call_tool("get_window", {
@@ -281,13 +302,13 @@ class TestWindowManagementEndToEnd:
                 "populate": True
             })
             
-            # Validate result
-            assert "window" in get_result, "Result should contain window"
-            window = get_result["window"]
-            assert window["id"] == window_id, "Should return correct window"
-            assert "tabs" in window, "Should include tabs (populate=True)"
+            # Extract content and validate result
+            get_content = get_result.get("content", "")
+            assert isinstance(get_content, str), "Get result should be a string"
+            assert f"Window {window_id}" in get_content, "Should return correct window"
+            assert "tabs" in get_content, "Should mention tabs (populate=True)"
             
-            print(f"Retrieved window ID: {window_id} with {len(window.get('tabs', []))} tabs")
+            print(f"Retrieved window ID: {window_id}, result: {get_content}")
             
         finally:
             pass
@@ -304,8 +325,13 @@ class TestWindowManagementEndToEnd:
         try:
             # Get current window
             current_result = await client.call_tool("get_current_window", {"populate": False})
-            window_id = current_result["window"]["id"]
-            original_state = current_result["window"].get("state", "normal")
+            current_content = current_result.get("content", "")
+            
+            # Extract window ID from current window result
+            import re
+            id_match = re.search(r'ID (\d+)', current_content)
+            assert id_match, f"Could not extract window ID from: {current_content}"
+            window_id = int(id_match.group(1))
             
             # Try to update window (resize it)
             update_result = await client.call_tool("update_window", {
@@ -315,14 +341,14 @@ class TestWindowManagementEndToEnd:
                 "focused": True
             })
             
-            # Validate update
-            assert "window" in update_result, "Update result should contain window"
-            updated_window = update_result["window"]
-            assert updated_window["id"] == window_id, "Should return same window ID"
+            # Extract content and validate update
+            update_content = update_result.get("content", "")
+            assert isinstance(update_content, str), "Update result should be a string"
+            assert f"window {window_id}" in update_content or f"Window {window_id}" in update_content, "Should reference correct window ID"
             
             # Note: Some properties might not change due to Firefox restrictions,
             # but the operation should still succeed
-            print(f"Updated window ID: {window_id}")
+            print(f"Updated window ID: {window_id}, result: {update_content}")
             
         finally:
             pass
@@ -338,19 +364,21 @@ class TestWindowManagementEndToEnd:
         
         try:
             # Try to get non-existent window
-            with pytest.raises(Exception) as exc_info:
-                await client.call_tool("get_window", {"window_id": 99999, "populate": False})
+            get_result = await client.call_tool("get_window", {"window_id": 99999, "populate": False})
+            get_content = get_result.get("content", "")
             
-            # The error should contain window not found information
-            error_str = str(exc_info.value).lower()
-            assert "window" in error_str or "not found" in error_str, "Should indicate window not found"
+            # The error should be in the content, not raised as exception
+            assert isinstance(get_content, str), "Get result should be a string"
+            assert ("Error" in get_content or "not found" in get_content or 
+                    "Unable to retrieve" in get_content), "Should indicate error or inability to retrieve"
             
-            # Try to close non-existent window
-            with pytest.raises(Exception) as exc_info:
-                await client.call_tool("close_window", {"window_id": 99999})
+            # Try to close non-existent window  
+            close_result = await client.call_tool("close_window", {"window_id": 99999})
+            close_content = close_result.get("content", "")
                 
-            error_str = str(exc_info.value).lower()
-            assert "window" in error_str or "not found" in error_str, "Should indicate window not found"
+            assert isinstance(close_content, str), "Close result should be a string"
+            assert ("Error" in close_content or "not found" in close_content or 
+                    "Unable to close" in close_content or "Failed to close" in close_content), "Should indicate error or failure to close"
             
             print("Error handling tests passed")
             
