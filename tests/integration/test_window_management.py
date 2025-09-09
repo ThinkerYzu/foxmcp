@@ -841,6 +841,176 @@ class TestWindowManagementEndToEnd:
                 except Exception as e:
                     print(f"⚠️ Error closing window {window_id}: {e}")
 
+    @pytest.mark.asyncio
+    async def test_window_focus_switching(self, server_with_extension):
+        """Test switching focus between windows and verifying current window changes"""
+        setup = server_with_extension
+        
+        # Create MCP client
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
+        
+        created_window_ids = []
+        
+        try:
+            print("🎯 Testing Window Focus Switching")
+            print("=" * 50)
+            
+            # Get initial current window
+            print("\n📍 Step 1: Get initial current window...")
+            initial_current = await client.call_tool("get_current_window", {"populate": True})
+            initial_content = initial_current.get("content", "")
+            print(f"Initial current window: {initial_content}")
+            
+            # Extract initial window ID
+            import re
+            initial_match = re.search(r'Current window \(ID (\d+)\)', initial_content)
+            assert initial_match, f"Could not extract initial window ID from: {initial_content}"
+            initial_window_id = int(initial_match.group(1))
+            print(f"✅ Initial focused window ID: {initial_window_id}")
+            
+            # Create a new window
+            print(f"\n🪟 Step 2: Creating new window...")
+            window_result = await client.call_tool("create_window", {
+                "url": "about:blank",
+                "window_type": "normal",
+                "width": 900,
+                "height": 700,
+                "focused": True  # This should make the new window focused
+            })
+            
+            window_content = window_result.get("content", "")
+            print(f"Window creation result: {window_content}")
+            
+            # Extract new window ID
+            id_match = re.search(r'ID (\d+)', window_content)
+            assert id_match, f"Could not find new window ID in: {window_content}"
+            new_window_id = int(id_match.group(1))
+            created_window_ids.append(new_window_id)
+            print(f"✅ Created new window ID: {new_window_id}")
+            
+            # Wait for window creation to stabilize
+            await asyncio.sleep(2.0)
+            
+            # Check current window after creation (should be the new window)
+            print(f"\n📍 Step 3: Check current window after creation...")
+            after_creation_current = await client.call_tool("get_current_window", {"populate": True})
+            after_creation_content = after_creation_current.get("content", "")
+            print(f"Current window after creation: {after_creation_content}")
+            
+            # Extract current window ID
+            after_creation_match = re.search(r'Current window \(ID (\d+)\)', after_creation_content)
+            assert after_creation_match, f"Could not extract current window ID from: {after_creation_content}"
+            current_after_creation = int(after_creation_match.group(1))
+            print(f"✅ Current focused window ID after creation: {current_after_creation}")
+            
+            # Verify the new window is now focused (if focused=True worked)
+            if current_after_creation == new_window_id:
+                print(f"✅ New window {new_window_id} is correctly focused after creation")
+                first_focused_window = new_window_id
+                second_focus_target = initial_window_id
+            else:
+                print(f"⚠️ Focus didn't switch to new window. Current: {current_after_creation}, Expected: {new_window_id}")
+                first_focused_window = current_after_creation
+                second_focus_target = new_window_id if current_after_creation != new_window_id else initial_window_id
+            
+            # Test explicit focus switching to the other window
+            print(f"\n🎯 Step 4: Explicitly focus window {second_focus_target}...")
+            focus_result = await client.call_tool("focus_window", {"window_id": second_focus_target})
+            focus_content = focus_result.get("content", "")
+            print(f"Focus result: {focus_content}")
+            
+            # Verify focus operation reported success
+            assert "focused successfully" in focus_content, f"Focus operation should succeed: {focus_content}"
+            
+            # Wait for focus change to take effect
+            await asyncio.sleep(1.5)
+            
+            # Check current window after explicit focus
+            print(f"\n📍 Step 5: Check current window after explicit focus...")
+            after_focus_current = await client.call_tool("get_current_window", {"populate": True})
+            after_focus_content = after_focus_current.get("content", "")
+            print(f"Current window after focus: {after_focus_content}")
+            
+            # Extract current window ID after focus
+            after_focus_match = re.search(r'Current window \(ID (\d+)\)', after_focus_content)
+            assert after_focus_match, f"Could not extract current window ID from: {after_focus_content}"
+            current_after_focus = int(after_focus_match.group(1))
+            print(f"✅ Current focused window ID after focus: {current_after_focus}")
+            
+            # Verify focus actually switched
+            assert current_after_focus == second_focus_target, f"Focus should have switched to {second_focus_target}, but current is {current_after_focus}"
+            print(f"✅ Focus successfully switched from {first_focused_window} to {current_after_focus}")
+            
+            # Test switching back to the first window
+            print(f"\n🎯 Step 6: Focus back to window {first_focused_window}...")
+            focus_back_result = await client.call_tool("focus_window", {"window_id": first_focused_window})
+            focus_back_content = focus_back_result.get("content", "")
+            print(f"Focus back result: {focus_back_content}")
+            
+            assert "focused successfully" in focus_back_content, f"Focus back operation should succeed: {focus_back_content}"
+            
+            await asyncio.sleep(1.5)
+            
+            # Check current window after focusing back
+            print(f"\n📍 Step 7: Check current window after focusing back...")
+            final_current = await client.call_tool("get_current_window", {"populate": True})
+            final_content = final_current.get("content", "")
+            print(f"Final current window: {final_content}")
+            
+            # Extract final current window ID
+            final_match = re.search(r'Current window \(ID (\d+)\)', final_content)
+            assert final_match, f"Could not extract final current window ID from: {final_content}"
+            final_current_id = int(final_match.group(1))
+            print(f"✅ Final focused window ID: {final_current_id}")
+            
+            # Verify focus switched back
+            assert final_current_id == first_focused_window, f"Focus should have switched back to {first_focused_window}, but current is {final_current_id}"
+            print(f"✅ Focus successfully switched back from {current_after_focus} to {final_current_id}")
+            
+            # Final verification - list all windows to see focus state
+            print(f"\n📋 Step 8: Final window listing...")
+            final_windows = await client.call_tool("list_windows", {"populate": True})
+            final_windows_content = final_windows.get("content", "")
+            print(f"Final window listing:\n{final_windows_content}")
+            
+            # Verify the focused window in the listing matches our expectation
+            focused_in_listing = None
+            for line in final_windows_content.split('\n'):
+                if "(focused)" in line:
+                    id_match = re.search(r'ID (\d+)', line)
+                    if id_match:
+                        focused_in_listing = int(id_match.group(1))
+                        break
+            
+            if focused_in_listing:
+                assert focused_in_listing == final_current_id, f"Focused window in listing ({focused_in_listing}) should match current window ({final_current_id})"
+                print(f"✅ Window listing confirms window {focused_in_listing} is focused")
+            else:
+                print("⚠️ Could not determine focused window from listing")
+            
+            print(f"\n✅ Window Focus Switching Test PASSED!")
+            print(f"✅ Successfully created windows: {initial_window_id}, {new_window_id}")
+            print(f"✅ Successfully switched focus: {first_focused_window} → {second_focus_target} → {first_focused_window}")
+            print(f"✅ Current window detection working correctly")
+            print(f"✅ Focus operations working as expected")
+            
+        finally:
+            # Clean up created windows
+            print(f"\n🧹 Cleaning up {len(created_window_ids)} created windows...")
+            for window_id in created_window_ids:
+                try:
+                    close_result = await client.call_tool("close_window", {"window_id": window_id})
+                    close_content = close_result.get("content", "")
+                    if "closed successfully" in close_content:
+                        print(f"✅ Closed window {window_id}")
+                    else:
+                        print(f"⚠️ Window {window_id} close result: {close_content}")
+                        
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    print(f"⚠️ Error closing window {window_id}: {e}")
+
 
 if __name__ == "__main__":
     # Run tests individually for debugging

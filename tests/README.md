@@ -164,6 +164,14 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - **Tool naming validation**: Prevents naming mismatches between test and production
   - **End-to-end tab testing**: Creates actual browser tabs and verifies tab listing functionality
 
+- **test_window_management.py**: Comprehensive window management end-to-end tests
+  - **Window creation and properties**: Creates windows with specific dimensions and properties
+  - **Cross-window tab creation**: Creates tabs in specific windows using window_id parameter
+  - **Window focus switching**: Tests focus operations with current window verification
+  - **Tab isolation verification**: Ensures tabs remain in their designated windows
+  - **Window cleanup**: Proper cleanup of created windows after tests
+  - **Multiple test scenarios**: Basic operations and comprehensive focus switching tests
+
 ## Test Fixtures
 
 The `conftest.py` file provides shared test fixtures:
@@ -215,12 +223,13 @@ pytest --cov=../server --cov-report=html
 Coverage reports are generated in `htmlcov/` directory.
 
 **Current Test Statistics:**
-- **128 total tests** across unit and integration suites (includes history content testing)
+- **130+ total tests** across unit and integration suites (includes window management testing)
 - **Enhanced coverage** of server components including FastMCP integration
-- **95+ integration tests** covering WebSocket communication and MCP functionality
+- **97+ integration tests** covering WebSocket communication, MCP functionality, and window management
 - **29 unit tests** covering individual component functionality
 - **8 additional tests** in root test directory for end-to-end coordination
 - **Comprehensive MCP schema validation** prevents parameter format issues
+- **Window management test coverage** includes focus switching and cross-window operations
 
 ## Test Infrastructure Features
 
@@ -261,6 +270,14 @@ The test suite includes comprehensive Firefox browser integration:
 All major browser functions are tested:
 
 **Tabs Management:** `tabs_list`, `tabs_create`, `tabs_close`, `tabs_switch` (with end-to-end tab creation and listing tests) - ✅ All implemented in extension
+  - ✅ **Cross-window tab creation**: `tabs_create` with `window_id` parameter support
+  - ✅ **Tab isolation**: Tabs properly isolated per window
+
+**Window Management:** `windows.list`, `windows.get`, `windows.create`, `windows.close`, `windows.focus`, `windows.update`, `windows.get_current` - ✅ All implemented and tested
+  - ✅ **Window creation**: Creates windows with specific dimensions and properties
+  - ✅ **Focus switching**: Window focus operations with current window verification
+  - ✅ **Window properties**: State management (normal, maximized, minimized, fullscreen)
+  - ✅ **Cross-window operations**: Verified tab creation and management across multiple windows
 
 **History Operations:** `history.query`, `history.get_recent`, `history.delete_item`, `history.clear_range`
 
