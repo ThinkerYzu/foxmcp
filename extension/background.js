@@ -372,10 +372,17 @@ async function handleTabsAction(id, action, data) {
         break;
 
       case 'tabs.create':
-        const newTab = await browser.tabs.create({
+        const createTabOptions = {
           url: data.url,
           active: data.active || false
-        });
+        };
+        
+        // Add windowId if provided
+        if (data.windowId) {
+          createTabOptions.windowId = data.windowId;
+        }
+        
+        const newTab = await browser.tabs.create(createTabOptions);
         sendResponse(id, action, { tab: newTab });
         break;
 
