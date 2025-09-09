@@ -281,8 +281,9 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
    ```bash
    make run-server  # Starts both WebSocket (8765) and MCP (3000) servers
 
-   # Or with custom ports:
+   # Or with custom configuration:
    python server/server.py --port 9000 --mcp-port 4000
+   python server/server.py --no-mcp  # WebSocket only, disable MCP server
    ```
 
 2. **Configure Firefox extension** (if using non-default ports):
@@ -300,7 +301,24 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
 ```
 
-## Port Configuration
+## Server Configuration
+
+### Command Line Options
+```bash
+python server/server.py [options]
+
+Options:
+  --host HOST          Host to bind to (default: localhost, security-enforced)
+  --port PORT          WebSocket port (default: 8765)
+  --mcp-port MCP_PORT  MCP server port (default: 3000)
+  --no-mcp             Disable MCP server
+  -h, --help           Show help message
+```
+
+### Security Features
+- **Localhost-only binding**: Both WebSocket and MCP servers bind to `localhost` only for security
+- **Host enforcement**: Any attempt to bind to external interfaces (e.g., `0.0.0.0`) is automatically changed to `localhost` with a warning
+- **Default secure configuration**: No configuration required for secure localhost-only operation
 
 ### Server Ports
 - **WebSocket Port**: Default `8765` - Used for Firefox extension communication
@@ -327,13 +345,13 @@ The Firefox extension includes comprehensive configuration options with **storag
    - **Automatic Reconnection**: Extension automatically reconnects when settings change
    - **Configuration Preservation**: Test settings maintained during normal use
 
-### Server Configuration
+### Programmatic Server Configuration
 ```python
-# Default configuration
-server = FoxMCPServer()  # WebSocket: 8765, MCP: 3000
+# Default configuration (localhost-only, secure)
+server = FoxMCPServer()  # WebSocket: localhost:8765, MCP: localhost:3000
 
-# Custom ports
-server = FoxMCPServer(port=9000, mcp_port=4000)
+# Custom ports (still localhost-only)
+server = FoxMCPServer(host="localhost", port=9000, mcp_port=4000)
 
 # WebSocket only (disable MCP)
 server = FoxMCPServer(port=8765, start_mcp=False)
@@ -369,12 +387,13 @@ make clean-all         # Deep clean including dependencies
 make status            # Show project status
 ```
 
-## Configuration
+## Legacy Configuration Reference
 
-### Server Configuration
-- **Host:** localhost (default)
-- **Port:** 8765 (default)
-- **Protocol:** WebSocket (ws://)
+### Default Server Settings
+- **Host:** `localhost` (security-enforced, cannot be changed)
+- **WebSocket Port:** `8765` (configurable via `--port`)
+- **MCP Port:** `3000` (configurable via `--mcp-port`)
+- **Protocol:** WebSocket (ws://localhost:port)
 
 ### Firefox Extension Permissions
 - `tabs` - Tab management
