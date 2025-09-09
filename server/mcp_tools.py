@@ -331,19 +331,19 @@ class FoxMCPTools:
         """Setup bookmark management tools"""
         
         # List Bookmarks Tool
-        class BookmarkListParams(BaseModel):
-            """Parameters for listing bookmarks"""
-            folder_id: Optional[str] = Field(default=None, description="Folder ID to list bookmarks from")
-        
         @self.mcp.tool()
-        async def bookmarks_list(params: BookmarkListParams) -> str:
-            """List browser bookmarks"""
+        async def bookmarks_list(folder_id: Optional[str] = None) -> str:
+            """List browser bookmarks
+            
+            Args:
+                folder_id: Optional folder ID to list bookmarks from
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "bookmarks.list",
                 "data": {
-                    **({"folderId": params.folder_id} if params.folder_id else {})
+                    **({"folderId": folder_id} if folder_id else {})
                 },
                 "timestamp": datetime.now().isoformat()
             }
