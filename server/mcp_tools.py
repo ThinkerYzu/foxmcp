@@ -10,7 +10,7 @@ import os
 import subprocess
 import json
 from datetime import datetime
-from typing import Dict, Any, Optional, List, TypedDict
+from typing import Dict, Any, Optional, List, TypedDict, Union
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -422,7 +422,7 @@ class FoxMCPTools:
             url: str,
             active: bool = True,
             pinned: bool = False,
-            window_id: Optional[int] = None
+            window_id: Optional[Union[int, str]] = None
         ) -> str:
             """Create a new browser tab
 
@@ -430,8 +430,15 @@ class FoxMCPTools:
                 url: URL to open in the new tab
                 active: Whether the tab should be active (default: True)
                 pinned: Whether the tab should be pinned (default: False)
-                window_id: Window ID to create tab in (optional)
+                window_id: Window ID to create tab in (optional, accepts int or string)
             """
+            # Convert window_id to int if it's a string (for MCP client compatibility)
+            if window_id is not None and isinstance(window_id, str):
+                try:
+                    window_id = int(window_id)
+                except (ValueError, TypeError):
+                    return f"Error: Invalid window_id '{window_id}'. Must be a valid integer."
+            
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
