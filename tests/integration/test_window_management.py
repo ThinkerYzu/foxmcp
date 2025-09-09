@@ -110,77 +110,78 @@ class TestWindowManagementEndToEnd:
     async def test_list_windows(self, server_with_extension):
         """Test listing all browser windows"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
-        
-        print(f"Testing window listing via MCP on port {mcp_port}")
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
             # Test list_windows tool
             result = await client.call_tool("list_windows", {"populate": True})
             
-            # Validate response structure
-            assert isinstance(result, dict), "Result should be a dict"
-            assert "windows" in result, "Result should contain 'windows' key"
-            assert isinstance(result["windows"], list), "Windows should be a list"
-            assert len(result["windows"]) > 0, "Should have at least one window"
+            # Extract content from MCP client wrapper
+            assert isinstance(result, dict), "MCP client should return dict wrapper"
+            assert result.get("success", False), "Tool call should succeed"
+            content = result.get("content", "")
             
-            # Check window structure
-            window = result["windows"][0]
-            assert "id" in window, "Window should have an id"
-            assert "type" in window, "Window should have a type"
-            assert "state" in window, "Window should have a state"
-            assert "focused" in window, "Window should have focused status"
-            assert "tabs" in window, "Window should have tabs (populate=True)"
+            # Validate response content
+            assert isinstance(content, str), "Content should be a string"
+            assert "Browser windows" in content, "Result should contain 'Browser windows'"
+            assert "found" in content, "Result should show count of windows found"
             
-            print(f"Found {len(result['windows'])} window(s)")
+            # Check for window information in the response
+            assert "ID" in content, "Window should have an ID"
+            assert "window" in content, "Should indicate window type"
+            
+            print(f"Window list result: {content[:200]}...")
             
         finally:
-            await client.cleanup()
+            pass
 
     @pytest.mark.asyncio
     async def test_get_current_window(self, server_with_extension):
         """Test getting current window information"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
             # Test get_current_window tool
             result = await client.call_tool("get_current_window", {"populate": True})
             
+            # Extract content from MCP client wrapper
+            assert isinstance(result, dict), "MCP client should return dict wrapper"
+            assert result.get("success", False), "Tool call should succeed"
+            content = result.get("content", "")
+            
             # Validate response
-            assert isinstance(result, dict), "Result should be a dict"
-            assert "window" in result, "Result should contain 'window' key"
+            assert isinstance(content, str), "Content should be a string"
+            assert "Current window" in content, "Result should contain 'Current window'"
+            assert "ID" in content, "Window should have an ID"
             
-            window = result["window"]
-            assert "id" in window, "Window should have an id"
-            assert "type" in window, "Window should have a type"
-            assert "focused" in window, "Window should have focused status"
-            assert window["focused"] == True, "Current window should be focused"
-            
-            print(f"Current window ID: {window['id']}")
+            print(f"Current window result: {content}")
             
         finally:
-            await client.cleanup()
+            pass
 
     @pytest.mark.asyncio
     async def test_create_and_close_window(self, server_with_extension):
         """Test creating and closing a window"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
-            # Get initial window count
+            # Get initial window count  
             initial_windows = await client.call_tool("list_windows", {"populate": False})
-            initial_count = len(initial_windows["windows"])
+            # Extract window count from string response like "Browser windows (2 found):"
+            import re
+            count_match = re.search(r'Browser windows \((\d+) found\)', initial_windows)
+            initial_count = int(count_match.group(1)) if count_match else 0
             
             # Create new window
             create_result = await client.call_tool("create_window", {
@@ -192,17 +193,24 @@ class TestWindowManagementEndToEnd:
             })
             
             # Validate creation
-            assert "window" in create_result, "Create result should contain window"
-            new_window = create_result["window"]
-            assert "id" in new_window, "New window should have an id"
-            new_window_id = new_window["id"]
+            assert isinstance(create_result, str), "Create result should be a string"
+            assert "Created" in create_result, "Result should indicate creation"
+            assert "ID" in create_result, "Result should contain window ID"
+            
+            # Extract window ID from result like "Created normal window (ID 123): ..."
+            import re
+            id_match = re.search(r'ID (\d+)', create_result)
+            assert id_match, f"Could not extract window ID from: {create_result}"
+            new_window_id = int(id_match.group(1))
             
             # Wait for window to be created
             await asyncio.sleep(1.0)
             
             # Verify window was created
             after_create_windows = await client.call_tool("list_windows", {"populate": False})
-            assert len(after_create_windows["windows"]) == initial_count + 1, "Should have one more window"
+            count_match = re.search(r'Browser windows \((\d+) found\)', after_create_windows)
+            after_create_count = int(count_match.group(1)) if count_match else 0
+            assert after_create_count == initial_count + 1, "Should have one more window"
             
             print(f"Created window with ID: {new_window_id}")
             
@@ -210,28 +218,31 @@ class TestWindowManagementEndToEnd:
             close_result = await client.call_tool("close_window", {"window_id": new_window_id})
             
             # Validate closure
-            assert close_result.get("success") == True, "Window should close successfully"
+            assert isinstance(close_result, str), "Close result should be a string"
+            assert "closed successfully" in close_result, "Window should close successfully"
             
             # Wait for window to be closed
             await asyncio.sleep(1.0)
             
             # Verify window was closed
             after_close_windows = await client.call_tool("list_windows", {"populate": False})
-            assert len(after_close_windows["windows"]) == initial_count, "Should be back to original count"
+            count_match = re.search(r'Browser windows \((\d+) found\)', after_close_windows)
+            after_close_count = int(count_match.group(1)) if count_match else 0
+            assert after_close_count == initial_count, "Should be back to original count"
             
             print(f"Closed window with ID: {new_window_id}")
             
         finally:
-            await client.cleanup()
+            pass
 
     @pytest.mark.asyncio
     async def test_focus_window(self, server_with_extension):
         """Test focusing a window"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
             # Get current window
@@ -248,16 +259,16 @@ class TestWindowManagementEndToEnd:
             print(f"Successfully focused window ID: {current_window_id}")
             
         finally:
-            await client.cleanup()
+            pass
 
     @pytest.mark.asyncio
     async def test_get_window_by_id(self, server_with_extension):
         """Test getting specific window by ID"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
             # Get current window ID
@@ -279,16 +290,16 @@ class TestWindowManagementEndToEnd:
             print(f"Retrieved window ID: {window_id} with {len(window.get('tabs', []))} tabs")
             
         finally:
-            await client.cleanup()
+            pass
 
     @pytest.mark.asyncio
     async def test_update_window_properties(self, server_with_extension):
         """Test updating window properties"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
             # Get current window
@@ -314,16 +325,16 @@ class TestWindowManagementEndToEnd:
             print(f"Updated window ID: {window_id}")
             
         finally:
-            await client.cleanup()
+            pass
 
     @pytest.mark.asyncio  
     async def test_window_error_handling(self, server_with_extension):
         """Test error handling for invalid window operations"""
         setup = server_with_extension
-        mcp_port = setup['mcp_port']
         
         # Create MCP client
-        client = DirectMCPTestClient("localhost", mcp_port)
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
         
         try:
             # Try to get non-existent window
@@ -344,7 +355,7 @@ class TestWindowManagementEndToEnd:
             print("Error handling tests passed")
             
         finally:
-            await client.cleanup()
+            pass
 
 
 if __name__ == "__main__":

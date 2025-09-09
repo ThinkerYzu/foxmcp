@@ -51,7 +51,7 @@ class FoxMCPTools:
         """Setup window management tools"""
 
         @self.mcp.tool()
-        async def list_windows(populate: bool = True) -> Dict[str, Any]:
+        async def list_windows(populate: bool = True) -> str:
             """
             List all browser windows
             
@@ -59,16 +59,40 @@ class FoxMCPTools:
                 populate: Whether to include tab information for each window
                 
             Returns:
-                Dict containing list of windows with their details
+                String containing list of windows with their details
             """
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.list',
-                'data': {'populate': populate}
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.list",
+                "data": {"populate": populate},
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error getting windows: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                windows_data = response["data"]
+                windows = windows_data.get("windows", [])
+                if not windows:
+                    return "No windows found"
+
+                result = f"Browser windows ({len(windows)} found):\n"
+                for window in windows:
+                    state_info = f"state: {window.get('state', 'unknown')}"
+                    focused_info = " (focused)" if window.get("focused") else ""
+                    size_info = f"{window.get('width', '?')}x{window.get('height', '?')}"
+                    tabs_count = len(window.get('tabs', [])) if populate else '?'
+                    result += f"- ID {window.get('id')}: {window.get('type', 'normal')} window, {state_info}, {size_info}, {tabs_count} tabs{focused_info}\n"
+                return result
+
+            return "Unable to retrieve windows"
 
         @self.mcp.tool()
-        async def get_window(window_id: int, populate: bool = True) -> Dict[str, Any]:
+        async def get_window(window_id: int, populate: bool = True) -> str:
             """
             Get information about a specific window
             
@@ -77,16 +101,36 @@ class FoxMCPTools:
                 populate: Whether to include tab information
                 
             Returns:
-                Dict containing window details
+                String containing window details
             """
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.get',
-                'data': {'windowId': window_id, 'populate': populate}
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.get",
+                "data": {"windowId": window_id, "populate": populate},
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error getting window {window_id}: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                window_data = response["data"].get("window", {})
+                if not window_data:
+                    return f"Window {window_id} not found"
+
+                state_info = f"state: {window_data.get('state', 'unknown')}"
+                focused_info = " (focused)" if window_data.get("focused") else ""
+                size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
+                tabs_count = len(window_data.get('tabs', [])) if populate else '?'
+                return f"Window {window_data.get('id')}: {window_data.get('type', 'normal')} window, {state_info}, {size_info}, {tabs_count} tabs{focused_info}"
+
+            return f"Unable to retrieve window {window_id}"
 
         @self.mcp.tool()
-        async def get_current_window(populate: bool = True) -> Dict[str, Any]:
+        async def get_current_window(populate: bool = True) -> str:
             """
             Get the current active window
             
@@ -94,16 +138,35 @@ class FoxMCPTools:
                 populate: Whether to include tab information
                 
             Returns:
-                Dict containing current window details
+                String containing current window details
             """
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.get_current',
-                'data': {'populate': populate}
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.get_current",
+                "data": {"populate": populate},
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error getting current window: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                window_data = response["data"].get("window", {})
+                if not window_data:
+                    return "No current window found"
+
+                state_info = f"state: {window_data.get('state', 'unknown')}"
+                size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
+                tabs_count = len(window_data.get('tabs', [])) if populate else '?'
+                return f"Current window (ID {window_data.get('id')}): {window_data.get('type', 'normal')} window, {state_info}, {size_info}, {tabs_count} tabs"
+
+            return "Unable to retrieve current window"
 
         @self.mcp.tool()
-        async def get_last_focused_window(populate: bool = True) -> Dict[str, Any]:
+        async def get_last_focused_window(populate: bool = True) -> str:
             """
             Get the last focused window
             
@@ -111,13 +174,32 @@ class FoxMCPTools:
                 populate: Whether to include tab information
                 
             Returns:
-                Dict containing last focused window details
+                String containing last focused window details
             """
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.get_last_focused',
-                'data': {'populate': populate}
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.get_last_focused",
+                "data": {"populate": populate},
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error getting last focused window: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                window_data = response["data"].get("window", {})
+                if not window_data:
+                    return "No last focused window found"
+
+                state_info = f"state: {window_data.get('state', 'unknown')}"
+                size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
+                tabs_count = len(window_data.get('tabs', [])) if populate else '?'
+                return f"Last focused window (ID {window_data.get('id')}): {window_data.get('type', 'normal')} window, {state_info}, {size_info}, {tabs_count} tabs"
+
+            return "Unable to retrieve last focused window"
 
         @self.mcp.tool()
         async def create_window(
@@ -130,7 +212,7 @@ class FoxMCPTools:
             top: Optional[int] = None,
             left: Optional[int] = None,
             incognito: bool = False
-        ) -> Dict[str, Any]:
+        ) -> str:
             """
             Create a new browser window
             
@@ -146,7 +228,7 @@ class FoxMCPTools:
                 incognito: Whether to create an incognito window
                 
             Returns:
-                Dict containing created window details
+                String containing created window details
             """
             data = {'type': window_type, 'state': state, 'focused': focused, 'incognito': incognito}
             if url: data['url'] = url
@@ -155,14 +237,31 @@ class FoxMCPTools:
             if top is not None: data['top'] = top
             if left is not None: data['left'] = left
             
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.create',
-                'data': data
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.create",
+                "data": data,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error creating window: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                window_data = response["data"].get("window", {})
+                if window_data:
+                    window_id = window_data.get('id')
+                    window_url = url or "about:blank"
+                    size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
+                    return f"Created {window_type} window (ID {window_id}): {window_url}, {size_info}"
+
+            return "Window created but unable to retrieve details"
 
         @self.mcp.tool() 
-        async def close_window(window_id: int) -> Dict[str, Any]:
+        async def close_window(window_id: int) -> str:
             """
             Close a browser window
             
@@ -170,16 +269,31 @@ class FoxMCPTools:
                 window_id: The ID of the window to close
                 
             Returns:
-                Dict indicating success/failure
+                String indicating success/failure
             """
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.close',
-                'data': {'windowId': window_id}
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.close",
+                "data": {"windowId": window_id},
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error closing window {window_id}: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                if response["data"].get("success"):
+                    return f"Window {window_id} closed successfully"
+                else:
+                    return f"Failed to close window {window_id}"
+
+            return f"Unable to close window {window_id}"
 
         @self.mcp.tool()
-        async def focus_window(window_id: int) -> Dict[str, Any]:
+        async def focus_window(window_id: int) -> str:
             """
             Bring a window to front and focus it
             
@@ -187,13 +301,28 @@ class FoxMCPTools:
                 window_id: The ID of the window to focus
                 
             Returns:
-                Dict indicating success/failure
+                String indicating success/failure
             """
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.focus',
-                'data': {'windowId': window_id}
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.focus",
+                "data": {"windowId": window_id},
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error focusing window {window_id}: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                if response["data"].get("success"):
+                    return f"Window {window_id} focused successfully"
+                else:
+                    return f"Failed to focus window {window_id}"
+
+            return f"Unable to focus window {window_id}"
 
         @self.mcp.tool()
         async def update_window(
@@ -204,7 +333,7 @@ class FoxMCPTools:
             height: Optional[int] = None,
             top: Optional[int] = None,
             left: Optional[int] = None
-        ) -> Dict[str, Any]:
+        ) -> str:
             """
             Update window properties
             
@@ -218,7 +347,7 @@ class FoxMCPTools:
                 left: New window left position in pixels
                 
             Returns:
-                Dict containing updated window details
+                String containing updated window details
             """
             data = {'windowId': window_id}
             if state: data['state'] = state
@@ -228,11 +357,29 @@ class FoxMCPTools:
             if top is not None: data['top'] = top
             if left is not None: data['left'] = left
             
-            response = await self.websocket_server.send_message_and_wait({
-                'action': 'windows.update',
-                'data': data
-            })
-            return response.get('data', {})
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "windows.update",
+                "data": data,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error updating window {window_id}: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                window_data = response["data"].get("window", {})
+                if window_data:
+                    state_info = f"state: {window_data.get('state', 'unknown')}"
+                    size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
+                    return f"Updated window {window_id}: {state_info}, {size_info}"
+                else:
+                    return f"Window {window_id} updated successfully"
+
+            return f"Unable to update window {window_id}"
 
     def _setup_tab_tools(self):
         """Setup tab management tools"""
