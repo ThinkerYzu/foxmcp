@@ -252,7 +252,7 @@ All messages follow this JSON structure:
   "action": "content.execute_script",
   "data": {
     "tabId": 123,
-    "code": "document.title"
+    "script": "document.title"
   },
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
@@ -267,6 +267,52 @@ All messages follow this JSON structure:
   "data": {
     "result": "My Page Title",
     "url": "https://example.com"
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Execute Predefined Script
+**Request:**
+```json
+{
+  "id": "req_010b",
+  "type": "request",
+  "action": "content.execute_predefine",
+  "data": {
+    "tabId": 123,
+    "scriptName": "get_page_info.sh",
+    "scriptArgs": ["title"]
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_010b",
+  "type": "response", 
+  "action": "content.execute_predefine",
+  "data": {
+    "result": "My Page Title",
+    "url": "https://example.com",
+    "scriptName": "get_page_info.sh",
+    "scriptOutput": "document.title"
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+**Security Validation Response:**
+```json
+{
+  "id": "req_010c",
+  "type": "error",
+  "action": "content.execute_predefine",
+  "data": {
+    "code": "INVALID_SCRIPT_NAME",
+    "message": "Invalid script name '../../../etc/passwd'. Script names cannot contain path separators or '..' sequences"
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
@@ -471,6 +517,11 @@ All messages follow this JSON structure:
 - `WEBSOCKET_ERROR` - Connection or communication error
 - `INVALID_REQUEST` - Malformed request message
 - `UNKNOWN_ACTION` - Unsupported action requested
+- `INVALID_SCRIPT_NAME` - Script name contains invalid characters or path traversal attempts
+- `SCRIPT_NOT_FOUND` - External script file not found in configured directory
+- `SCRIPT_NOT_EXECUTABLE` - External script file lacks execute permissions
+- `INVALID_JSON` - Script arguments contain malformed JSON
+- `INVALID_SCRIPT_ARGS` - Script arguments must be JSON array of strings or empty string
 
 ## Test Helper Messages
 

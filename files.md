@@ -45,7 +45,12 @@ foxmcp/
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests
     │   ├── test_real_firefox_communication.py # Real Firefox extension tests
     │   ├── test_ui_storage_sync.py        # UI storage synchronization tests with Firefox
-    │   └── test_test_helper_protocol.py   # Test helper protocol unit tests
+    │   ├── test_end_to_end_mcp.py         # Complete MCP tool chain tests
+    │   ├── test_test_helper_protocol.py   # Test helper protocol unit tests
+    │   └── foxmcp_scripts/    # External scripts for predefined script execution tests
+    │       ├── simple_test.sh     # Basic test script (no user interaction)
+    │       ├── get_page_info.sh   # Page information extraction (title, URL, text, links)
+    │       └── multi_arg_test.sh  # Multi-argument demo script with DOM manipulation
     └── fixtures/      # Test data files
 ```
 
@@ -183,7 +188,7 @@ foxmcp/
   - **Complete MCP tool registry** with all browser functions:
     - **History**: query with search terms/time ranges, recent items
     - **Tabs**: list all tabs, create new tabs, close tabs, update tabs
-    - **Content**: text extraction, HTML extraction, script execution
+    - **Content**: text extraction, HTML extraction, direct script execution, predefined script execution
     - **Navigation**: URL navigation, back/forward, reload with cache options
     - **Bookmarks**: list bookmarks tree, search bookmarks, create/remove bookmarks
   - **Comprehensive tool parameter definitions** with types and validation
@@ -192,6 +197,14 @@ foxmcp/
   - **Full response correlation implementation** with timeout handling
   - **Response type processing** (success data extraction, error handling)
   - **15-second timeout** for extension responses with graceful failure handling
+  - **Predefined Script Execution System**:
+    - `content_execute_predefine()` - Execute external scripts that generate JavaScript
+    - **Environment variable configuration**: `FOXMCP_EXT_SCRIPTS` directory path
+    - **Security validation**: Path traversal protection, character validation, directory containment
+    - **JSON argument support**: JSON array of strings or empty string for no arguments
+    - **External script execution**: Subprocess execution with 30-second timeout
+    - **JavaScript injection**: Generated script output executed in browser tabs
+    - **Comprehensive error handling**: Script validation, execution, and browser injection errors
 
 ## Communication Flow
 

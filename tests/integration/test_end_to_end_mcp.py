@@ -976,6 +976,280 @@ class TestEndToEndMCP:
             print("  - Verification of changes")
             print("  - Error handling")
 
+    @pytest.mark.asyncio
+    async def test_end_to_end_content_execute_predefine(self, full_mcp_system):
+        """Test complete end-to-end predefined script execution in browser tabs via MCP"""
+        system = full_mcp_system
+        server = system['server']
+        mcp_client = system['mcp_client']
+        
+        # Skip if required components not available
+        extension_xpi = get_extension_xpi_path()
+        if not extension_xpi or not os.path.exists(extension_xpi):
+            pytest.skip("Extension XPI not found")
+            
+        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        if not os.path.exists(os.path.expanduser(firefox_path)):
+            pytest.skip("Firefox not found")
+        
+        # Set up the external scripts directory
+        scripts_dir = os.path.join(os.path.dirname(__file__), 'foxmcp_scripts')
+        os.environ['FOXMCP_EXT_SCRIPTS'] = scripts_dir
+        
+        # Verify test scripts exist
+        simple_test_script = os.path.join(scripts_dir, 'simple_test.sh')
+        get_page_info_script = os.path.join(scripts_dir, 'get_page_info.sh')
+        multi_arg_test_script = os.path.join(scripts_dir, 'multi_arg_test.sh')
+        
+        if not os.path.exists(simple_test_script) or not os.path.exists(get_page_info_script):
+            pytest.skip("Test scripts not found in foxmcp_scripts directory")
+        
+        # Connect MCP client
+        await mcp_client.connect()
+        
+        # Start Firefox with extension
+        with FirefoxTestManager(
+            firefox_path=firefox_path,
+            test_port=system['websocket_port'], 
+            coordination_file=system['coordination_file']
+        ) as firefox:
+            
+            firefox.create_test_profile()
+            firefox.install_extension(extension_xpi)
+            firefox.start_firefox(headless=True)
+            
+            # Wait for extension connection
+            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            
+            if len(server.connected_clients) == 0:
+                pytest.skip("Extension did not connect - cannot test predefined script execution")
+            
+            print("\n🧪 Testing End-to-End Predefined Script Execution")
+            
+            # Step 1: Get existing tabs to find one we can test with
+            print("\n1️⃣  Getting existing tabs...")
+            tabs_result = await mcp_client.call_tool("tabs_list")
+            assert not tabs_result.get('isError', False), f"tabs_list should not error: {tabs_result}"
+            
+            tab_content = tabs_result.get('content', '')
+            print(f"   Available tabs: {tab_content}")
+            
+            # Parse tab content to find any tab
+            tab_lines = [line for line in tab_content.split('\n') if 'ID ' in line and ':' in line]
+            
+            if not tab_lines:
+                pytest.skip("No tabs found for predefined script execution test")
+            
+            # Extract tab ID from the first available tab
+            tab_line = tab_lines[0]
+            import re
+            tab_id_match = re.search(r'ID (\d+):', tab_line)
+            if not tab_id_match:
+                pytest.skip("Could not extract tab ID from tabs list")
+            
+            test_tab_id = int(tab_id_match.group(1))
+            print(f"   ✅ Found test tab ID: {test_tab_id}")
+            
+            # Step 2: Create a new tab with a simple web URL
+            print("\n2️⃣  Creating tab with web URL...")
+            create_result = await mcp_client.call_tool("tabs_create", {
+                "url": "https://httpbin.org/html",
+                "active": True
+            })
+            
+            if create_result.get('isError', False):
+                print(f"   ⚠️  Tab creation failed: {create_result.get('content', '')}")
+                print("   Using existing tab...")
+                target_tab_id = test_tab_id
+            else:
+                print(f"   ✅ Created web tab: {create_result.get('content', '')}")
+                # Wait for tab to load
+                await asyncio.sleep(3.0)
+                
+                # Get updated tab list to find our new tab
+                new_tabs_result = await mcp_client.call_tool("tabs_list")
+                if not new_tabs_result.get('isError', False):
+                    new_tab_content = new_tabs_result.get('content', '')
+                    new_tab_lines = [line for line in new_tab_content.split('\n') if 'httpbin.org' in line]
+                    if new_tab_lines:
+                        new_tab_match = re.search(r'ID (\d+):', new_tab_lines[0])
+                        if new_tab_match:
+                            target_tab_id = int(new_tab_match.group(1))
+                            print(f"   ✅ Using new tab ID: {target_tab_id}")
+                        else:
+                            target_tab_id = test_tab_id
+                    else:
+                        target_tab_id = test_tab_id
+                else:
+                    target_tab_id = test_tab_id
+            
+            # Step 3: Test predefined script execution with simple_test.sh (no arguments - empty string)
+            print("\n3️⃣  Testing predefined script: simple_test.sh...")
+            simple_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "simple_test.sh",
+                "script_args": ""
+            })
+            
+            print(f"   Simple script result: {simple_result}")
+            
+            # The simple script should execute successfully and return page title or "Test Success"
+            simple_content = simple_result.get('content', '')
+            assert not simple_result.get('isError', False), f"Simple script should not error: {simple_result}"
+            assert 'executed successfully' in simple_content or 'result from tab' in simple_content or 'Test Success' in simple_content, \
+                f"Simple script should execute successfully: {simple_content}"
+            
+            # Step 4: Test predefined script execution with get_page_info.sh for page title
+            print("\n4️⃣  Testing predefined script: get_page_info.sh (title)...")
+            title_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "get_page_info.sh",
+                "script_args": '["title"]'
+            })
+            
+            print(f"   Page title result: {title_result}")
+            
+            title_content = title_result.get('content', '')
+            assert not title_result.get('isError', False), f"Title script should not error: {title_result}"
+            
+            # Should contain either the page title or success message
+            assert any(word in title_content.lower() for word in ['html', 'title', 'executed successfully', 'result from tab']), \
+                f"Title script should return page title or success: {title_content}"
+            
+            # Step 5: Test predefined script execution with get_page_info.sh for page URL
+            print("\n5️⃣  Testing predefined script: get_page_info.sh (url)...")
+            url_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "get_page_info.sh",
+                "script_args": '["url"]'
+            })
+            
+            print(f"   Page URL result: {url_result}")
+            
+            url_content = url_result.get('content', '')
+            assert not url_result.get('isError', False), f"URL script should not error: {url_result}"
+            
+            # Should contain the URL or success message
+            assert any(word in url_content for word in ['httpbin.org', 'http', 'executed successfully', 'result from tab']), \
+                f"URL script should return page URL or success: {url_content}"
+            
+            # Step 5.5: Test multi-argument script with arguments containing spaces
+            if os.path.exists(multi_arg_test_script):
+                print("\n5️⃣.5  Testing predefined script: multi_arg_test.sh (multiple args with spaces)...")
+                multi_arg_result = await mcp_client.call_tool("content_execute_predefine", {
+                    "tab_id": target_tab_id,
+                    "script_name": "multi_arg_test.sh",
+                    "script_args": '["Hello from JSON args!", "test-div", "green"]'
+                })
+                
+                print(f"   Multi-arg script result: {multi_arg_result}")
+                
+                multi_arg_content = multi_arg_result.get('content', '')
+                assert not multi_arg_result.get('isError', False), f"Multi-arg script should not error: {multi_arg_result}"
+                # Should contain success message or result
+                assert 'executed successfully' in multi_arg_content or 'result from tab' in multi_arg_content or 'Added message' in multi_arg_content, \
+                    f"Multi-arg script should execute successfully: {multi_arg_content}"
+            
+            # Step 6: Test error handling - non-existent script (empty array format)
+            print("\n6️⃣  Testing error handling: non-existent script...")
+            error_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "nonexistent_script.sh",
+                "script_args": "[]"
+            })
+            
+            print(f"   Error handling result: {error_result}")
+            
+            error_content = error_result.get('content', '')
+            # This should return an error about script not found
+            assert 'not found' in error_content or 'Error:' in error_content, \
+                f"Should return error for non-existent script: {error_content}"
+            
+            # Step 7: Test security validation - path traversal attack (empty string format)
+            print("\n7️⃣  Testing security: path traversal attack...")
+            security_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "../../../etc/passwd",
+                "script_args": ""
+            })
+            
+            print(f"   Security test result: {security_result}")
+            
+            security_content = security_result.get('content', '')
+            # This should return a security error
+            assert 'Invalid script name' in security_content, \
+                f"Should block path traversal attack: {security_content}"
+            
+            # Step 8: Test security validation - invalid characters (empty string format)
+            print("\n8️⃣  Testing security: invalid characters...")
+            security_result2 = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "script;rm -rf /",
+                "script_args": ""
+            })
+            
+            print(f"   Security test 2 result: {security_result2}")
+            
+            security_content2 = security_result2.get('content', '')
+            # This should return a security error
+            assert 'Invalid script name' in security_content2, \
+                f"Should block invalid characters: {security_content2}"
+            
+            # Step 8.5: Test empty string vs empty array equivalence
+            print("\n8️⃣.5  Testing equivalence: empty string vs empty array...")
+            empty_string_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "simple_test.sh",
+                "script_args": ""
+            })
+            
+            empty_array_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "simple_test.sh",
+                "script_args": "[]"
+            })
+            
+            print(f"   Empty string result: {empty_string_result.get('content', '')[:100]}...")
+            print(f"   Empty array result: {empty_array_result.get('content', '')[:100]}...")
+            
+            # Both should succeed and produce similar results
+            assert not empty_string_result.get('isError', False), "Empty string should not error"
+            assert not empty_array_result.get('isError', False), "Empty array should not error"
+            
+            # Step 9: Test JSON validation - invalid JSON
+            print("\n9️⃣  Testing JSON validation: invalid JSON...")
+            json_error_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "simple_test.sh",
+                "script_args": '["invalid json"'  # Missing closing bracket
+            })
+            
+            print(f"   JSON validation result: {json_error_result}")
+            
+            json_error_content = json_error_result.get('content', '')
+            # This should return a JSON parsing error
+            assert 'Invalid JSON' in json_error_content, \
+                f"Should return JSON validation error: {json_error_content}"
+            
+            # Step 10: Test JSON validation - non-array JSON
+            print("\n🔟  Testing JSON validation: non-array JSON...")
+            non_array_result = await mcp_client.call_tool("content_execute_predefine", {
+                "tab_id": target_tab_id,
+                "script_name": "simple_test.sh",
+                "script_args": '{"key": "value"}'  # Object instead of array
+            })
+            
+            print(f"   Non-array validation result: {non_array_result}")
+            
+            non_array_content = non_array_result.get('content', '')
+            # This should return an error about expecting an array or empty string
+            assert 'must be a JSON array of strings or empty string' in non_array_content, \
+                f"Should return array validation error: {non_array_content}"
+            
+            print("\n✅ All predefined script execution tests passed!")
+            print("✅ Security validation tests passed!")
+            print("✅ JSON argument validation tests passed!")
+
 
 class TestMCPProtocolCompliance:
     """Test MCP protocol compliance and schema validation"""

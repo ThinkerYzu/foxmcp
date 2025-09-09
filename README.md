@@ -171,10 +171,83 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 #### Content Access
 - `content_get_text(tab_id)` - Extract page text content
 - `content_get_html(tab_id)` - Get page HTML source
-- `content_execute_script(tab_id, code)` - Execute JavaScript
+- `content_execute_script(tab_id, script)` - Execute JavaScript directly
+- `content_execute_predefine(tab_id, script_name, script_args="")` - Execute predefined external scripts
 
 #### Debugging Tools
 - `debug_websocket_status()` - Check browser extension connection status
+
+### Predefined Script Execution
+
+The `content_execute_predefine()` tool allows execution of external scripts that generate JavaScript dynamically. This provides a powerful way to create reusable, parameterized browser automation scripts.
+
+#### Setup
+1. **Configure Script Directory**: Set the `FOXMCP_EXT_SCRIPTS` environment variable to point to your scripts directory:
+   ```bash
+   export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
+   ```
+
+2. **Create Executable Scripts**: Scripts must be executable and output JavaScript to stdout:
+   ```bash
+   #!/bin/bash
+   # get_page_info.sh
+   info_type="${1:-title}"
+   case "$info_type" in
+     "title") echo "document.title" ;;
+     "url") echo "window.location.href" ;;
+     "text") echo "document.body.innerText.substring(0, 500)" ;;
+   esac
+   ```
+
+#### Usage Examples
+
+**No Arguments (Empty String)**:
+```json
+{
+  "name": "content_execute_predefine",
+  "arguments": {
+    "tab_id": 123,
+    "script_name": "simple_script.sh",
+    "script_args": ""
+  }
+}
+```
+
+**Single Argument**:
+```json
+{
+  "name": "content_execute_predefine", 
+  "arguments": {
+    "tab_id": 123,
+    "script_name": "get_page_info.sh",
+    "script_args": "[\"title\"]"
+  }
+}
+```
+
+**Multiple Arguments with Spaces**:
+```json
+{
+  "name": "content_execute_predefine",
+  "arguments": {
+    "tab_id": 123,
+    "script_name": "add_message.sh", 
+    "script_args": "[\"Hello World!\", \"my-element\", \"red\"]"
+  }
+}
+```
+
+#### Security Features
+- ✅ **Path Traversal Protection**: Script names cannot contain `..`, `/`, or `\`
+- ✅ **Character Validation**: Only alphanumeric, underscore, dash, and dot allowed
+- ✅ **Directory Containment**: Resolved paths must stay within `FOXMCP_EXT_SCRIPTS`
+- ✅ **Executable Validation**: Scripts must have execute permissions
+- ✅ **JSON Validation**: Arguments must be valid JSON array of strings
+
+#### Argument Formats
+- **Empty string**: `""` → No arguments
+- **Empty array**: `"[]"` → No arguments  
+- **JSON array**: `"[\"arg1\", \"arg2\"]"` → Multiple arguments
 
 ### MCP Parameter Format
 

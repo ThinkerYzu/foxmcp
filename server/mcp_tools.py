@@ -6,6 +6,9 @@ These tools bridge browser functions through WebSocket to the Firefox extension
 
 import asyncio
 import uuid
+import os
+import subprocess
+import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List, TypedDict
 
@@ -721,6 +724,123 @@ class FoxMCPTools:
                 return f"Failed to execute script: {error_msg}"
             
             return f"Unable to execute script in tab {tab_id}"
+
+        # Execute Predefined Script Tool
+        @self.mcp.tool()
+        async def content_execute_predefine(
+            tab_id: int,
+            script_name: str,
+            script_args: str = ""
+        ) -> str:
+            """Execute a predefined external script and run its JavaScript output in a tab
+            
+            Args:
+                tab_id: ID of the tab to execute script in
+                script_name: Name of the external script to run
+                script_args: JSON array of strings to pass to the external script (e.g., '["arg1", "arg2"]') 
+                            or empty string for no arguments
+            """
+            # Get the scripts directory from environment variable
+            scripts_dir = os.environ.get('FOXMCP_EXT_SCRIPTS')
+            if not scripts_dir:
+                return "Error: FOXMCP_EXT_SCRIPTS environment variable not set"
+            
+            # Validate script name to prevent path traversal attacks
+            if not script_name or '..' in script_name or '/' in script_name or '\\' in script_name:
+                return f"Error: Invalid script name '{script_name}'. Script names cannot contain path separators or '..' sequences"
+            
+            # Additional validation: only allow alphanumeric, underscore, dash, and dot
+            import re
+            if not re.match(r'^[a-zA-Z0-9._-]+$', script_name):
+                return f"Error: Invalid script name '{script_name}'. Only alphanumeric characters, underscore, dash, and dot are allowed"
+            
+            # Resolve absolute paths to prevent symlink attacks
+            scripts_dir = os.path.abspath(scripts_dir)
+            script_path = os.path.abspath(os.path.join(scripts_dir, script_name))
+            
+            # Ensure the resolved script path is still within the scripts directory
+            if not script_path.startswith(scripts_dir + os.sep) and script_path != scripts_dir:
+                return f"Error: Script path '{script_name}' escapes the allowed directory"
+            
+            if not os.path.exists(script_path):
+                return f"Error: Script '{script_name}' not found in {scripts_dir}"
+            
+            if not os.access(script_path, os.X_OK):
+                return f"Error: Script '{script_name}' is not executable"
+            
+            try:
+                # Parse JSON arguments - handle both empty string and JSON arrays
+                try:
+                    if script_args.strip() == "":
+                        # Empty string means no arguments
+                        args_list = []
+                    else:
+                        # Parse as JSON array
+                        args_list = json.loads(script_args)
+                        if not isinstance(args_list, list):
+                            return f"Error: script_args must be a JSON array of strings or empty string, got: {type(args_list).__name__}"
+                        
+                        # Validate all arguments are strings
+                        for i, arg in enumerate(args_list):
+                            if not isinstance(arg, str):
+                                return f"Error: All arguments must be strings. Argument {i} is {type(arg).__name__}: {arg}"
+                            
+                except json.JSONDecodeError as e:
+                    return f"Error: Invalid JSON in script_args: {e}"
+                
+                # Execute the external script with arguments
+                result = subprocess.run(
+                    [script_path] + args_list,
+                    capture_output=True,
+                    text=True,
+                    timeout=30  # 30 second timeout
+                )
+                
+                if result.returncode != 0:
+                    return f"Error: Script '{script_name}' failed with exit code {result.returncode}. stderr: {result.stderr}"
+                
+                # The script output should be JavaScript code
+                javascript_code = result.stdout.strip()
+                if not javascript_code:
+                    return f"Error: Script '{script_name}' produced no output"
+                
+                # Now execute the generated JavaScript in the tab
+                request = {
+                    "id": str(uuid.uuid4()),
+                    "type": "request",
+                    "action": "content.execute_script",
+                    "data": {
+                        "tabId": tab_id,
+                        "script": javascript_code
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                response = await self.websocket_server.send_request_and_wait(request)
+                
+                if "error" in response:
+                    return f"Error executing generated script: {response['error']}"
+                
+                if response.get("type") == "response" and "data" in response:
+                    result_data = response["data"].get("result")
+                    url = response["data"].get("url", "Unknown URL")
+                    
+                    if result_data is None:
+                        return f"Predefined script '{script_name}' executed successfully in tab {tab_id} ({url}) - no return value"
+                    
+                    return f"Predefined script '{script_name}' result from tab {tab_id} ({url}):\n{result_data}"
+                elif response.get("type") == "error":
+                    error_msg = response.get("data", {}).get("message", "Unknown error")
+                    return f"Failed to execute generated script: {error_msg}"
+                
+                return f"Unable to execute generated script in tab {tab_id}"
+                
+            except subprocess.TimeoutExpired:
+                return f"Error: Script '{script_name}' timed out after 30 seconds"
+            except subprocess.SubprocessError as e:
+                return f"Error executing script '{script_name}': {e}"
+            except Exception as e:
+                return f"Unexpected error running script '{script_name}': {e}"
     
     def get_mcp_app(self):
         """Get the FastMCP application instance"""
