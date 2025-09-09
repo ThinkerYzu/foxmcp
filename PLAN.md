@@ -37,6 +37,7 @@
 - **Firefox Extension**: Complete Firefox extension with all WebExtensions APIs implemented
 - **Message Protocol**: Complete protocol specification with JSON message formats  
 - **Browser API Integration**: All browser functions implemented (tabs, history, bookmarks, navigation, content)
+- **Bookmark Management**: Fixed bookmarks_list() function to properly flatten bookmark tree structure
 - **Test Infrastructure**: Production-ready testing with 91 tests (47 unit + 44 integration), enhanced coverage
 - **Test Helper Protocol**: Automated UI validation system via WebSocket messages for storage synchronization testing
 - **Response Correlation**: UUID-based async request/response matching with timeout handling

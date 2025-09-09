@@ -111,7 +111,7 @@ make test-integration # Integration tests only
 - `navigation.go_to_url` - Navigate to specific URL
 
 ### Bookmark Management
-- `bookmarks.list` - Get all bookmarks
+- `bookmarks.list` - Get all bookmarks (flattened from tree structure)
 - `bookmarks.search` - Search bookmarks
 - `bookmarks.create` - Add new bookmark
 - `bookmarks.delete` - Remove bookmark

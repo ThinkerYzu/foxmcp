@@ -495,7 +495,27 @@ async function handleBookmarksAction(id, action, data) {
   try {
     switch (action) {
       case 'bookmarks.list':
-        const bookmarks = await browser.bookmarks.getTree();
+        const bookmarkTree = await browser.bookmarks.getTree();
+        // Flatten the tree structure into a flat array
+        function flattenBookmarks(nodes) {
+          let result = [];
+          for (const node of nodes) {
+            // Add current node if it's a folder or has a URL (bookmark)
+            result.push({
+              id: node.id,
+              title: node.title,
+              url: node.url,
+              isFolder: !node.url,
+              parentId: node.parentId
+            });
+            // Recursively add children
+            if (node.children) {
+              result = result.concat(flattenBookmarks(node.children));
+            }
+          }
+          return result;
+        }
+        const bookmarks = flattenBookmarks(bookmarkTree);
         sendResponse(id, action, { bookmarks });
         break;
 

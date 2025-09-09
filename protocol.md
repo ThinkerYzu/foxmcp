@@ -407,16 +407,13 @@ All messages follow this JSON structure:
         "parentId": "1",
         "title": "GitHub",
         "url": "https://github.com",
-        "dateAdded": "2025-09-01T10:00:00.000Z",
         "isFolder": false
       },
       {
         "id": "bm_002", 
         "parentId": "1",
         "title": "Development",
-        "dateAdded": "2025-09-01T09:00:00.000Z",
-        "isFolder": true,
-        "children": []
+        "isFolder": true
       }
     ]
   },
