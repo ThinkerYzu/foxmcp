@@ -922,9 +922,10 @@ class TestWindowManagementEndToEnd:
             
             # Verify focus operation reported success
             assert "focused successfully" in focus_content, f"Focus operation should succeed: {focus_content}"
+            print("✅ Focus operation reported success")
             
-            # Wait for focus change to take effect
-            await asyncio.sleep(1.5)
+            # Wait for focus change to take effect (increased delay for reliability)
+            await asyncio.sleep(2.0)
             
             # Check current window after explicit focus
             print(f"\n📍 Step 5: Check current window after explicit focus...")
@@ -939,7 +940,13 @@ class TestWindowManagementEndToEnd:
             print(f"✅ Current focused window ID after focus: {current_after_focus}")
             
             # Verify focus actually switched
-            assert current_after_focus == second_focus_target, f"Focus should have switched to {second_focus_target}, but current is {current_after_focus}"
+            if current_after_focus != second_focus_target:
+                print(f"❌ Focus verification failed!")
+                print(f"   Expected: {second_focus_target}")
+                print(f"   Actual:   {current_after_focus}")
+                print(f"   Focus operation result: '{focus_content}'")
+                assert False, f"Focus should have switched to {second_focus_target}, but current is {current_after_focus}"
+            
             print(f"✅ Focus successfully switched from {first_focused_window} to {current_after_focus}")
             
             # Test switching back to the first window
@@ -949,8 +956,9 @@ class TestWindowManagementEndToEnd:
             print(f"Focus back result: {focus_back_content}")
             
             assert "focused successfully" in focus_back_content, f"Focus back operation should succeed: {focus_back_content}"
+            print("✅ Focus back operation reported success")
             
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(2.0)
             
             # Check current window after focusing back
             print(f"\n📍 Step 7: Check current window after focusing back...")
@@ -965,11 +973,50 @@ class TestWindowManagementEndToEnd:
             print(f"✅ Final focused window ID: {final_current_id}")
             
             # Verify focus switched back
-            assert final_current_id == first_focused_window, f"Focus should have switched back to {first_focused_window}, but current is {final_current_id}"
+            if final_current_id != first_focused_window:
+                print(f"❌ Focus back verification failed!")
+                print(f"   Expected: {first_focused_window}")
+                print(f"   Actual:   {final_current_id}")
+                print(f"   Focus back operation result: '{focus_back_content}'")
+                assert False, f"Focus should have switched back to {first_focused_window}, but current is {final_current_id}"
+            
             print(f"✅ Focus successfully switched back from {current_after_focus} to {final_current_id}")
             
+            # Additional focus switch (3rd switch) - back to second window again
+            print(f"\n🎯 Step 8: Third focus switch - back to window {second_focus_target}...")
+            focus_third_result = await client.call_tool("focus_window", {"window_id": second_focus_target})
+            focus_third_content = focus_third_result.get("content", "")
+            print(f"Third focus result: {focus_third_content}")
+            
+            assert "focused successfully" in focus_third_content, f"Third focus operation should succeed: {focus_third_content}"
+            print("✅ Third focus operation reported success")
+            
+            await asyncio.sleep(2.0)
+            
+            # Check current window after third focus
+            print(f"\n📍 Step 9: Check current window after third focus...")
+            third_current = await client.call_tool("get_current_window", {"populate": True})
+            third_content = third_current.get("content", "")
+            print(f"Current window after third focus: {third_content}")
+            
+            # Extract third current window ID
+            third_match = re.search(r'Current window \(ID (\d+)\)', third_content)
+            assert third_match, f"Could not extract third current window ID from: {third_content}"
+            third_current_id = int(third_match.group(1))
+            print(f"✅ Third focused window ID: {third_current_id}")
+            
+            # Verify third focus switch worked
+            if third_current_id != second_focus_target:
+                print(f"❌ Third focus verification failed!")
+                print(f"   Expected: {second_focus_target}")
+                print(f"   Actual:   {third_current_id}")
+                print(f"   Third focus operation result: '{focus_third_content}'")
+                assert False, f"Third focus should have switched to {second_focus_target}, but current is {third_current_id}"
+            
+            print(f"✅ Third focus successfully switched from {final_current_id} to {third_current_id}")
+            
             # Final verification - list all windows to see focus state
-            print(f"\n📋 Step 8: Final window listing...")
+            print(f"\n📋 Step 10: Final window listing...")
             final_windows = await client.call_tool("list_windows", {"populate": True})
             final_windows_content = final_windows.get("content", "")
             print(f"Final window listing:\n{final_windows_content}")
@@ -984,16 +1031,17 @@ class TestWindowManagementEndToEnd:
                         break
             
             if focused_in_listing:
-                assert focused_in_listing == final_current_id, f"Focused window in listing ({focused_in_listing}) should match current window ({final_current_id})"
+                assert focused_in_listing == third_current_id, f"Focused window in listing ({focused_in_listing}) should match current window ({third_current_id})"
                 print(f"✅ Window listing confirms window {focused_in_listing} is focused")
             else:
                 print("⚠️ Could not determine focused window from listing")
             
             print(f"\n✅ Window Focus Switching Test PASSED!")
             print(f"✅ Successfully created windows: {initial_window_id}, {new_window_id}")
-            print(f"✅ Successfully switched focus: {first_focused_window} → {second_focus_target} → {first_focused_window}")
+            print(f"✅ Successfully switched focus 3 times: {first_focused_window} → {second_focus_target} → {first_focused_window} → {third_current_id}")
             print(f"✅ Current window detection working correctly")
             print(f"✅ Focus operations working as expected")
+            print(f"✅ All 3 focus switches completed successfully")
             
         finally:
             # Clean up created windows
