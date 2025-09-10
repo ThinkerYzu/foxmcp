@@ -157,7 +157,7 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 
 #### Tab Management
 - `tabs_list()` - List all open tabs
-- `tabs_create(url, active=True, pinned=False)` - Create new tab
+- `tabs_create(url, active=True, pinned=False, window_id=None)` - Create new tab (optionally in specific window)
 - `tabs_close(tab_id)` - Close specific tab
 - `tabs_switch(tab_id)` - Switch to specific tab
 

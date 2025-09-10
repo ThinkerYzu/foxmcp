@@ -26,6 +26,8 @@ foxmcp/
 │   ├── requirements.txt # Python dependencies
 │   ├── server.py       # WebSocket server implementation with ping-pong
 │   └── mcp_tools.py    # FastMCP tool definitions and handlers
+├── tools/             # Utility scripts and tools
+│   └── generate-channel-switch.sh # Generate JavaScript for channel switching
 └── tests/             # Test suite directory
     ├── conftest.py    # Pytest configuration and fixtures
     ├── pytest.ini     # Pytest settings
@@ -351,14 +353,15 @@ foxmcp/
 1. ✅ ~~**Run existing tests** to validate current implementation: `make test`~~
 2. ✅ ~~**Implement actual browser API calls** in extension handlers~~
 3. ✅ ~~**Add response correlation** and async waiting in MCP handler~~
-4. **Integrate FastMCP server framework** for MCP protocol compliance
-5. **Add comprehensive error handling** for edge cases and permissions
-6. ✅ ~~Create testing framework and test cases~~
-7. ✅ ~~Add ping-pong communication for connection validation~~
-8. ✅ ~~Create build system and documentation~~
-9. ✅ ~~Set up virtual environment and fix test infrastructure~~
-10. **Add logging and debugging capabilities** for production deployment
-11. **Performance optimization and connection management** for multiple clients
-12. **End-to-end integration testing** with real Firefox extension and MCP client
+4. ✅ ~~**Integrate FastMCP server framework** for MCP protocol compliance~~
+5. ✅ ~~**Add comprehensive error handling** for edge cases and permissions~~
+6. ✅ ~~**Create testing framework and test cases**~~
+7. ✅ ~~**Add ping-pong communication for connection validation**~~
+8. ✅ ~~**Create build system and documentation**~~
+9. ✅ ~~**Set up virtual environment and fix test infrastructure**~~
+10. ✅ ~~**Complete window management functionality** with focus switching and cross-window operations~~
+11. ✅ ~~**End-to-end integration testing** with real Firefox extension and MCP client~~
+12. **Add logging and debugging capabilities** for production deployment
+13. **Performance optimization and connection management** for multiple clients
 
 This foundation provides a complete development environment with professional build tooling, comprehensive testing infrastructure, working Python environment, and full documentation for implementing the FoxMCP system with clear separation of concerns and validation.

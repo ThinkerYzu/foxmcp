@@ -36,9 +36,9 @@
 - **WebSocket Communication Infrastructure**: Complete bidirectional communication with comprehensive testing
 - **Firefox Extension**: Complete Firefox extension with all WebExtensions APIs implemented
 - **Message Protocol**: Complete protocol specification with JSON message formats  
-- **Browser API Integration**: All browser functions implemented (tabs, history, bookmarks, navigation, content)
+- **Browser API Integration**: All browser functions implemented (tabs, history, bookmarks, navigation, content, windows)
 - **Bookmark Management**: Fixed bookmarks_list() function to properly flatten bookmark tree structure
-- **Test Infrastructure**: Production-ready testing with 91 tests (47 unit + 44 integration), enhanced coverage
+- **Test Infrastructure**: Production-ready testing with 130+ tests (29 unit + 97+ integration), enhanced coverage including window management
 - **Test Helper Protocol**: Automated UI validation system via WebSocket messages for storage synchronization testing
 - **Response Correlation**: UUID-based async request/response matching with timeout handling
 - **Build System**: Complete Makefile with development, testing, and packaging workflows
@@ -47,7 +47,8 @@
 - **Extension Configuration System**: Complete storage.sync integration with test override support
 - **Dynamic Testing**: Real Firefox integration with temporary profiles, extension installation, and SQLite configuration injection
 - **FastMCP Server Integration**: Complete MCP protocol implementation with FastMCP
-- **MCP Tool Definitions**: All browser functions exposed as callable MCP tools (20+ tools)
+- **Window Management**: Complete window operations (create, close, focus, list, update) with cross-window tab creation
+- **MCP Tool Definitions**: All browser functions exposed as callable MCP tools (25+ tools including window management)
 - **End-to-End MCP Testing**: Verified MCP tool calls work with simulated and real WebSocket communication
 
 ### ❌ **Remaining Tasks**:
