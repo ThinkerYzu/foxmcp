@@ -2,6 +2,10 @@
 
 A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content, windows) to MCP (Model Context Protocol) clients via WebSocket communication. Features FastMCP server integration for seamless MCP tool access.
 
+You may aware that this project is helped by Claude Code. By asking
+Claude Code to update several documents periodically, it understands
+the goal of the project pretty well. Check CLAUDE.md.
+
 ## Quick Start
 
 ```bash
