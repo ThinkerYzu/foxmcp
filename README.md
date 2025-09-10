@@ -49,12 +49,6 @@ make build           # Build extension package in dist/
 
 ### 3. Load Extension in Browser
 
-**Chrome:**
-1. Go to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension/` directory
-
 **Firefox:**
 1. Go to `about:debugging`
 2. Click "This Firefox"
@@ -562,35 +556,7 @@ Common issues with external MCP agents:
 3. Make changes and test: `make check`
 4. Submit pull request
 
-## License
-
-MIT License - see LICENSE file for details.
-
 ## Implementation Status
-
-### ✅ Completed Features
-- **Firefox Extension**: Complete Firefox extension with manifest V2, persistent background script, content script, and popup UI
-- **WebSocket Communication**: Bidirectional communication with auto-reconnect and configurable retry intervals
-- **Browser API Integration**: Full WebExtensions API implementations for history, tabs, content, navigation, and bookmarks
-- **Response Correlation**: UUID-based request/response correlation with async handling and timeouts
-- **Configuration System**: Complete storage.sync integration with test override support, popup and options page configuration
-- **Comprehensive Test Suite**: 77 tests with 74% code coverage and robust Firefox integration
-- **Build System**: Complete Makefile with development, testing, and XPI packaging commands
-- **Production-Ready WebSocket Server**: Robust server with proper error handling and connection management
-
-### ✅ Advanced Testing Infrastructure
-- **Real Firefox Integration**: Automated testing with temporary profiles, extension installation, and SQLite configuration injection
-- **Dynamic Port Allocation**: Conflict-free test execution with unique ports per test suite
-- **Test Configuration System**: SQLite-based extension configuration with test override support
-- **Robust Fixture Management**: Proper async cleanup and resource management
-- **Multi-Client Testing**: Concurrent connection handling and server resilience testing
-- **Protocol Compliance**: Comprehensive message format and browser API coverage validation
-
-### ⏳ In Progress
-- **FastMCP Integration**: MCP protocol server implementation (framework ready, needs integration)
-
-### 📋 Pending
-- **Production Deployment**: Enhanced logging and multi-client support
 
 ### 📊 Test Results - ALL PASSING ✅
 - **91 total tests** across comprehensive test suites
