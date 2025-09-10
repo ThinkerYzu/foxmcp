@@ -39,26 +39,26 @@ Claude Code provides built-in MCP support that makes it easy to use FoxMCP brows
    ```
 
 2. **Load the Firefox extension**:
-   
+
    **Option A: Temporary Extension (Development)**
    - Go to `about:debugging` in Firefox
    - Click "This Firefox" → "Load Temporary Add-on"
    - Select `extension/manifest.json`
-   
+
    **Option B: Install XPI Package (Permanent)**
    - Build the package: `make package`
    - Go to `about:config` in Firefox and set `xpinstall.signatures.required` to `false`
    - Go to `about:addons`
    - Click the gear icon → "Install Add-on From File"
    - Select `dist/packages/foxmcp@codemud.org.xpi`
-   
+
    - Verify connection status shows "Connected" in extension popup
 
 3. **Configure Claude Code MCP**:
    ```bash
    # Add FoxMCP server to Claude Code
    claude mcp add foxmcp http://localhost:3000
-   
+
    # Verify it was added
    claude mcp list
    ```
@@ -159,7 +159,7 @@ chmod +x /path/to/your/scripts/*.sh
 **Single Argument**:
 ```json
 {
-  "name": "content_execute_predefined", 
+  "name": "content_execute_predefined",
   "arguments": {
     "tab_id": 123,
     "script_name": "get_page_info.sh",
@@ -269,94 +269,15 @@ foxmcp/
 
 ## Development Workflow
 
-### 1. Setup Development Environment
+For detailed development commands, see the **Development Commands** section below.
 
-```bash
-make dev              # Install all dependencies
-```
+**Quick development cycle:**
+1. `make dev` - Setup environment
+2. `make build` - Build extension
+3. Load extension in Firefox (see **Using FoxMCP with Claude Code** section for instructions)
+4. `make run-server` - Start server
+5. `make test` - Run tests
 
-### 2. Build Extension
-
-```bash
-make build           # Build extension package in dist/
-```
-
-### 3. Load Extension in Browser
-
-**Firefox:**
-1. Go to `about:debugging`
-2. Click "This Firefox"
-3. Click "Load Temporary Add-on"
-4. Select `extension/manifest.json`
-
-### 4. Start Server
-
-```bash
-make run-server      # Start WebSocket server on localhost:8765
-```
-
-### 5. Test Communication
-
-- Click the extension icon in browser toolbar
-- Check connection status indicator
-- Status shows "Connected" when extension communicates with server
-
-### 6. Run Tests
-
-```bash
-make test           # Run all tests with coverage
-make test-unit      # Unit tests only
-make test-integration # Integration tests only
-```
-
-
-
-## Available Browser Functions
-
-### History Management
-- `history.query` - Search browser history
-- `history.get_recent` - Get recent history items
-- `history.delete_item` - Remove specific history entry
-- `history.clear_range` - Clear history for time range
-
-### Tab Management
-- `tabs.list` - Get all open tabs
-- `tabs.get_active` - Get currently active tab
-- `tabs.create` - Open new tab
-- `tabs.close` - Close specific tab
-- `tabs.switch` - Switch to specific tab
-- `tabs.duplicate` - Duplicate existing tab
-
-### Content Access
-- `content.get_text` - Extract page text content
-- `content.get_html` - Get page HTML
-- `content.get_title` - Get page title
-- `content.get_url` - Get current URL
-- `content.execute_script` - Run script on page
-
-### Navigation Control
-- `navigation.back` - Go back in history
-- `navigation.forward` - Go forward in history
-- `navigation.reload` - Reload current page
-- `navigation.go_to_url` - Navigate to specific URL
-
-### Window Management
-- `windows.list` - Get all browser windows
-- `windows.get` - Get specific window information
-- `windows.get_current` - Get current active window
-- `windows.get_last_focused` - Get most recently focused window
-- `windows.create` - Create new browser window
-- `windows.close` - Close specific window
-- `windows.focus` - Bring window to front
-- `windows.update` - Update window properties (resize, move, state)
-
-### Bookmark Management
-- `bookmarks.list` - Get all bookmarks (flattened from tree structure)
-- `bookmarks.search` - Search bookmarks
-- `bookmarks.create` - Add new bookmark
-- `bookmarks.delete` - Remove bookmark
-- `bookmarks.update` - Modify existing bookmark
-- `bookmarks.create_folder` - Create bookmark folder
 
 ## WebSocket Protocol
 
@@ -466,7 +387,7 @@ The `content_execute_predefined()` tool allows execution of external scripts tha
 **Single Argument**:
 ```json
 {
-  "name": "content_execute_predefined", 
+  "name": "content_execute_predefined",
   "arguments": {
     "tab_id": 123,
     "script_name": "get_page_info.sh",
@@ -481,7 +402,7 @@ The `content_execute_predefined()` tool allows execution of external scripts tha
   "name": "content_execute_predefined",
   "arguments": {
     "tab_id": 123,
-    "script_name": "add_message.sh", 
+    "script_name": "add_message.sh",
     "script_args": "[\"Hello World!\", \"my-element\", \"red\"]"
   }
 }
@@ -496,7 +417,7 @@ The `content_execute_predefined()` tool allows execution of external scripts tha
 
 #### Argument Formats
 - **Empty string**: `""` → No arguments
-- **Empty array**: `"[]"` → No arguments  
+- **Empty array**: `"[]"` → No arguments
 - **JSON array**: `"[\"arg1\", \"arg2\"]"` → Multiple arguments
 
 ### MCP Parameter Format
@@ -514,37 +435,16 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 }
 ```
 
-#### ❌ Incorrect Format  
+#### ❌ Incorrect Format
 ```json
 {
   "method": "tools/call",
   "params": {
-    "name": "history_get_recent", 
+    "name": "history_get_recent",
     "arguments": {"params": {"count": 10}}  // Wrong: nested params
   }
 }
 ```
-
-### Using MCP Tools
-
-1. **Start the server**:
-   ```bash
-   make run-server  # Starts both WebSocket (8765) and MCP (3000) servers
-
-   # Or with custom configuration:
-   python server/server.py --port 9000 --mcp-port 4000
-   python server/server.py --no-mcp  # WebSocket only, disable MCP server
-   ```
-
-2. **Configure Firefox extension** (if using non-default ports):
-   - Right-click extension icon → **"Manage Extension"** → **"Preferences"**
-   - Set **Hostname**: `localhost`
-   - Set **WebSocket Port**: `8765` (or your custom port)
-   - Click **"Save Settings"** → Extension automatically reconnects
-
-3. **Connect Firefox extension** (loads automatically when Firefox starts with extension)
-
-4. **Connect MCP client** to `http://localhost:3000` and use the tools
 
 ### Available Tools in Claude Code
 
@@ -597,20 +497,19 @@ User: "Open the local dev server and the documentation in separate windows"
 Claude: I'll create two browser windows - one for your localhost:3000 development server and another for the documentation.
 ```
 
-### Security Notes
-
-- FoxMCP only binds to localhost for security
-- All browser interactions require user consent through extension permissions
-- Scripts can only run on pages where the extension has permission
-- No external network access - all communication stays local
-
-### Complete Workflow
-```
-MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
-```
-
 
 ## Server Configuration
+
+### Starting the Server
+
+```bash
+# Quick start (both WebSocket and MCP servers)
+make run-server
+
+# Custom configuration
+python server/server.py --port 9000 --mcp-port 4000
+python server/server.py --no-mcp  # WebSocket only, disable MCP server
+```
 
 ### Command Line Options
 ```bash
@@ -666,6 +565,23 @@ server = FoxMCPServer(host="localhost", port=9000, mcp_port=4000)
 server = FoxMCPServer(port=8765, start_mcp=False)
 ```
 
+### MCP Client Connection
+
+1. **Start the server** (both WebSocket and MCP servers)
+2. **Load Firefox extension** (connects automatically to WebSocket)
+3. **Connect MCP client** to `http://localhost:3000`
+
+**Complete Workflow**:
+```
+MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
+```
+
+**Security Notes**:
+- FoxMCP only binds to localhost for security
+- All browser interactions require user consent through extension permissions
+- Scripts can only run on pages where the extension has permission
+- No external network access - all communication stays local
+
 ## Development Commands
 
 ```bash
@@ -696,21 +612,6 @@ make clean-all         # Deep clean including dependencies
 make status            # Show project status
 ```
 
-## Legacy Configuration Reference
-
-### Default Server Settings
-- **Host:** `localhost` (security-enforced, cannot be changed)
-- **WebSocket Port:** `8765` (configurable via `--port`)
-- **MCP Port:** `3000` (configurable via `--mcp-port`)
-- **Protocol:** WebSocket (ws://localhost:port)
-
-### Firefox Extension Permissions
-- `tabs` - Tab management
-- `history` - Browser history access
-- `bookmarks` - Bookmark management
-- `activeTab` - Current tab content
-- `storage` - Extension storage
-- `<all_urls>` - All website access
 
 ## Testing
 
@@ -762,9 +663,9 @@ The extension includes a **test helper protocol** for automated UI validation vi
   "data": {}
 }
 
-// Validate UI-storage synchronization  
+// Validate UI-storage synchronization
 {
-  "id": "test_002", 
+  "id": "test_002",
   "type": "request",
   "action": "test.validate_ui_sync",
   "data": {
@@ -890,6 +791,7 @@ Common issues with external MCP agents:
 │  - Bookmarks    │
 │  - Navigation   │
 │  - Content      │
+│  - Windows      │
 └─────────────────┘
 ```
 
