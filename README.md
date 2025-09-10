@@ -446,30 +446,6 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 }
 ```
 
-
-### Example Usage Scenarios
-
-Use Claude Code as an example.
-
-**Research Assistant**:
-```
-User: "I'm researching React hooks. Can you help me organize my browser?"
-Claude: I'll help you organize your research. Let me first see what tabs you have open, then we can bookmark the useful ones and close the rest.
-```
-
-**Code Review Helper**:
-```
-User: "I have a GitHub PR open. Can you extract the diff and help me review it?"
-Claude: I'll find your GitHub tab and extract the page content so we can review the code changes together.
-```
-
-**Development Workflow**:
-```
-User: "Open the local dev server and the documentation in separate windows"
-Claude: I'll create two browser windows - one for your localhost:3000 development server and another for the documentation.
-```
-
-
 ## Server Configuration
 
 ### Starting the Server
