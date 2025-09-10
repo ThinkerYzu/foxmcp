@@ -449,6 +449,8 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 
 ### Example Usage Scenarios
 
+Use Claude Code as an example.
+
 **Research Assistant**:
 ```
 User: "I'm researching React hooks. Can you help me organize my browser?"
