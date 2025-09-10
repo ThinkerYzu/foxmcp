@@ -22,6 +22,236 @@ make test-integration
 make load-extension
 ```
 
+## Using FoxMCP with Claude Code
+
+Claude Code provides built-in MCP support that makes it easy to use FoxMCP browser tools directly in your coding sessions.
+
+### Setup Steps
+
+1. **Start the FoxMCP server**:
+   ```bash
+   make run-server
+   # Server starts on localhost:8765 (WebSocket) and localhost:3000 (MCP)
+   ```
+
+2. **Load the Firefox extension**:
+   
+   **Option A: Temporary Extension (Development)**
+   - Go to `about:debugging` in Firefox
+   - Click "This Firefox" → "Load Temporary Add-on"
+   - Select `extension/manifest.json`
+   
+   **Option B: Install XPI Package (Permanent)**
+   - Build the package: `make package`
+   - Go to `about:config` in Firefox and set `xpinstall.signatures.required` to `false`
+   - Go to `about:addons`
+   - Click the gear icon → "Install Add-on From File"
+   - Select `dist/packages/foxmcp@codemud.org.xpi`
+   
+   - Verify connection status shows "Connected" in extension popup
+
+3. **Configure Claude Code MCP**:
+   ```bash
+   # Add FoxMCP server to Claude Code
+   claude mcp add foxmcp http://localhost:3000
+   
+   # Verify it was added
+   claude mcp list
+   ```
+
+4. **Use browser tools in Claude Code**:
+   Once configured, you can use browser functions directly in your conversations:
+
+   ```
+   User: "Can you check what tabs I have open?"
+   Claude: I'll check your open browser tabs using the tabs_list tool.
+   ```
+
+   Claude Code will automatically call the `tabs_list()` MCP tool and show you all your open Firefox tabs.
+
+## Predefined Scripts
+
+Predefined scripts are external executable scripts that generate JavaScript code dynamically and execute it in browser tabs. This powerful feature allows you to create reusable, parameterized browser automation scripts that can be called via the `content_execute_predefined` MCP tool.
+
+### How Predefined Scripts Work
+
+1. **Script Execution**: External script runs with optional arguments
+2. **JavaScript Generation**: Script outputs JavaScript code to stdout
+3. **Browser Injection**: Generated JavaScript is executed in the specified browser tab
+4. **Result Return**: Execution result is returned to the caller
+
+### Creating Predefined Scripts
+
+#### 1. Setup Script Directory
+
+Set the environment variable to point to your scripts directory:
+```bash
+export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
+```
+
+#### 2. Create Executable Script
+
+Scripts must be executable and output JavaScript to stdout:
+
+**Simple Example** (`get_title.sh`):
+```bash
+#!/bin/bash
+# Simple script that gets page title
+echo "document.title"
+```
+
+**Parameterized Example** (`get_page_info.sh`):
+```bash
+#!/bin/bash
+# Script that takes info type as argument
+info_type="${1:-title}"
+case "$info_type" in
+  "title") echo "document.title" ;;
+  "url") echo "window.location.href" ;;
+  "text") echo "document.body.innerText.substring(0, 500)" ;;
+  *) echo "document.title + ' - Unknown info type'" ;;
+esac
+```
+
+**Advanced Example** (`add_banner.sh`):
+```bash
+#!/bin/bash
+# Script that adds a banner with custom message and color
+message="${1:-Hello World!}"
+color="${2:-blue}"
+cat << EOF
+(function() {
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:${color};color:white;text-align:center;padding:10px;z-index:9999;';
+  banner.textContent = '${message}';
+  document.body.insertBefore(banner, document.body.firstChild);
+  return 'Banner added: ${message}';
+})()
+EOF
+```
+
+#### 3. Make Scripts Executable
+
+```bash
+chmod +x /path/to/your/scripts/*.sh
+```
+
+### Using Predefined Scripts
+
+#### Via MCP Tools
+
+**No Arguments**:
+```json
+{
+  "name": "content_execute_predefined",
+  "arguments": {
+    "tab_id": 123,
+    "script_name": "get_title.sh",
+    "script_args": ""
+  }
+}
+```
+
+**Single Argument**:
+```json
+{
+  "name": "content_execute_predefined", 
+  "arguments": {
+    "tab_id": 123,
+    "script_name": "get_page_info.sh",
+    "script_args": "[\"url\"]"
+  }
+}
+```
+
+**Multiple Arguments**:
+```json
+{
+  "name": "content_execute_predefined",
+  "arguments": {
+    "tab_id": 123,
+    "script_name": "add_banner.sh",
+    "script_args": "[\"Welcome to our site!\", \"green\"]"
+  }
+}
+```
+
+#### Via Claude Code
+
+Once configured with Claude Code, you can use natural language:
+
+```
+User: "Add a red banner saying 'Under Maintenance' to the current page"
+Claude: I'll add a maintenance banner to your page using a predefined script.
+```
+
+Claude Code will call:
+```
+content_execute_predefined(tab_id=current_tab, script_name="add_banner.sh", script_args=["Under Maintenance", "red"])
+```
+
+### Script Output Types
+
+Predefined scripts output JavaScript code that gets executed in the browser tab:
+
+```bash
+#!/bin/bash
+# All script output is treated as JavaScript and executed in the browser
+echo "document.title"
+```
+
+```bash
+#!/bin/bash
+# You can return values from your JavaScript
+echo "(function() { return 'Script completed: ' + document.title; })()"
+```
+
+```bash
+#!/bin/bash
+# Or execute actions and return status messages
+echo "document.body.style.backgroundColor = 'lightblue'; 'Background changed successfully'"
+```
+
+### Security Features
+
+- ✅ **Path Traversal Protection**: Script names cannot contain `..`, `/`, or `\`
+- ✅ **Character Validation**: Only alphanumeric, underscore, dash, and dot allowed
+- ✅ **Directory Containment**: Scripts must be within `FOXMCP_EXT_SCRIPTS` directory
+- ✅ **Executable Validation**: Scripts must have execute permissions
+- ✅ **JSON Validation**: Arguments must be valid JSON array of strings
+- ✅ **Timeout Protection**: Scripts timeout after 30 seconds
+
+### Best Practices
+
+1. **Error Handling**: Always include error handling in your scripts
+2. **Validation**: Validate input arguments before using them
+3. **Documentation**: Add comments explaining what your script does
+4. **Testing**: Test scripts independently before using with FoxMCP
+5. **Security**: Never accept untrusted input or execute dangerous commands
+
+### Example Script Collection
+
+Create a collection of useful scripts:
+
+**`extract_links.sh`** - Extract all links from page:
+```bash
+#!/bin/bash
+echo "Array.from(document.links).map(link => ({text: link.textContent.trim(), url: link.href})).slice(0, 10)"
+```
+
+**`highlight_text.sh`** - Highlight text on page:
+```bash
+#!/bin/bash
+search_text="${1:-example}"
+echo "document.body.innerHTML = document.body.innerHTML.replace(new RegExp('${search_text}', 'gi'), '<mark>\$&</mark>'); 'Highlighted: ${search_text}'"
+```
+
+**`page_stats.sh`** - Get page statistics:
+```bash
+#!/bin/bash
+echo "({title: document.title, links: document.links.length, images: document.images.length, words: document.body.innerText.split(/\s+/).length})"
+```
+
 ## Project Structure
 
 ```
@@ -74,6 +304,8 @@ make test           # Run all tests with coverage
 make test-unit      # Unit tests only
 make test-integration # Integration tests only
 ```
+
+
 
 ## Available Browser Functions
 
@@ -310,48 +542,6 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 
 4. **Connect MCP client** to `http://localhost:3000` and use the tools
 
-### Complete Workflow
-```
-MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
-```
-
-## Using FoxMCP with Claude Code
-
-Claude Code provides built-in MCP support that makes it easy to use FoxMCP browser tools directly in your coding sessions.
-
-### Setup Steps
-
-1. **Start the FoxMCP server**:
-   ```bash
-   make run-server
-   # Server starts on localhost:8765 (WebSocket) and localhost:3000 (MCP)
-   ```
-
-2. **Load the Firefox extension**:
-   - Go to `about:debugging` in Firefox
-   - Click "This Firefox" → "Load Temporary Add-on"
-   - Select `extension/manifest.json`
-   - Verify connection status shows "Connected" in extension popup
-
-3. **Configure Claude Code MCP**:
-   ```bash
-   # Add FoxMCP server to Claude Code
-   claude mcp add foxmcp http://localhost:3000
-   
-   # Verify it was added
-   claude mcp list
-   ```
-
-4. **Use browser tools in Claude Code**:
-   Once configured, you can use browser functions directly in your conversations:
-
-   ```
-   User: "Can you check what tabs I have open?"
-   Claude: I'll check your open browser tabs using the tabs_list tool.
-   ```
-
-   Claude Code will automatically call the `tabs_list()` MCP tool and show you all your open Firefox tabs.
-
 ### Available Tools in Claude Code
 
 When FoxMCP is configured, Claude Code gains access to these browser functions:
@@ -403,21 +593,18 @@ User: "Open the local dev server and the documentation in separate windows"
 Claude: I'll create two browser windows - one for your localhost:3000 development server and another for the documentation.
 ```
 
-### Troubleshooting
-
-If MCP tools aren't working:
-
-1. **Check server status**: Ensure FoxMCP server is running on port 3000
-2. **Verify extension**: Firefox extension should show "Connected" status
-3. **Test connection**: Use `debug_websocket_status()` tool to check connectivity
-4. **Check Claude Code logs**: Look for MCP connection errors in Claude Code output
-
 ### Security Notes
 
 - FoxMCP only binds to localhost for security
 - All browser interactions require user consent through extension permissions
 - Scripts can only run on pages where the extension has permission
 - No external network access - all communication stays local
+
+### Complete Workflow
+```
+MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
+```
+
 
 ## Server Configuration
 
@@ -601,6 +788,15 @@ This enables **automated testing** of storage synchronization without browser au
 2. Verify WebSocket URL in browser console
 3. Check browser permissions granted
 4. Verify connection: Check status in extension popup
+
+### Claude Code MCP Issues
+
+If MCP tools aren't working in Claude Code:
+
+1. **Check server status**: Ensure FoxMCP server is running on port 3000
+2. **Verify extension**: Firefox extension should show "Connected" status
+3. **Test connection**: Use `debug_websocket_status()` tool to check connectivity
+4. **Check Claude Code logs**: Look for MCP connection errors in Claude Code output
 
 ### MCP Agent Issues
 
