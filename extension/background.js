@@ -227,15 +227,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // Handle connection test from options page
-  if (request.type === 'testConnection') {
-    testPingPong().then(result => {
-      sendResponse(result);
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // Keep message channel open for async response
-  }
 
   // Handle connection status request from options page
   if (request.type === 'getConnectionStatus') {
@@ -243,14 +234,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (request.action === 'testPing') {
-    testPingPong().then(result => {
-      sendResponse(result);
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // Keep channel open for async response
-  }
 
   if (request.action === 'updateConfig') {
     updateConfig(request.config);
@@ -269,45 +252,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Test ping-pong functionality
-async function testPingPong() {
-  if (!isConnected) {
-    return { success: false, error: 'Not connected to server' };
-  }
-
-  const testId = `ping_test_${Date.now()}`;
-  const pingMessage = {
-    id: testId,
-    type: 'request',
-    action: 'ping',
-    data: { test: true },
-    timestamp: new Date().toISOString()
-  };
-
-  return new Promise((resolve, reject) => {
-    // Set up response handler
-    const originalHandler = websocket.onmessage;
-    const timeout = setTimeout(() => {
-      websocket.onmessage = originalHandler;
-      reject(new Error('Ping timeout'));
-    }, CONFIG.PING_TIMEOUT);
-
-    websocket.onmessage = (event) => {
-      const response = JSON.parse(event.data);
-      if (response.id === testId && response.type === 'response') {
-        clearTimeout(timeout);
-        websocket.onmessage = originalHandler;
-        resolve({ success: true, response });
-      } else {
-        // Pass other messages to original handler
-        originalHandler(event);
-      }
-    };
-
-    // Send ping
-    websocket.send(JSON.stringify(pingMessage));
-  });
-}
 
 // History handlers
 async function handleHistoryAction(id, action, data) {

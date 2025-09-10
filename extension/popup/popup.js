@@ -2,7 +2,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const statusElement = document.getElementById('status');
   const retryInfo = document.getElementById('retryInfo');
-  const testButton = document.getElementById('testPing');
   const testResult = document.getElementById('testResult');
   const forceReconnectButton = document.getElementById('forceReconnect');
   const saveConfigButton = document.getElementById('saveConfig');
@@ -73,32 +72,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initial display update
   await updateDisplay();
-
-  // Handle test ping button
-  testButton.addEventListener('click', async () => {
-    testButton.disabled = true;
-    testButton.textContent = 'Testing...';
-    testResult.textContent = 'Sending ping...';
-
-    browser.runtime.sendMessage({ action: 'testPing' }, (response) => {
-      testButton.disabled = false;
-      testButton.textContent = 'Test Connection';
-
-      if (browser.runtime.lastError) {
-        testResult.textContent = `Error: ${browser.runtime.lastError.message}`;
-        testResult.style.color = 'red';
-        return;
-      }
-
-      if (response.success) {
-        testResult.textContent = `✅ Ping successful! Received: ${response.response.data.message}`;
-        testResult.style.color = 'green';
-      } else {
-        testResult.textContent = `❌ Ping failed: ${response.error}`;
-        testResult.style.color = 'red';
-      }
-    });
-  });
 
   // Handle force reconnect button
   forceReconnectButton.addEventListener('click', () => {

@@ -109,7 +109,7 @@ foxmcp/
 - **Purpose**: Extension popup user interface
 - **Key Features**:
   - Connection status display with retry attempt information
-  - **Test Connection button** for ping-pong testing
+  - **Connection status display** for monitoring server connection
   - **Force Reconnect button** for manual connection restart
   - **Test result display area** with success/failure feedback
   - **Collapsible configuration panel** with:
@@ -127,7 +127,7 @@ foxmcp/
   - **Direct storage.sync access** for accurate configuration reading and writing
   - **Test configuration override support** - displays effective values with priority handling
   - **Real-time connection status checking** with retry information display
-  - **Ping test functionality** with visual feedback and detailed results
+  - **Connection monitoring** with visual feedback and status updates
   - **Configuration management** with WebSocket URL parsing/building and form validation
   - **Test override preservation** - saves maintain test configurations during normal use
   - **Test indicator display** - shows when test configuration overrides are active
@@ -145,7 +145,7 @@ foxmcp/
   - **Test configuration override support** - displays effective values and warns when test overrides are active
   - **Server configuration**: Hostname, port, and WebSocket URL management
   - **Advanced settings**: Retry intervals, max retries, ping timeout configuration
-  - **Connection testing** with real ping-pong functionality
+  - **Connection monitoring** with real-time status updates
   - **Connection status display** with real-time updates
   - **Configuration preservation** - all saves maintain test overrides and existing settings
   - **Form validation** with comprehensive error checking and user feedback

@@ -62,9 +62,9 @@ make test
 
 ## Next Steps
 1. Load browser extension to test connection
-2. Use extension popup "Test Connection" button
+2. Check connection status in extension popup
 3. Run tests to validate implementation
-4. Verify ping-pong communication works
+4. Verify server communication works
 
 ## Deactivate Virtual Environment
 ```bash

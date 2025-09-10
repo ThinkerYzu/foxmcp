@@ -64,8 +64,8 @@ make run-server      # Start WebSocket server on localhost:8765
 ### 5. Test Communication
 
 - Click the extension icon in browser toolbar
-- Click "Test Connection" button
-- Should see "✅ Ping successful!" if working
+- Check connection status indicator
+- Status shows "Connected" when extension communicates with server
 
 ### 6. Run Tests
 
@@ -354,7 +354,7 @@ The Firefox extension includes comprehensive configuration options with **storag
 
 3. **Features**:
    - **Real-time storage sync**: Configuration changes persist across browser restarts
-   - **Test Connection**: Built-in ping-pong connection testing with detailed feedback
+   - **Connection Status**: Real-time connection status monitoring
    - **Status Indicators**: Live connection status with retry attempt information
    - **Automatic Reconnection**: Extension automatically reconnects when settings change
    - **Configuration Preservation**: Test settings maintained during normal use
@@ -496,7 +496,7 @@ This enables **automated testing** of storage synchronization without browser au
 1. Check server is running: `make status`
 2. Verify WebSocket URL in browser console
 3. Check browser permissions granted
-4. Test with ping-pong: Click "Test Connection"
+4. Verify connection: Check status in extension popup
 
 ### MCP Agent Issues
 

@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('optionsForm').addEventListener('submit', saveSettings);
 
     // Button event listeners
-    document.getElementById('testConnection').addEventListener('click', testConnection);
     document.getElementById('refreshStatus').addEventListener('click', refreshConnectionStatus);
     document.getElementById('saveAdvanced').addEventListener('click', saveAdvancedSettings);
     document.getElementById('resetDefaults').addEventListener('click', resetToDefaults);
@@ -164,34 +163,6 @@ async function saveAdvancedSettings() {
     }
 }
 
-async function testConnection() {
-    const button = document.getElementById('testConnection');
-    const originalText = button.textContent;
-
-    button.textContent = 'Testing...';
-    button.disabled = true;
-
-    try {
-        const response = await browser.runtime.sendMessage({
-            type: 'testConnection'
-        });
-
-        if (response && response.success) {
-            showStatus('Connection test successful!', 'success');
-            updateConnectionStatus(true);
-        } else {
-            showStatus(`Connection test failed: ${response?.error || 'Unknown error'}`, 'error');
-            updateConnectionStatus(false);
-        }
-    } catch (error) {
-        console.error('Error testing connection:', error);
-        showStatus('Connection test failed', 'error');
-        updateConnectionStatus(false);
-    } finally {
-        button.textContent = originalText;
-        button.disabled = false;
-    }
-}
 
 async function refreshConnectionStatus() {
     try {
