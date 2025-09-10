@@ -446,36 +446,6 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 }
 ```
 
-### Available Tools in Claude Code
-
-When FoxMCP is configured, Claude Code gains access to these browser functions:
-
-#### Tab Management
-- **tabs_list()** - "Show me all my open tabs"
-- **tabs_create(url)** - "Open a new tab with GitHub"
-- **tabs_close(tab_id)** - "Close that YouTube tab"
-- **tabs_switch(tab_id)** - "Switch to my email tab"
-
-#### History & Bookmarks
-- **history_query(query)** - "Find pages I visited about Python"
-- **history_get_recent(count)** - "What sites did I visit today?"
-- **bookmarks_search(query)** - "Find my React documentation bookmarks"
-- **bookmarks_create(title, url)** - "Bookmark this tutorial"
-
-#### Page Content & Navigation
-- **content_get_text(tab_id)** - "Get the text from this article"
-- **content_get_html(tab_id)** - "Show me the HTML source"
-- **navigation_go_to_url(tab_id, url)** - "Navigate to the documentation"
-- **navigation_back(tab_id)** - "Go back to the previous page"
-
-#### Window Management
-- **list_windows()** - "Show me all browser windows"
-- **create_window(url)** - "Open a new window with the dev tools"
-- **focus_window(window_id)** - "Bring my work window to front"
-
-#### Script Execution
-- **content_execute_script(tab_id, script)** - "Run this JavaScript on the page"
-- **content_execute_predefined(tab_id, script_name, args)** - "Execute my custom script"
 
 ### Example Usage Scenarios
 
