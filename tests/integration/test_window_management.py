@@ -1059,6 +1059,81 @@ class TestWindowManagementEndToEnd:
                 except Exception as e:
                     print(f"⚠️ Error closing window {window_id}: {e}")
 
+    @pytest.mark.asyncio
+    async def test_tabs_list_shows_pinned_status(self, server_with_extension):
+        """Test that tabs_list shows pinned status for tabs"""
+        setup = server_with_extension
+        
+        # Create MCP client
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
+        
+        try:
+            print("📌 Testing tabs_list pinned status display")
+            print("=" * 50)
+            
+            # Create a regular tab
+            print("\n📄 Creating regular tab...")
+            tab1_result = await client.call_tool("tabs_create", {
+                "url": "https://example.com",
+                "active": True,
+                "pinned": False
+            })
+            print(f"Regular tab result: {tab1_result.get('content', '')}")
+            
+            # Create a pinned tab
+            print("\n📌 Creating pinned tab...")
+            tab2_result = await client.call_tool("tabs_create", {
+                "url": "https://github.com",
+                "active": False,
+                "pinned": True
+            })
+            print(f"Pinned tab result: {tab2_result.get('content', '')}")
+            
+            await asyncio.sleep(1.0)
+            
+            # List all tabs to see pinned status
+            print("\n📋 Listing all tabs...")
+            tabs_result = await client.call_tool("tabs_list", {})
+            tabs_content = tabs_result.get("content", "")
+            print(f"Tabs list result:\n{tabs_content}")
+            
+            # Verify that pinned status is shown
+            if "(pinned)" in tabs_content:
+                print("✅ Pinned status is displayed in tabs_list!")
+                
+                # Count pinned tabs
+                pinned_count = tabs_content.count("(pinned)")
+                print(f"✅ Found {pinned_count} pinned tab(s)")
+                
+                # Verify GitHub tab is marked as pinned
+                lines = tabs_content.split('\n')
+                for line in lines:
+                    if "github.com" in line and "(pinned)" in line:
+                        print(f"✅ GitHub tab is correctly marked as pinned: {line.strip()}")
+                        break
+                else:
+                    print("⚠️ GitHub tab not found or not marked as pinned")
+                    
+            else:
+                print("❌ No pinned tabs found in output - this indicates an issue")
+                
+            # Also verify regular tab is not marked as pinned
+            lines = tabs_content.split('\n')
+            for line in lines:
+                if "example.com" in line:
+                    if "(pinned)" not in line:
+                        print(f"✅ Example.com tab is correctly NOT marked as pinned: {line.strip()}")
+                    else:
+                        print(f"❌ Example.com tab incorrectly marked as pinned: {line.strip()}")
+                    break
+            
+            print(f"\n✅ Tabs list pinned status test completed!")
+            
+        except Exception as e:
+            print(f"❌ Test failed with error: {e}")
+            raise
+
 
 if __name__ == "__main__":
     # Run tests individually for debugging

@@ -382,6 +382,11 @@ async function handleTabsAction(id, action, data) {
           createTabOptions.windowId = data.windowId;
         }
         
+        // Add pinned status if provided
+        if (data.pinned !== undefined) {
+          createTabOptions.pinned = data.pinned;
+        }
+        
         const newTab = await browser.tabs.create(createTabOptions);
         sendResponse(id, action, { tab: newTab });
         break;

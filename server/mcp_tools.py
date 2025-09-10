@@ -387,7 +387,18 @@ class FoxMCPTools:
         # Tab List Tool
         @self.mcp.tool()
         async def tabs_list() -> str:
-            """List all open browser tabs"""
+            """
+            List all open browser tabs
+            
+            Returns:
+                Formatted string with tab information:
+                "Open tabs ({count} found):
+                - ID {tab_id}: {title} - {url}{status_indicators}"
+                
+                Status indicators include:
+                - (active) - for the currently active tab
+                - (pinned) - for pinned tabs
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
@@ -411,7 +422,8 @@ class FoxMCPTools:
                 result = f"Open tabs ({len(tabs)} found):\n"
                 for tab in tabs:
                     active = " (active)" if tab.get("active") else ""
-                    result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}\n"
+                    pinned = " (pinned)" if tab.get("pinned") else ""
+                    result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}{pinned}\n"
                 return result
 
             return "Unable to retrieve tabs"
