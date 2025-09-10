@@ -315,6 +315,110 @@ FoxMCP uses **direct parameter format** (no `params` wrapper). External MCP agen
 MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API
 ```
 
+## Using FoxMCP with Claude Code
+
+Claude Code provides built-in MCP support that makes it easy to use FoxMCP browser tools directly in your coding sessions.
+
+### Setup Steps
+
+1. **Start the FoxMCP server**:
+   ```bash
+   make run-server
+   # Server starts on localhost:8765 (WebSocket) and localhost:3000 (MCP)
+   ```
+
+2. **Load the Firefox extension**:
+   - Go to `about:debugging` in Firefox
+   - Click "This Firefox" → "Load Temporary Add-on"
+   - Select `extension/manifest.json`
+   - Verify connection status shows "Connected" in extension popup
+
+3. **Configure Claude Code MCP**:
+   ```bash
+   # Add FoxMCP server to Claude Code
+   claude mcp add foxmcp http://localhost:3000
+   
+   # Verify it was added
+   claude mcp list
+   ```
+
+4. **Use browser tools in Claude Code**:
+   Once configured, you can use browser functions directly in your conversations:
+
+   ```
+   User: "Can you check what tabs I have open?"
+   Claude: I'll check your open browser tabs using the tabs_list tool.
+   ```
+
+   Claude Code will automatically call the `tabs_list()` MCP tool and show you all your open Firefox tabs.
+
+### Available Tools in Claude Code
+
+When FoxMCP is configured, Claude Code gains access to these browser functions:
+
+#### Tab Management
+- **tabs_list()** - "Show me all my open tabs"
+- **tabs_create(url)** - "Open a new tab with GitHub"
+- **tabs_close(tab_id)** - "Close that YouTube tab"
+- **tabs_switch(tab_id)** - "Switch to my email tab"
+
+#### History & Bookmarks
+- **history_query(query)** - "Find pages I visited about Python"
+- **history_get_recent(count)** - "What sites did I visit today?"
+- **bookmarks_search(query)** - "Find my React documentation bookmarks"
+- **bookmarks_create(title, url)** - "Bookmark this tutorial"
+
+#### Page Content & Navigation
+- **content_get_text(tab_id)** - "Get the text from this article"
+- **content_get_html(tab_id)** - "Show me the HTML source"
+- **navigation_go_to_url(tab_id, url)** - "Navigate to the documentation"
+- **navigation_back(tab_id)** - "Go back to the previous page"
+
+#### Window Management
+- **list_windows()** - "Show me all browser windows"
+- **create_window(url)** - "Open a new window with the dev tools"
+- **focus_window(window_id)** - "Bring my work window to front"
+
+#### Script Execution
+- **content_execute_script(tab_id, script)** - "Run this JavaScript on the page"
+- **content_execute_predefined(tab_id, script_name, args)** - "Execute my custom script"
+
+### Example Usage Scenarios
+
+**Research Assistant**:
+```
+User: "I'm researching React hooks. Can you help me organize my browser?"
+Claude: I'll help you organize your research. Let me first see what tabs you have open, then we can bookmark the useful ones and close the rest.
+```
+
+**Code Review Helper**:
+```
+User: "I have a GitHub PR open. Can you extract the diff and help me review it?"
+Claude: I'll find your GitHub tab and extract the page content so we can review the code changes together.
+```
+
+**Development Workflow**:
+```
+User: "Open the local dev server and the documentation in separate windows"
+Claude: I'll create two browser windows - one for your localhost:3000 development server and another for the documentation.
+```
+
+### Troubleshooting
+
+If MCP tools aren't working:
+
+1. **Check server status**: Ensure FoxMCP server is running on port 3000
+2. **Verify extension**: Firefox extension should show "Connected" status
+3. **Test connection**: Use `debug_websocket_status()` tool to check connectivity
+4. **Check Claude Code logs**: Look for MCP connection errors in Claude Code output
+
+### Security Notes
+
+- FoxMCP only binds to localhost for security
+- All browser interactions require user consent through extension permissions
+- Scripts can only run on pages where the extension has permission
+- No external network access - all communication stays local
+
 ## Server Configuration
 
 ### Command Line Options
