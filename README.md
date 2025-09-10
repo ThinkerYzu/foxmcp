@@ -101,7 +101,7 @@ Scripts must be executable and output JavaScript to stdout:
 ```bash
 #!/bin/bash
 # Simple script that gets page title
-echo "document.title"
+echo "(function() { return document.title; })()"
 ```
 
 **Parameterized Example** (`get_page_info.sh`):
@@ -110,10 +110,10 @@ echo "document.title"
 # Script that takes info type as argument
 info_type="${1:-title}"
 case "$info_type" in
-  "title") echo "document.title" ;;
-  "url") echo "window.location.href" ;;
-  "text") echo "document.body.innerText.substring(0, 500)" ;;
-  *) echo "document.title + ' - Unknown info type'" ;;
+  "title") echo "(function() { return document.title; })()" ;;
+  "url") echo "(function() { return window.location.href; })()" ;;
+  "text") echo "(function() { return document.body.innerText.substring(0, 500); })()" ;;
+  *) echo "(function() { return document.title + ' - Unknown info type'; })()" ;;
 esac
 ```
 
@@ -196,25 +196,31 @@ content_execute_predefined(tab_id=current_tab, script_name="add_banner.sh", scri
 
 ### Script Output Types
 
-Predefined scripts output JavaScript code that gets executed in the browser tab:
+Predefined scripts output JavaScript code that gets executed in the browser tab. **Recommended practice** is to wrap code in an immediately invoked function expression (IIFE) for better isolation:
 
 ```bash
 #!/bin/bash
-# All script output is treated as JavaScript and executed in the browser
-echo "document.title"
+# Simple value return (wrapped in IIFE for isolation)
+echo "(function() { return document.title; })()"
 ```
 
 ```bash
 #!/bin/bash
-# You can return values from your JavaScript
+# Complex operations with return value
 echo "(function() { return 'Script completed: ' + document.title; })()"
 ```
 
 ```bash
 #!/bin/bash
-# Or execute actions and return status messages
-echo "document.body.style.backgroundColor = 'lightblue'; 'Background changed successfully'"
+# Execute actions and return status messages
+echo "(function() { document.body.style.backgroundColor = 'lightblue'; return 'Background changed successfully'; })()"
 ```
+
+**Benefits of IIFE pattern:**
+- Prevents variable conflicts with page code
+- Creates isolated scope for script execution
+- Enables proper return value handling
+- Follows JavaScript best practices
 
 ### Security Features
 
@@ -240,20 +246,20 @@ Create a collection of useful scripts:
 **`extract_links.sh`** - Extract all links from page:
 ```bash
 #!/bin/bash
-echo "Array.from(document.links).map(link => ({text: link.textContent.trim(), url: link.href})).slice(0, 10)"
+echo "(function() { return Array.from(document.links).map(link => ({text: link.textContent.trim(), url: link.href})).slice(0, 10); })()"
 ```
 
 **`highlight_text.sh`** - Highlight text on page:
 ```bash
 #!/bin/bash
 search_text="${1:-example}"
-echo "document.body.innerHTML = document.body.innerHTML.replace(new RegExp('${search_text}', 'gi'), '<mark>\$&</mark>'); 'Highlighted: ${search_text}'"
+echo "(function() { document.body.innerHTML = document.body.innerHTML.replace(new RegExp('${search_text}', 'gi'), '<mark>\$&</mark>'); return 'Highlighted: ${search_text}'; })()"
 ```
 
 **`page_stats.sh`** - Get page statistics:
 ```bash
 #!/bin/bash
-echo "({title: document.title, links: document.links.length, images: document.images.length, words: document.body.innerText.split(/\s+/).length})"
+echo "(function() { return {title: document.title, links: document.links.length, images: document.images.length, words: document.body.innerText.split(/\\s+/).length}; })()"
 ```
 
 ## Project Structure
@@ -364,9 +370,9 @@ The `content_execute_predefined()` tool allows execution of external scripts tha
    # get_page_info.sh
    info_type="${1:-title}"
    case "$info_type" in
-     "title") echo "document.title" ;;
-     "url") echo "window.location.href" ;;
-     "text") echo "document.body.innerText.substring(0, 500)" ;;
+     "title") echo "(function() { return document.title; })()" ;;
+     "url") echo "(function() { return window.location.href; })()" ;;
+     "text") echo "(function() { return document.body.innerText.substring(0, 500); })()" ;;
    esac
    ```
 
