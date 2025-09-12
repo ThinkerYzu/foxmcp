@@ -22,8 +22,6 @@ make test
 # Run integration tests (includes Firefox extension testing)
 make test-integration
 
-# Load extension in browser
-make load-extension
 ```
 
 ## Using FoxMCP with Claude Code
@@ -556,7 +554,6 @@ make check             # Run linting + tests
 
 # Development
 make run-server        # Start WebSocket server
-make load-extension    # Show instructions for loading extension
 make lint              # Run Python linting
 make format            # Format Python code
 

@@ -116,17 +116,6 @@ lint:
 	@flake8 tests/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in tests/"
 	@echo "✅ Linting complete!"
 
-# Extension Development Helper
-load-extension:
-	@echo "Extension location for browser loading:"
-	@echo "Chrome: Load unpacked extension from: $(PWD)/extension"
-	@echo "Firefox: Load temporary extension from: $(PWD)/extension/manifest.json"
-	@echo ""
-	@echo "Instructions:"
-	@echo "1. Open Chrome and go to chrome://extensions/"
-	@echo "2. Enable 'Developer mode'"
-	@echo "3. Click 'Load unpacked' and select the extension/ directory"
-	@echo "4. The FoxMCP extension should now be loaded"
 
 # Maintenance and Cleanup
 clean:
