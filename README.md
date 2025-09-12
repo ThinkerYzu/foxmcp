@@ -71,6 +71,50 @@ Claude Code provides built-in MCP support that makes it easy to use FoxMCP brows
 
    Claude Code will automatically call the `tabs_list()` MCP tool and show you all your open Firefox tabs.
 
+## Available MCP Tools
+
+### Tab Management
+- `tabs_list()` - List all open tabs
+- `tabs_create(url, active=True, pinned=False, window_id=None)` - Create new tab (optionally in specific window)
+- `tabs_close(tab_id)` - Close specific tab
+- `tabs_switch(tab_id)` - Switch to specific tab
+
+### History Operations
+- `history_query(query, max_results=50)` - Search browser history
+- `history_get_recent(count=10)` - Get recent history items
+- `history_delete_item(url)` - Delete specific history item
+
+### Bookmark Management
+- `bookmarks_list(folder_id=None)` - List bookmarks
+- `bookmarks_search(query)` - Search bookmarks
+- `bookmarks_create(title, url, parent_id=None)` - Create bookmark
+- `bookmarks_delete(bookmark_id)` - Delete bookmark
+
+### Navigation Control
+- `navigation_back(tab_id)` - Navigate back in tab
+- `navigation_forward(tab_id)` - Navigate forward in tab
+- `navigation_reload(tab_id, bypass_cache=False)` - Reload tab
+- `navigation_go_to_url(tab_id, url)` - Navigate to URL
+
+### Content Access
+- `content_get_text(tab_id)` - Extract page text content
+- `content_get_html(tab_id)` - Get page HTML source
+- `content_execute_script(tab_id, script)` - Execute JavaScript directly
+- `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
+
+### Window Management
+- `list_windows(populate=True)` - List all browser windows with optional tab details
+- `get_window(window_id, populate=True)` - Get specific window information
+- `get_current_window(populate=True)` - Get current active window
+- `get_last_focused_window(populate=True)` - Get most recently focused window
+- `create_window(url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
+- `close_window(window_id)` - Close specific window
+- `focus_window(window_id)` - Bring window to front and focus it
+- `update_window(window_id, state=None, focused=None, width=None, height=None, top=None, left=None)` - Update window properties
+
+### Debugging Tools
+- `debug_websocket_status()` - Check browser extension connection status
+
 ## Predefined Scripts
 
 Predefined scripts are external executable scripts that generate JavaScript code dynamically and execute it in browser tabs. This powerful feature allows you to create reusable, parameterized browser automation scripts that can be called via the `content_execute_predefined` MCP tool.
@@ -307,50 +351,6 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 - **WebSocket Server**: Port 8765 (default) for Firefox extension communication
 - **MCP Server**: Port 3000 (default) for MCP client connections
 - **FastMCP Tools**: All browser functions exposed as MCP tools
-
-### Available MCP Tools
-
-#### Tab Management
-- `tabs_list()` - List all open tabs
-- `tabs_create(url, active=True, pinned=False, window_id=None)` - Create new tab (optionally in specific window)
-- `tabs_close(tab_id)` - Close specific tab
-- `tabs_switch(tab_id)` - Switch to specific tab
-
-#### History Operations
-- `history_query(query, max_results=50)` - Search browser history
-- `history_get_recent(count=10)` - Get recent history items
-- `history_delete_item(url)` - Delete specific history item
-
-#### Bookmark Management
-- `bookmarks_list(folder_id=None)` - List bookmarks
-- `bookmarks_search(query)` - Search bookmarks
-- `bookmarks_create(title, url, parent_id=None)` - Create bookmark
-- `bookmarks_delete(bookmark_id)` - Delete bookmark
-
-#### Navigation Control
-- `navigation_back(tab_id)` - Navigate back in tab
-- `navigation_forward(tab_id)` - Navigate forward in tab
-- `navigation_reload(tab_id, bypass_cache=False)` - Reload tab
-- `navigation_go_to_url(tab_id, url)` - Navigate to URL
-
-#### Content Access
-- `content_get_text(tab_id)` - Extract page text content
-- `content_get_html(tab_id)` - Get page HTML source
-- `content_execute_script(tab_id, script)` - Execute JavaScript directly
-- `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
-
-#### Window Management
-- `list_windows(populate=True)` - List all browser windows with optional tab details
-- `get_window(window_id, populate=True)` - Get specific window information
-- `get_current_window(populate=True)` - Get current active window
-- `get_last_focused_window(populate=True)` - Get most recently focused window
-- `create_window(url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
-- `close_window(window_id)` - Close specific window
-- `focus_window(window_id)` - Bring window to front and focus it
-- `update_window(window_id, state=None, focused=None, width=None, height=None, top=None, left=None)` - Update window properties
-
-#### Debugging Tools
-- `debug_websocket_status()` - Check browser extension connection status
 
 
 ### MCP Parameter Format
