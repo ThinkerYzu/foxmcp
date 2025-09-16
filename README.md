@@ -346,6 +346,45 @@ The `predefined-ex/` directory contains comprehensive Google Calendar integratio
 - **Event Automation**: Programmatically access calendar data for workflow automation
 - **Attendance Tracking**: Monitor RSVP statuses and participant lists
 
+### Claude Code Integration Example
+
+The `claude-ex/` directory contains a comprehensive example demonstrating how to configure Claude Code to effectively use FoxMCP predefined scripts:
+
+**`CLAUDE.md.template`** - Complete Claude Code configuration template showing:
+- **Project Context**: How to describe your project's purpose and workflow needs
+- **Tool Access**: Clear permissions for browser automation and MCP tool usage
+- **Predefined Script Documentation**: Detailed usage examples for Google Calendar scripts
+- **Browser Automation Guidelines**: Best practices for content script injection and namespace protection
+- **Autonomous Operation**: Configuration for proactive browser tool usage without explicit permission
+
+**Key Configuration Patterns:**
+```markdown
+## Tools
+- foxmcp: provides access to my work browser. Browser automation tools
+  (tabs management, navigation, content scripts) can be used freely
+  without explicit permission for work-related tasks.
+
+## Foxmcp Predefined External Scripts
+- gcal-cal-event-js.sh: extracts Google Calendar event details
+  Usage: gcal-cal-event-js.sh "Event Title" day time
+- gcal-monthly-events-js.sh: extracts all monthly calendar events
+- gcal-daily-events-js.sh: retrieves specific day events
+```
+
+**Benefits of This Configuration:**
+- **Seamless Integration**: Claude Code automatically uses FoxMCP tools for browser tasks
+- **Context Awareness**: Claude understands your workflow and available predefined scripts
+- **Autonomous Operation**: Reduced need for explicit permissions on routine browser tasks
+- **Documentation**: Clear examples for extending with your own predefined scripts
+
+**Usage:**
+1. Copy `claude-ex/CLAUDE.md.template` to your project as `CLAUDE.md`
+2. Customize the template with your specific tools and workflow requirements
+3. Add your own predefined script documentation following the established patterns
+4. Claude Code will automatically understand and use your browser automation capabilities
+
+This example demonstrates the recommended approach for integrating FoxMCP with Claude Code projects requiring browser automation and calendar management capabilities.
+
 ## Project Structure
 
 ```

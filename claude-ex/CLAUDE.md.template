@@ -1,0 +1,68 @@
+This project is to help me to manage the tasks of my job.
+
+## Me
+
+My personal information.
+
+## Tools
+- foxmcp: provides the access to my work browser. When I have any
+  question about bugs, you can also search the browser's history to
+  get information of bugs I have visited. Browser automation tools
+  (tabs management, navigation, content scripts) can be used freely
+  without explicit permission for work-related tasks.
+- emacsclient -n <filename>: loads a file in my editor.
+  
+## Foxmcp Predefined External Scripts
+A predefined external script is defined at the server side of foxmcp.
+To call a script, for example, `hello.sh` with two arguments, it means to call
+`content_execute_predefined(tab_id, "hello.sh", "[\"arg1\", \"arg2\"]")`.
+The last argument is a stringified JSON object that is a list of strings.
+
+- gcal-cal-event-js.sh: extracts Google Calendar
+  event details. Usage: `gcal-cal-event-js.sh "Event Title" day time`
+  Example: `gcal-cal-event-js.sh "Team Lunch" 8 "11:30am"`
+  Outputs ready-to-inject JavaScript that returns structured JSON with complete
+  event information (meeting links, attendees, attachments, etc).
+- gcal-monthly-events-js.sh:
+  extracts all Google Calendar events from
+  the current month view, grouped by days. Usage:
+  `gcal-monthly-events-js.sh` Returns comprehensive monthly calendar
+  data with 160+ events, summary statistics, and metadata for each day
+  including event counts and busiest days.
+- gcal-daily-events-js.sh: retrieves Google Calendar events for a specific day with detailed information.
+  Usage: `gcal-daily-events-js.sh day [month] [year]`. Examples: `gcal-daily-events-js.sh 8` (current month/year),
+  `gcal-daily-events-js.sh 15 10` (October 15, current year), `gcal-daily-events-js.sh 25 12 2024` (December 25, 2024).
+  Returns focused daily event data with chronological sorting, RSVP status, and meeting type detection.
+
+## Browser Content Scripts
+
+When injecting JavaScript content scripts into browser tabs, always wrap the code in an anonymous function to avoid namespace pollution:
+
+```javascript
+(function() {
+  // Your script code here
+  const elements = document.querySelectorAll('*');
+  // ... rest of script
+})();
+```
+
+This prevents variable declarations from polluting the global namespace and avoids conflicts with existing page scripts.
+
+## Meeting Information
+
+When checking meeting information, always check Google Calendar by default unless explicitly requested otherwise. Use the calendar tools to extract current day's events and provide meeting details including times, titles, and RSVP status.
+
+## Browser Automation
+
+All browser automation tools via foxmcp can be used autonomously for work-related tasks without explicit permission:
+- Tab management (create, switch, close)
+- Navigation (URLs, back/forward, reload)
+- Content extraction (text, HTML)
+- Script execution for automation
+  - There are some predefined external scripts.
+- History and bookmark access
+- Element interaction and form submission
+- Window management (create, close, focus, list)
+
+Use these tools proactively to help with workflow management and information retrieval.
+
