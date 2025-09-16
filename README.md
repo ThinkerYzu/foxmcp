@@ -304,6 +304,48 @@ echo "(function() { document.body.innerHTML = document.body.innerHTML.replace(ne
 echo "(function() { return {title: document.title, links: document.links.length, images: document.images.length, words: document.body.innerText.split(/\\s+/).length}; })()"
 ```
 
+### Google Calendar Integration Examples
+
+The `predefined-ex/` directory contains comprehensive Google Calendar integration scripts that demonstrate advanced data extraction capabilities:
+
+**`gcal-cal-event-js.sh`** - Extract detailed event information:
+```bash
+#!/bin/bash
+# Usage: ./gcal-cal-event-js.sh "Event Title" day time
+# Example: ./gcal-cal-event-js.sh "Team Lunch" 8 "11:30am"
+# Returns: Complete event details including meeting info, attendees, and metadata
+```
+
+**`gcal-daily-events-js.sh`** - Get all events for a specific day:
+```bash
+#!/bin/bash
+# Usage: ./gcal-daily-events-js.sh day [month] [year]
+# Example: ./gcal-daily-events-js.sh 15 9 2025
+# Returns: All events for the specified date with time sorting
+```
+
+**`gcal-monthly-events-js.sh`** - Extract full month calendar data:
+```bash
+#!/bin/bash
+# Usage: ./gcal-monthly-events-js.sh
+# Returns: All events grouped by days with summary statistics
+```
+
+**Key Features of Google Calendar Scripts:**
+- **Event Detail Extraction**: Complete event information including title, time, meeting links, attendees
+- **Zoom Integration**: Automatic extraction of Zoom meeting IDs, passcodes, and phone numbers
+- **RSVP Status Detection**: Identifies accepted, tentative, and awaiting responses
+- **Time Parsing**: Intelligent time extraction and chronological sorting
+- **Container Indexing**: Accurate day-to-container mapping for reliable data extraction
+- **Error Handling**: Comprehensive error detection and fallback strategies
+- **JSON Structure**: Well-formatted data output for easy programmatic processing
+
+**Use Cases:**
+- **Meeting Preparation**: Extract meeting details and join information
+- **Schedule Analysis**: Analyze calendar patterns and event distribution
+- **Event Automation**: Programmatically access calendar data for workflow automation
+- **Attendance Tracking**: Monitor RSVP statuses and participant lists
+
 ## Project Structure
 
 ```
