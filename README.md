@@ -2,6 +2,28 @@
 
 A Firefox extension that exposes browser functionality (history, tabs, bookmarks, navigation, content, windows) to MCP (Model Context Protocol) clients via WebSocket communication. Features FastMCP server integration for seamless MCP tool access.
 
+## ⚠️ Security and Privacy Notice
+
+**Important:** This project enables AI models to access your browser data including:
+- Browsing history
+- Open tabs and bookmarks
+- Page content and navigation
+- Window management
+
+**Before using FoxMCP, consider these privacy implications:**
+- Your browser data may be transmitted to remote AI services
+- This tool is designed for exploring browser automation with AI agents
+- Use only with trusted AI models and in controlled environments
+- Consider using dedicated browser profiles for testing
+- Review what data you're comfortable sharing with AI assistants
+
+**Recommended for:**
+- Development and experimentation environments
+- Controlled testing with trusted AI services
+- Educational exploration of browser-AI integration
+
+**The purpose of this project is to create a platform for exploring the potential of browser automation with AI agents.**
+
 You may aware that this project is helped by Claude Code. By asking
 Claude Code to update several documents periodically, it understands
 the goal of the project pretty well. Check CLAUDE.md.
