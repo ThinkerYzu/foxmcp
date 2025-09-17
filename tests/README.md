@@ -163,6 +163,7 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - **HTTP endpoint validation**: FastMCP server accessibility testing
   - **Tool naming validation**: Prevents naming mismatches between test and production
   - **End-to-end tab testing**: Creates actual browser tabs and verifies tab listing functionality
+  - **Navigation reload testing**: Complete end-to-end page reload functionality with cache bypass options
 
 - **test_window_management.py**: Comprehensive window management end-to-end tests
   - **Window creation and properties**: Creates windows with specific dimensions and properties

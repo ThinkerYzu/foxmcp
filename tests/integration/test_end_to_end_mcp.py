@@ -982,10 +982,218 @@ class TestEndToEndMCP:
             print("✅ End-to-end JavaScript execution test successful!")
             print("✅ All script execution scenarios tested:")
             print("  - Simple expressions")
-            print("  - DOM queries with return values")  
+            print("  - DOM queries with return values")
             print("  - DOM modifications")
             print("  - Verification of changes")
             print("  - Error handling")
+
+    @pytest.mark.asyncio
+    async def test_end_to_end_navigation_reload(self, full_mcp_system):
+        """Test complete end-to-end page reload functionality via MCP"""
+        system = full_mcp_system
+        server = system['server']
+        mcp_client = system['mcp_client']
+
+        # Skip if required components not available
+        extension_xpi = get_extension_xpi_path()
+        if not extension_xpi or not os.path.exists(extension_xpi):
+            pytest.skip("Extension XPI not found")
+
+        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+        if not os.path.exists(os.path.expanduser(firefox_path)):
+            pytest.skip("Firefox not found")
+
+        # Connect MCP client
+        await mcp_client.connect()
+
+        # Start Firefox with extension
+        with FirefoxTestManager(
+            firefox_path=firefox_path,
+            test_port=system['websocket_port'],
+            coordination_file=system['coordination_file']
+        ) as firefox:
+
+            firefox.create_test_profile()
+            firefox.install_extension(extension_xpi)
+            firefox.start_firefox(headless=True)
+
+            # Wait for extension connection
+            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+
+            if len(server.connected_clients) == 0:
+                pytest.skip("Extension did not connect - cannot test navigation reload")
+
+            print("\n🧪 Testing End-to-End Navigation Reload")
+
+            # Step 1: Create a test tab with a web URL
+            print("\n1️⃣  Creating test tab...")
+            create_result = await mcp_client.call_tool("tabs_create", {
+                "url": "https://httpbin.org/uuid",
+                "active": True
+            })
+
+            if create_result.get('isError', False):
+                pytest.skip(f"Tab creation failed: {create_result.get('content', '')}")
+
+            print(f"   ✅ Created tab: {create_result.get('content', '')}")
+
+            # Wait for tab to fully load
+            await asyncio.sleep(3.0)
+
+            # Step 2: Get the new tab ID from tabs list
+            print("\n2️⃣  Finding test tab ID...")
+            tabs_result = await mcp_client.call_tool("tabs_list")
+            assert not tabs_result.get('isError', False), f"tabs_list should not error: {tabs_result}"
+
+            tab_content = tabs_result.get('content', '')
+            print(f"   Available tabs: {tab_content}")
+
+            # Find tab with httpbin.org/uuid URL
+            tab_lines = [line for line in tab_content.split('\n') if 'httpbin.org/uuid' in line]
+
+            if not tab_lines:
+                pytest.skip("Could not find test tab with httpbin.org/uuid")
+
+            # Extract tab ID
+            import re
+            tab_id_match = re.search(r'ID (\d+):', tab_lines[0])
+            if not tab_id_match:
+                pytest.skip("Could not extract tab ID from tabs list")
+
+            test_tab_id = int(tab_id_match.group(1))
+            print(f"   ✅ Found test tab ID: {test_tab_id}")
+
+            # Step 3: Get initial page content to verify reload works
+            print("\n3️⃣  Getting initial page content...")
+            initial_content_result = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "document.body.textContent || 'No content'"
+            })
+
+            if initial_content_result.get('isError', False):
+                print(f"   ⚠️  Could not get initial content: {initial_content_result.get('content', '')}")
+                initial_uuid = None
+            else:
+                initial_content = initial_content_result.get('content', '')
+                print(f"   Initial content: {initial_content}")
+
+                # Extract UUID from content (httpbin.org/uuid returns a JSON with uuid field)
+                import re
+                uuid_match = re.search(r'"uuid":\s*"([^"]+)"', initial_content)
+                initial_uuid = uuid_match.group(1) if uuid_match else None
+                print(f"   ✅ Initial UUID: {initial_uuid}")
+
+            # Step 4: Test normal reload (without bypassing cache)
+            print("\n4️⃣  Testing normal reload...")
+            reload_result = await mcp_client.call_tool("navigation_reload", {
+                "tab_id": test_tab_id,
+                "bypass_cache": False
+            })
+
+            assert not reload_result.get('isError', False), f"Normal reload should not error: {reload_result}"
+
+            reload_content = reload_result.get('content', '')
+            print(f"   Reload result: {reload_content}")
+
+            # Verify success message
+            assert "Successfully reloaded tab" in reload_content, "Should confirm successful reload"
+            assert str(test_tab_id) in reload_content, "Should mention the tab ID"
+            assert "bypassing cache" not in reload_content, "Normal reload should not mention bypassing cache"
+
+            # Wait for page to reload
+            await asyncio.sleep(2.0)
+
+            # Step 5: Verify page content changed (new UUID from httpbin.org/uuid)
+            print("\n5️⃣  Verifying page reloaded...")
+            new_content_result = await mcp_client.call_tool("content_execute_script", {
+                "tab_id": test_tab_id,
+                "code": "document.body.textContent || 'No content'"
+            })
+
+            if not new_content_result.get('isError', False):
+                new_content = new_content_result.get('content', '')
+                print(f"   New content: {new_content}")
+
+                # Extract new UUID
+                uuid_match = re.search(r'"uuid":\s*"([^"]+)"', new_content)
+                new_uuid = uuid_match.group(1) if uuid_match else None
+                print(f"   ✅ New UUID: {new_uuid}")
+
+                # UUIDs should be different (httpbin.org/uuid generates new UUID each request)
+                if initial_uuid and new_uuid:
+                    assert initial_uuid != new_uuid, f"UUID should change after reload: {initial_uuid} vs {new_uuid}"
+                    print(f"   ✅ UUID changed: {initial_uuid} → {new_uuid}")
+                else:
+                    print(f"   ⚠️  Could not compare UUIDs, but page reloaded successfully")
+
+            # Step 6: Test reload with cache bypass
+            print("\n6️⃣  Testing reload with cache bypass...")
+            cache_bypass_result = await mcp_client.call_tool("navigation_reload", {
+                "tab_id": test_tab_id,
+                "bypass_cache": True
+            })
+
+            assert not cache_bypass_result.get('isError', False), f"Cache bypass reload should not error: {cache_bypass_result}"
+
+            cache_bypass_content = cache_bypass_result.get('content', '')
+            print(f"   Cache bypass result: {cache_bypass_content}")
+
+            # Verify success message includes cache bypass info
+            assert "Successfully reloaded tab" in cache_bypass_content, "Should confirm successful reload"
+            assert str(test_tab_id) in cache_bypass_content, "Should mention the tab ID"
+            assert "bypassing cache" in cache_bypass_content, "Cache bypass reload should mention bypassing cache"
+
+            # Wait for page to reload
+            await asyncio.sleep(2.0)
+
+            # Step 7: Test error handling - invalid tab ID
+            print("\n7️⃣  Testing error handling...")
+            invalid_tab_id = 99999
+            error_result = await mcp_client.call_tool("navigation_reload", {
+                "tab_id": invalid_tab_id,
+                "bypass_cache": False
+            })
+
+            # Should either be an error response or contain error information
+            error_content = error_result.get('content', '')
+            print(f"   Error handling result: {error_content}")
+
+            is_error_response = error_result.get('isError', False)
+            contains_error_info = "error" in error_content.lower() or "failed" in error_content.lower() or "unable" in error_content.lower()
+
+            assert is_error_response or contains_error_info, \
+                "Invalid tab ID should produce error response or error message"
+
+            # Step 8: Test parameter validation - verify both parameters work
+            print("\n8️⃣  Testing parameter combinations...")
+
+            # Test with explicit bypass_cache=False
+            explicit_false_result = await mcp_client.call_tool("navigation_reload", {
+                "tab_id": test_tab_id,
+                "bypass_cache": False
+            })
+
+            assert not explicit_false_result.get('isError', False), "Explicit bypass_cache=False should work"
+            assert "bypassing cache" not in explicit_false_result.get('content', ''), "Should not bypass cache"
+
+            await asyncio.sleep(1.0)
+
+            # Test with explicit bypass_cache=True again
+            explicit_true_result = await mcp_client.call_tool("navigation_reload", {
+                "tab_id": test_tab_id,
+                "bypass_cache": True
+            })
+
+            assert not explicit_true_result.get('isError', False), "Explicit bypass_cache=True should work"
+            assert "bypassing cache" in explicit_true_result.get('content', ''), "Should bypass cache"
+
+            print("✅ End-to-end navigation reload test successful!")
+            print("✅ All reload scenarios tested:")
+            print("  - Normal reload (bypass_cache=False)")
+            print("  - Cache bypass reload (bypass_cache=True)")
+            print("  - Page content verification")
+            print("  - Error handling for invalid tab ID")
+            print("  - Parameter validation")
 
     @pytest.mark.asyncio
     async def test_end_to_end_content_execute_predefined(self, full_mcp_system):

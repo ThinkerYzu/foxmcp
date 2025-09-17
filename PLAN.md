@@ -38,7 +38,7 @@
 - **Message Protocol**: Complete protocol specification with JSON message formats  
 - **Browser API Integration**: All browser functions implemented (tabs, history, bookmarks, navigation, content, windows)
 - **Bookmark Management**: Fixed bookmarks_list() function to properly flatten bookmark tree structure
-- **Test Infrastructure**: Production-ready testing with 130+ tests (29 unit + 97+ integration), enhanced coverage including window management
+- **Test Infrastructure**: Production-ready testing with 130+ tests (29 unit + 98+ integration), enhanced coverage including window management and navigation reload
 - **Test Helper Protocol**: Automated UI validation system via WebSocket messages for storage synchronization testing
 - **Response Correlation**: UUID-based async request/response matching with timeout handling
 - **Build System**: Complete Makefile with development, testing, and packaging workflows
@@ -84,7 +84,7 @@ The FoxMCP project has successfully achieved its primary goal:
 - **20+ MCP Tools**: All browser functions exposed via FastMCP
 - **Dual Server Architecture**: WebSocket (8765) + MCP (3000) servers
 - **End-to-End Workflow**: `MCP Client → FastMCP → WebSocket → Firefox Extension → Browser API`
-- **Comprehensive Testing**: 91 tests covering all integration scenarios including automated UI validation
+- **Comprehensive Testing**: 98+ tests covering all integration scenarios including automated UI validation and navigation reload
 - **Production Ready**: Robust error handling and connection management
 
 **✅ Available MCP Tool Categories:**

@@ -899,21 +899,21 @@ class FoxMCPTools:
             return f"Unable to navigate forward in tab {params.tab_id}"
 
         # Reload Page Tool
-        class NavigationReloadParams(BaseModel):
-            """Parameters for reloading a page"""
-            tab_id: int = Field(description="ID of the tab to reload")
-            bypass_cache: bool = Field(default=False, description="Whether to bypass cache when reloading")
-
         @self.mcp.tool()
-        async def navigation_reload(params: NavigationReloadParams) -> str:
-            """Reload a page in a tab"""
+        async def navigation_reload(tab_id: int, bypass_cache: bool = False) -> str:
+            """Reload a page in a tab
+
+            Args:
+                tab_id: ID of the tab to reload
+                bypass_cache: Whether to bypass cache when reloading (default: False)
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "navigation.reload",
                 "data": {
-                    "tabId": params.tab_id,
-                    "bypassCache": params.bypass_cache
+                    "tabId": tab_id,
+                    "bypassCache": bypass_cache
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -924,13 +924,13 @@ class FoxMCPTools:
                 return f"Error reloading page: {response['error']}"
 
             if response.get("type") == "response":
-                cache_text = " (bypassing cache)" if params.bypass_cache else ""
-                return f"Successfully reloaded tab {params.tab_id}{cache_text}"
+                cache_text = " (bypassing cache)" if bypass_cache else ""
+                return f"Successfully reloaded tab {tab_id}{cache_text}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to reload page: {error_msg}"
 
-            return f"Unable to reload tab {params.tab_id}"
+            return f"Unable to reload tab {tab_id}"
 
         # Go to URL Tool
         @self.mcp.tool()

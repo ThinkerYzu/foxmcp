@@ -49,7 +49,7 @@ foxmcp/
     │   ├── test_real_firefox_communication.py # Real Firefox extension tests
     │   ├── test_ui_storage_sync.py        # UI storage synchronization tests with Firefox
     │   ├── test_window_management.py      # End-to-end window management tests with Firefox
-    │   ├── test_end_to_end_mcp.py         # Complete MCP tool chain tests
+    │   ├── test_end_to_end_mcp.py         # Complete MCP tool chain tests (includes navigation reload)
     │   ├── test_test_helper_protocol.py   # Test helper protocol unit tests
     │   └── foxmcp_scripts/    # External scripts for predefined script execution tests
     │       ├── simple_test.sh     # Basic test script (no user interaction)
