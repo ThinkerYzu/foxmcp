@@ -544,7 +544,7 @@ class FoxMCPTools:
         @self.mcp.tool()
         async def history_query(
             query: str,
-            max_results: int = 50,
+            max_results: int = 200,
             start_time: Optional[str] = None,
             end_time: Optional[str] = None
         ) -> str:
@@ -552,7 +552,7 @@ class FoxMCPTools:
 
             Args:
                 query: Search query for history
-                max_results: Maximum number of results (default: 50)
+                max_results: Maximum number of results (default: 200)
                 start_time: Start time filter (ISO format, optional)
                 end_time: End time filter (ISO format, optional)
             """
