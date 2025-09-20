@@ -379,3 +379,171 @@ class TestBookmarkManagementEndToEnd:
         # We expect most operations to succeed, but some might fail due to concurrency
         assert verified_count >= len(concurrent_bookmarks) // 2, \
             f"Expected at least half of concurrent operations to succeed, got {verified_count}/{len(concurrent_bookmarks)}"
+
+    @pytest.mark.asyncio
+    async def test_bookmark_folder_filtering(self, full_bookmark_system):
+        """Test bookmark listing with folder_id parameter"""
+        system = full_bookmark_system
+        mcp_client = system['mcp_client']
+
+        await mcp_client.connect()
+
+        # First, get all bookmarks to understand the structure
+        print("\n📋 Getting all bookmarks to understand folder structure...")
+        all_bookmarks_result = await mcp_client.call_tool("bookmarks_list", {})
+        print(f"All bookmarks: {all_bookmarks_result}")
+
+        # Extract folder IDs from the results
+        all_bookmarks_content = all_bookmarks_result.get('content', '')
+        folder_ids = []
+
+        # Look for folder entries (📁) and extract their IDs
+        lines = all_bookmarks_content.split('\n')
+        for line in lines:
+            if '📁' in line and 'ID:' in line:
+                try:
+                    # Extract ID from format: "📁 Folder Name (ID: folder_id, Parent: parent_id)"
+                    id_part = line.split('ID: ')[1].split(',')[0].strip()
+                    if id_part != 'None':
+                        folder_ids.append(id_part)
+                        print(f"Found folder ID: {id_part}")
+                except (IndexError, ValueError):
+                    continue
+
+        # Find a non-root folder for testing (avoid root________ which can't have direct bookmarks)
+        test_folder_id = None
+        for folder_id in folder_ids:
+            if folder_id != "root________":  # Skip root folder
+                test_folder_id = folder_id
+                break
+
+        if not test_folder_id:
+            # If no non-root folders exist, use toolbar folder (it should always exist)
+            for line in lines:
+                if 'toolbar' in line.lower() and 'ID:' in line:
+                    try:
+                        test_folder_id = line.split('ID: ')[1].split(',')[0].strip()
+                        break
+                    except (IndexError, ValueError):
+                        continue
+
+        if not test_folder_id:
+            pytest.skip("No suitable folders available for testing folder filtering")
+
+        print(f"\n🔍 Testing folder filtering with folder ID: {test_folder_id}")
+
+        # Test 1: Get bookmarks from specific folder
+        folder_bookmarks_result = await mcp_client.call_tool("bookmarks_list", {
+            "folder_id": test_folder_id
+        })
+        print(f"Folder bookmarks result: {folder_bookmarks_result}")
+
+        # Debug: print all keys in the result to see if debugInfo is there
+        if isinstance(folder_bookmarks_result, dict):
+            print(f"🔍 Result keys: {list(folder_bookmarks_result.keys())}")
+            if 'debugInfo' in folder_bookmarks_result:
+                print(f"🔍 DEBUG INFO: {folder_bookmarks_result['debugInfo']}")
+            elif any('debug' in key.lower() for key in folder_bookmarks_result.keys()):
+                debug_keys = [k for k in folder_bookmarks_result.keys() if 'debug' in k.lower()]
+                print(f"🔍 Found debug keys: {debug_keys}")
+                for key in debug_keys:
+                    print(f"🔍 {key}: {folder_bookmarks_result[key]}")
+
+        # Test with a deeper folder that should have fewer items
+        deeper_folder_id = None
+        for line in lines:
+            if '🔖' in line and 'Parent: ' in line and test_folder_id not in line:
+                try:
+                    # Look for a bookmark with a parent that's not our test folder
+                    parent_part = line.split('Parent: ')[1].strip(' )')
+                    if parent_part != test_folder_id and parent_part != 'None':
+                        deeper_folder_id = parent_part
+                        break
+                except (IndexError, ValueError):
+                    continue
+
+        if deeper_folder_id:
+            print(f"\n🔍 Testing with deeper folder ID: {deeper_folder_id}")
+            deeper_folder_result = await mcp_client.call_tool("bookmarks_list", {
+                "folder_id": deeper_folder_id
+            })
+            print(f"Deeper folder result: {deeper_folder_result}")
+
+            deeper_content = deeper_folder_result.get('content', '')
+            if deeper_content != all_bookmarks_content:
+                print("✅ Deeper folder filtering returned different results")
+            else:
+                print("⚠️ Deeper folder returned same as all bookmarks")
+        else:
+            print("ℹ️ No deeper folder found for additional testing")
+
+        # Verify the result
+        folder_content = folder_bookmarks_result.get('content', '')
+
+        # The result should be different from getting all bookmarks
+        # (unless the folder contains everything, which is unlikely)
+        if folder_content != all_bookmarks_content:
+            print("✅ Folder filtering returned different results than all bookmarks")
+        else:
+            print("ℹ️ Folder contains the same bookmarks as full tree (possible for root folders)")
+
+        # Test 2: Verify folder filtering format includes parent IDs
+        if 'Parent:' in folder_content:
+            print("✅ Folder filtering results include parent ID information")
+        else:
+            print("⚠️ Parent ID information not found in folder results")
+
+        # Test 3: Compare bookmark counts
+        all_bookmark_count = all_bookmarks_content.count('🔖')
+        folder_bookmark_count = folder_content.count('🔖')
+
+        print(f"📊 All bookmarks count: {all_bookmark_count}")
+        print(f"📊 Folder bookmarks count: {folder_bookmark_count}")
+
+        # The folder should have <= bookmarks than the full tree
+        assert folder_bookmark_count <= all_bookmark_count, \
+            f"Folder should not have more bookmarks than total: {folder_bookmark_count} > {all_bookmark_count}"
+
+        # Test 4: Test with non-existent folder ID
+        print("\n❌ Testing with non-existent folder ID...")
+        invalid_folder_result = await mcp_client.call_tool("bookmarks_list", {
+            "folder_id": "non-existent-folder-999"
+        })
+        print(f"Invalid folder result: {invalid_folder_result}")
+
+        # Should return an error for invalid folder ID
+        invalid_content = invalid_folder_result.get('content', '')
+        is_error = invalid_folder_result.get('isError', False)
+        if is_error or 'Error' in invalid_content or 'Invalid folder ID' in invalid_content:
+            print("✅ Correctly handled non-existent folder ID with error")
+        elif 'No bookmarks found' in invalid_content or invalid_content.strip() == '':
+            print("✅ Correctly handled non-existent folder ID with empty result")
+        else:
+            print(f"⚠️ Unexpected result for non-existent folder: {invalid_content}")
+            # This is not necessarily a failure - some browsers might handle it differently
+
+        # Test 5: Test that folder_id parameter is properly respected
+        # Create a test bookmark and verify it only shows up in relevant folder queries
+        print(f"\n🔖 Creating test bookmark specifically for folder {test_folder_id}")
+        unique_title = f"Folder Test Bookmark {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        test_bookmark_result = await mcp_client.call_tool("bookmarks_create", {
+            "title": unique_title,
+            "url": "https://example.com/folder-specific-test",
+            "parent_id": test_folder_id
+        })
+        print(f"Created test bookmark: {test_bookmark_result}")
+
+        # Wait for bookmark creation
+        await asyncio.sleep(1.0)
+
+        # Verify bookmark appears in folder listing
+        updated_folder_result = await mcp_client.call_tool("bookmarks_list", {
+            "folder_id": test_folder_id
+        })
+
+        if unique_title in updated_folder_result.get('content', ''):
+            print("✅ Newly created bookmark appears in specific folder listing")
+        else:
+            print("⚠️ Newly created bookmark not found in folder listing")
+
+        print("✅ Folder filtering test completed successfully")

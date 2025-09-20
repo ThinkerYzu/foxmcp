@@ -454,27 +454,50 @@ async function handleBookmarksAction(id, action, data) {
   try {
     switch (action) {
       case 'bookmarks.list':
-        const bookmarkTree = await browser.bookmarks.getTree();
-        // Flatten the tree structure into a flat array
-        function flattenBookmarks(nodes) {
-          let result = [];
-          for (const node of nodes) {
-            // Add current node if it's a folder or has a URL (bookmark)
-            result.push({
+        let bookmarks;
+
+        // Check if folder filtering is requested
+        if (data && data.folderId) {
+          try {
+            // Get bookmarks from specific folder
+            const folderChildren = await browser.bookmarks.getChildren(data.folderId);
+            bookmarks = folderChildren.map(node => ({
               id: node.id,
               title: node.title,
               url: node.url,
               isFolder: !node.url,
               parentId: node.parentId
-            });
-            // Recursively add children
-            if (node.children) {
-              result = result.concat(flattenBookmarks(node.children));
-            }
+            }));
+          } catch (folderError) {
+            // Handle invalid folder ID
+            sendError(id, 'INVALID_FOLDER_ID', `Invalid folder ID: ${data.folderId}. ${folderError.message}`);
+            return;
           }
-          return result;
+        } else {
+          // Get all bookmarks (existing behavior)
+          const bookmarkTree = await browser.bookmarks.getTree();
+          // Flatten the tree structure into a flat array
+          function flattenBookmarks(nodes) {
+            let result = [];
+            for (const node of nodes) {
+              // Add current node if it's a folder or has a URL (bookmark)
+              result.push({
+                id: node.id,
+                title: node.title,
+                url: node.url,
+                isFolder: !node.url,
+                parentId: node.parentId
+              });
+              // Recursively add children
+              if (node.children) {
+                result = result.concat(flattenBookmarks(node.children));
+              }
+            }
+            return result;
+          }
+          bookmarks = flattenBookmarks(bookmarkTree);
         }
-        const bookmarks = flattenBookmarks(bookmarkTree);
+
         sendResponse(id, action, { bookmarks });
         break;
 

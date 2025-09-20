@@ -107,7 +107,10 @@ Claude Code provides built-in MCP support that makes it easy to use FoxMCP brows
 - `history_delete_item(url)` - Delete specific history item
 
 ### Bookmark Management
-- `bookmarks_list(folder_id=None)` - List bookmarks
+- `bookmarks_list(folder_id=None)` - List bookmarks from all folders or a specific folder
+  - Returns formatted text with folder (📁) and bookmark (🔖) entries
+  - Each item includes unique ID and parent folder ID for navigation
+  - When `folder_id` is provided, returns only direct children of that folder
 - `bookmarks_search(query)` - Search bookmarks
 - `bookmarks_create(title, url, parent_id=None)` - Create bookmark
 - `bookmarks_delete(bookmark_id)` - Delete bookmark

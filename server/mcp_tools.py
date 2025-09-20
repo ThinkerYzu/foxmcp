@@ -691,6 +691,19 @@ class FoxMCPTools:
 
             Args:
                 folder_id: Optional folder ID to list bookmarks from
+
+            Returns:
+                Formatted string with bookmark information:
+                "Bookmarks:
+                📁 {folder_title} (ID: {folder_id}, Parent: {parent_id})
+                🔖 {bookmark_title} - {bookmark_url} (ID: {bookmark_id}, Parent: {parent_id})"
+
+                Format details:
+                - Folders are prefixed with 📁 emoji
+                - Bookmarks are prefixed with 🔖 emoji
+                - Each item includes its unique ID and parent ID for reference
+                - Parent ID shows which folder contains the item
+                - Returns "No bookmarks found" if the folder/root is empty
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -715,10 +728,11 @@ class FoxMCPTools:
 
                 result = "Bookmarks:\n"
                 for bookmark in bookmarks:
+                    parent_info = f", Parent: {bookmark.get('parentId', 'None')}"
                     if bookmark.get("isFolder", False):
-                        result += f"📁 {bookmark.get('title', 'Untitled Folder')} (ID: {bookmark.get('id')})\n"
+                        result += f"📁 {bookmark.get('title', 'Untitled Folder')} (ID: {bookmark.get('id')}{parent_info})\n"
                     else:
-                        result += f"🔖 {bookmark.get('title', 'Untitled')} - {bookmark.get('url', 'No URL')} (ID: {bookmark.get('id')})\n"
+                        result += f"🔖 {bookmark.get('title', 'Untitled')} - {bookmark.get('url', 'No URL')} (ID: {bookmark.get('id')}{parent_info})\n"
 
                 return result
 
