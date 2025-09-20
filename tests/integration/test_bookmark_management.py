@@ -164,7 +164,7 @@ class TestBookmarkManagementEndToEnd:
             # Verify creation was successful
             result_content = result.get('content', '')
             assert result.get('success'), f"Failed to create bookmark: {result}"
-            assert "Created bookmark:" in result_content, f"Expected success message not found: {result}"
+            assert "Created bookmark:" in result.get('content', ''), f"Expected success message not found: {result}"
             assert bookmark["title"] in result_content, f"Bookmark title not in result: {result}"
             assert bookmark["url"] in result_content, f"Bookmark URL not in result: {result}"
         
@@ -215,7 +215,7 @@ class TestBookmarkManagementEndToEnd:
                 "title": bookmark["title"],
                 "url": bookmark["url"]
             })
-            assert "Created bookmark:" in result
+            assert "Created bookmark:" in result.get('content', '')
         
         # Wait for bookmarks to be indexed
         await asyncio.sleep(1.0)
@@ -236,13 +236,14 @@ class TestBookmarkManagementEndToEnd:
             })
             print(f"Search result: {search_result}")
             
+            search_content = search_result.get('content', '') if isinstance(search_result, dict) else search_result
             if expected_titles:
                 for title in expected_titles:
-                    assert title in search_result, f"Expected '{title}' in search results for '{query}'"
+                    assert title in search_content, f"Expected '{title}' in search results for '{query}'"
                 print(f"✅ Found expected bookmarks for query '{query}'")
             else:
                 # For empty results, check for appropriate message
-                assert "No bookmarks found" in search_result or search_result.strip() == "", f"Expected no results for '{query}', got: {search_result}"
+                assert "No bookmarks found" in search_content or search_content.strip() == "", f"Expected no results for '{query}', got: {search_result}"
                 print(f"✅ Correctly found no results for query '{query}'")
     
     @pytest.mark.asyncio
@@ -262,19 +263,21 @@ class TestBookmarkManagementEndToEnd:
             "url": test_bookmark["url"]
         })
         
-        assert "Created bookmark:" in create_result
+        assert "Created bookmark:" in create_result.get('content', '')
         
         # Extract bookmark ID
         bookmark_id = None
-        if "ID:" in create_result:
-            bookmark_id = create_result.split("ID: ")[1].rstrip(")")
+        create_content = create_result.get('content', '')
+        if "ID:" in create_content:
+            bookmark_id = create_content.split("ID: ")[1].rstrip(")")
             print(f"Created bookmark with ID: {bookmark_id}")
         
         assert bookmark_id, f"Could not extract bookmark ID from: {create_result}"
         
         # Verify bookmark exists in list
         list_result = await mcp_client.call_tool("bookmarks_list", {})
-        assert test_bookmark["title"] in list_result, "Bookmark should exist before deletion"
+        list_content = list_result.get('content', '')
+        assert test_bookmark["title"] in list_content, "Bookmark should exist before deletion"
         
         # Delete the bookmark
         print(f"\n🗑️ Deleting bookmark with ID: {bookmark_id}")
@@ -284,7 +287,8 @@ class TestBookmarkManagementEndToEnd:
         print(f"Deletion result: {delete_result}")
         
         # Verify deletion was successful
-        assert "Successfully deleted bookmark" in delete_result or "Deleted bookmark" in delete_result, f"Failed to delete bookmark: {delete_result}"
+        delete_content = delete_result.get('content', '')
+        assert "Successfully deleted bookmark" in delete_content or "Deleted bookmark" in delete_content, f"Failed to delete bookmark: {delete_result}"
         
         # Wait a moment for deletion to be processed
         await asyncio.sleep(1.0)

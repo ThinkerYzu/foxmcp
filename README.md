@@ -111,7 +111,8 @@ Claude Code provides built-in MCP support that makes it easy to use FoxMCP brows
   - Returns formatted text with folder (📁) and bookmark (🔖) entries
   - Each item includes unique ID and parent folder ID for navigation
   - When `folder_id` is provided, returns only direct children of that folder
-- `bookmarks_search(query)` - Search bookmarks
+- `bookmarks_search(query)` - Search bookmarks by title or URL
+  - Returns formatted text with matching bookmark entries including ID and parent folder ID
 - `bookmarks_create(title, url, parent_id=None)` - Create bookmark
 - `bookmarks_delete(bookmark_id)` - Delete bookmark
 

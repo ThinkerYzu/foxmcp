@@ -745,6 +745,16 @@ class FoxMCPTools:
 
             Args:
                 query: Search query for bookmarks
+
+            Returns:
+                Formatted string with search results:
+                "Found N bookmarks for 'query':
+                🔖 {bookmark_title} - {bookmark_url} (ID: {bookmark_id}, Parent: {parent_id})"
+
+                Format details:
+                - Only bookmarks (not folders) are included in search results
+                - Each result includes title, URL, unique ID, and parent folder ID
+                - Returns "No bookmarks found" if no matches
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -770,7 +780,8 @@ class FoxMCPTools:
                 result = f"Found {len(bookmarks)} bookmarks for '{query}':\n"
                 for bookmark in bookmarks:
                     if not bookmark.get("isFolder", False):
-                        result += f"🔖 {bookmark.get('title', 'Untitled')} - {bookmark.get('url', 'No URL')}\n"
+                        parent_info = f", Parent: {bookmark.get('parentId', 'None')}"
+                        result += f"🔖 {bookmark.get('title', 'Untitled')} - {bookmark.get('url', 'No URL')} (ID: {bookmark.get('id')}{parent_info})\n"
 
                 return result
 
