@@ -312,6 +312,26 @@ echo "(function() { document.body.style.backgroundColor = 'lightblue'; return 'B
 4. **Testing**: Test scripts independently before using with FoxMCP
 5. **Security**: Never accept untrusted input or execute dangerous commands
 
+### Documenting Scripts for AI Tools
+
+**Important**: When you create new predefined scripts, document them in your project's `CLAUDE.md` file so AI tools can discover and use them effectively.
+
+**Add to your CLAUDE.md**:
+```markdown
+## Foxmcp Predefined External Scripts
+- script_name.sh: Brief description of what the script does
+  Usage: script_name.sh "arg1" "arg2"
+  Example: script_name.sh "Get page title"
+- another_script.sh: Another script description
+  Usage: another_script.sh [optional_arg]
+```
+
+**Benefits**:
+- AI tools automatically discover your custom scripts
+- Enables natural language usage ("extract the page title" → calls your script)
+- Provides usage examples for correct parameter formatting
+- Maintains documentation alongside your codebase
+
 ### Example Script Collection
 
 Create a collection of useful scripts:
