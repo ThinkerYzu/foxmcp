@@ -92,15 +92,15 @@ test: run-tests
 
 run-tests: package
 	@echo "Running all tests with coverage..."
-	cd tests && python run_tests.py
+	cd tests && FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py
 
 test-unit:
 	@echo "Running unit tests..."
-	cd tests && PYTHONPATH=.. python run_tests.py unit
+	cd tests && PYTHONPATH=.. FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py unit
 
 test-integration: package
 	@echo "Running integration tests..."
-	cd tests && PYTHONPATH=.. python run_tests.py integration
+	cd tests && PYTHONPATH=.. FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py integration
 
 
 # Quality Checks

@@ -22,7 +22,7 @@ class FirefoxTestManager:
     """Manages Firefox instances for testing with proper extension configuration"""
 
     def __init__(self, firefox_path=None, test_port=None, coordination_file=None):
-        self.firefox_path = firefox_path or os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+        self.firefox_path = firefox_path or os.environ.get('FIREFOX_PATH', 'firefox')
         self.test_port = test_port or get_firefox_test_port()
         self.coordination_file = coordination_file
         self.profile_dir = None

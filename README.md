@@ -602,10 +602,10 @@ make status            # Show project status
 
 ## Testing
 
-The project includes comprehensive test coverage with **91 tests** and **74% code coverage**:
+The project includes comprehensive test coverage with **173 tests** and **74% code coverage**:
 
-- **Unit Tests (47):** Individual component testing
-- **Integration Tests (44):** End-to-end WebSocket communication
+- **Unit Tests (43):** Individual component testing
+- **Integration Tests (124):** End-to-end WebSocket communication
 - **Protocol Tests:** Message format validation
 - **Ping-Pong Tests:** Connection validation
 - **Firefox Integration Tests:** Real browser extension testing with dynamic port allocation
@@ -634,6 +634,14 @@ cd tests && python -m pytest integration/test_firefox_extension_communication.py
 - **Robust fixture management** with proper async cleanup
 - **Firefox integration testing** with temporary profiles
 - **Real WebSocket communication** between server and extension
+- **Timeout protection** for network-dependent tests
+- **Portable Firefox path detection** (supports both commands and paths)
+
+**Recent Improvements:**
+- Fixed hardcoded Firefox paths across all integration tests
+- Added timeout protection for external URL navigation tests
+- Improved server configuration consistency across test fixtures
+- Enhanced error handling for network-dependent operations
 
 Coverage reports are generated in `tests/htmlcov/`.
 
@@ -751,10 +759,10 @@ Common issues with external MCP agents:
 ## Implementation Status
 
 ### 📊 Test Results - ALL PASSING ✅
-- **91 total tests** across comprehensive test suites
+- **173 total tests** across comprehensive test suites
 - **74% code coverage** of server components
-- **44 integration tests** including real Firefox browser communication and automated UI validation
-- **47 unit tests** covering individual component functionality
+- **124 integration tests** including real Firefox browser communication and automated UI validation
+- **43 unit tests** covering individual component functionality
 - **All browser API functions tested** and verified working
 - **Real WebSocket communication confirmed** between server and Firefox extension
 

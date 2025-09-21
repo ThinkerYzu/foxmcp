@@ -100,7 +100,7 @@ class TestRealFirefoxCommunication:
             pytest.skip("Extension XPI not found. Run 'make package' first.")
 
         # Skip if Firefox not available
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip(f"Firefox not found at {firefox_path}. Set FIREFOX_PATH environment variable.")
 
@@ -158,7 +158,7 @@ class TestRealFirefoxCommunication:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found. Run 'make package' first.")
 
-        with FirefoxTestManager(firefox_path=os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox'),
+        with FirefoxTestManager(firefox_path=os.environ.get('FIREFOX_PATH', 'firefox'),
                                 test_port=coordinated_server.test_ports['websocket'],
                                 coordination_file=coordinated_server.coordination_file) as firefox:
             # Set up and start Firefox

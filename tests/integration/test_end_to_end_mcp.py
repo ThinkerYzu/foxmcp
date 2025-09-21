@@ -159,7 +159,7 @@ class TestEndToEndMCP:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found. Run 'make package' first.")
         
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip(f"Firefox not found at {firefox_path}. Set FIREFOX_PATH environment variable.")
         
@@ -222,7 +222,7 @@ class TestEndToEndMCP:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found")
             
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')  
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip("Firefox not found")
         
@@ -688,7 +688,7 @@ class TestEndToEndMCP:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found")
             
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')  
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip("Firefox not found")
         
@@ -818,7 +818,7 @@ class TestEndToEndMCP:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found")
             
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')  
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip("Firefox not found")
         
@@ -999,7 +999,7 @@ class TestEndToEndMCP:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found")
 
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip("Firefox not found")
 
@@ -1207,7 +1207,7 @@ class TestEndToEndMCP:
         if not extension_xpi or not os.path.exists(extension_xpi):
             pytest.skip("Extension XPI not found")
             
-        firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')  
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')  
         if not os.path.exists(os.path.expanduser(firefox_path)):
             pytest.skip("Firefox not found")
         

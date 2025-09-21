@@ -59,7 +59,7 @@ class TestHistoryMCPIntegration:
             await asyncio.sleep(0.5)  # Allow server to start
             
             # Start Firefox with extension
-            firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+            firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
             if not os.path.exists(os.path.expanduser(firefox_path)):
                 pytest.skip(f"Firefox not found at {firefox_path}")
             

@@ -60,7 +60,7 @@ class TestBookmarkManagementEndToEnd:
             await asyncio.sleep(0.1)  # Let server start
             
             # Check Firefox path
-            firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+            firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
             if not os.path.exists(os.path.expanduser(firefox_path)):
                 pytest.skip(f"Firefox not found at {firefox_path}")
             
@@ -322,7 +322,8 @@ class TestBookmarkManagementEndToEnd:
             "bookmark_id": "non-existent-bookmark-id"
         })
         print(f"Non-existent deletion result: {delete_result}")
-        assert "Error" in delete_result or "Failed" in delete_result or "not found" in delete_result.lower(), \
+        result_content = delete_result.get("content", "") if isinstance(delete_result, dict) else str(delete_result)
+        assert "Error" in result_content or "Failed" in result_content or "not found" in result_content.lower(), \
             "Should get error when deleting non-existent bookmark"
         
         print("✅ Error handling tests completed")
@@ -374,8 +375,9 @@ class TestBookmarkManagementEndToEnd:
         final_list = await mcp_client.call_tool("bookmarks_list", {})
         
         verified_count = 0
+        final_list_content = final_list.get("content", "") if isinstance(final_list, dict) else str(final_list)
         for bookmark in concurrent_bookmarks:
-            if bookmark["title"] in final_list:
+            if bookmark["title"] in final_list_content:
                 verified_count += 1
         
         print(f"✅ Verified {verified_count}/{len(concurrent_bookmarks)} concurrent bookmarks in final list")

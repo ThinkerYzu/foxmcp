@@ -32,7 +32,7 @@ async def test_complete_mcp_to_firefox_chain():
         print("❌ Extension XPI not found. Run 'make package' first.")
         return False
         
-    firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+    firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
     if not os.path.exists(os.path.expanduser(firefox_path)):
         print(f"❌ Firefox not found at {firefox_path}. Set FIREFOX_PATH environment variable.")
         return False

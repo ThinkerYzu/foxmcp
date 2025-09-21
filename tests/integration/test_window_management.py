@@ -56,7 +56,7 @@ class TestWindowManagementEndToEnd:
             )
             
             # Start Firefox with extension
-            firefox_path = os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+            firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
             firefox = FirefoxTestManager(
                 firefox_path=firefox_path,
                 test_port=test_port,

@@ -33,7 +33,7 @@ class TestFirefoxExtensionCommunication:
     @pytest.fixture
     def firefox_path(self):
         """Get Firefox path from environment or default"""
-        return os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox')
+        return os.environ.get('FIREFOX_PATH', 'firefox')
 
     @pytest.fixture  
     def temp_profile(self):
@@ -170,7 +170,7 @@ user_pref("browser.tabs.remote.autostart", false);
             
             # Create Firefox test manager with coordinated port
             firefox_manager = FirefoxTestManager(
-                firefox_path=os.environ.get('FIREFOX_PATH', '~/tmp/ff2/bin/firefox'),
+                firefox_path=os.environ.get('FIREFOX_PATH', 'firefox'),
                 test_port=running_server._test_port
             )
             
