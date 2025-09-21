@@ -31,6 +31,10 @@ the goal of the project pretty well. Check CLAUDE.md.
 ## Quick Start
 
 ```bash
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
 # Install dependencies and build
 make setup
 make build
@@ -39,10 +43,11 @@ make build
 make run-server
 
 # In another terminal, run tests
+source venv/bin/activate  # Activate venv in new terminal
 make test
 
-# Run integration tests (includes Firefox extension testing)
-make test-integration
+# Run integration tests (requires Firefox path if Firefox not in PATH)
+make FIREFOX_PATH="/path/to/firefox" test-integration  # Optional: set if needed
 
 ```
 
