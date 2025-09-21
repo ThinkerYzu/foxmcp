@@ -44,9 +44,9 @@ make run-server
 
 # In another terminal, run tests
 source venv/bin/activate  # Activate venv in new terminal
-make test
+make FIREFOX_PATH="/path/to/firefox" test  # Set Firefox path if not in PATH
 
-# Run integration tests (requires Firefox path if Firefox not in PATH)
+# Run integration tests only
 make FIREFOX_PATH="/path/to/firefox" test-integration  # Optional: set if needed
 
 ```
