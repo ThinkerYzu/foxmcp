@@ -994,19 +994,19 @@ class FoxMCPTools:
         """Setup content access tools"""
 
         # Get Page Text Tool
-        class ContentGetTextParams(BaseModel):
-            """Parameters for getting page text content"""
-            tab_id: int = Field(description="ID of the tab to get content from")
-
         @self.mcp.tool()
-        async def content_get_text(params: ContentGetTextParams) -> str:
-            """Get text content from a tab's page"""
+        async def content_get_text(tab_id: int) -> str:
+            """Get text content from a tab's page
+
+            Args:
+                tab_id: ID of the tab to get content from
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "content.get_text",
                 "data": {
-                    "tabId": params.tab_id
+                    "tabId": tab_id
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -1022,29 +1022,29 @@ class FoxMCPTools:
                 title = response["data"].get("title", "Unknown Title")
 
                 if not text:
-                    return f"No text content found in tab {params.tab_id} ({title})"
+                    return f"No text content found in tab {tab_id} ({title})"
 
                 return f"Text content from {title} ({url}):\n\n{text[:2000]}{'...' if len(text) > 2000 else ''}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to get page text: {error_msg}"
 
-            return f"Unable to get text content from tab {params.tab_id}"
+            return f"Unable to get text content from tab {tab_id}"
 
         # Get Page HTML Tool
-        class ContentGetHtmlParams(BaseModel):
-            """Parameters for getting page HTML content"""
-            tab_id: int = Field(description="ID of the tab to get HTML content from")
-
         @self.mcp.tool()
-        async def content_get_html(params: ContentGetHtmlParams) -> str:
-            """Get HTML content from a tab's page"""
+        async def content_get_html(tab_id: int) -> str:
+            """Get HTML content from a tab's page
+
+            Args:
+                tab_id: ID of the tab to get HTML content from
+            """
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "content.get_html",
                 "data": {
-                    "tabId": params.tab_id
+                    "tabId": tab_id
                 },
                 "timestamp": datetime.now().isoformat()
             }
@@ -1060,14 +1060,14 @@ class FoxMCPTools:
                 title = response["data"].get("title", "Unknown Title")
 
                 if not html:
-                    return f"No HTML content found in tab {params.tab_id} ({title})"
+                    return f"No HTML content found in tab {tab_id} ({title})"
 
                 return f"HTML content from {title} ({url}):\n\n{html[:2000]}{'...' if len(html) > 2000 else ''}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to get page HTML: {error_msg}"
 
-            return f"Unable to get HTML content from tab {params.tab_id}"
+            return f"Unable to get HTML content from tab {tab_id}"
 
         # Execute Script Tool
         @self.mcp.tool()
