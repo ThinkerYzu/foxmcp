@@ -105,7 +105,10 @@ Claude Code provides built-in MCP support that makes it easy to use FoxMCP brows
 - `tabs_create(url, active=True, pinned=False, window_id=None)` - Create new tab (optionally in specific window)
 - `tabs_close(tab_id)` - Close specific tab
 - `tabs_switch(tab_id)` - Switch to specific tab
-- `tabs_capture_screenshot(window_id=None, format="png", quality=90)` - Capture screenshot of visible tab
+- `tabs_capture_screenshot(filename=None, window_id=None, format="png", quality=90)` - Capture screenshot of visible tab
+  - If `filename` provided: saves screenshot to file and returns success message
+  - If `filename` omitted: returns base64 encoded image data URL
+  - Automatically adds file extension (.png/.jpeg) if not provided
 
 ### History Operations
 - `history_query(query, max_results=50)` - Search browser history

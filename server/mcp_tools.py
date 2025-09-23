@@ -9,6 +9,7 @@ import uuid
 import os
 import subprocess
 import json
+import base64
 from datetime import datetime
 from typing import Dict, Any, Optional, List, TypedDict, Union
 
@@ -540,6 +541,7 @@ class FoxMCPTools:
         # Tab Screenshot Tool
         @self.mcp.tool()
         async def tabs_capture_screenshot(
+            filename: Optional[str] = None,
             window_id: Optional[int] = None,
             format: str = "png",
             quality: int = 90
@@ -547,12 +549,13 @@ class FoxMCPTools:
             """Capture a screenshot of the visible tab
 
             Args:
+                filename: Name of the file to save the screenshot (optional, if not provided returns base64)
                 window_id: ID of the window to capture (optional, defaults to current window)
                 format: Image format ('png' or 'jpeg', default: 'png')
                 quality: Image quality for JPEG format (1-100, default: 90)
 
             Returns:
-                Base64 encoded image data URL of the screenshot
+                Success message with file path if filename provided, otherwise base64 encoded image data URL
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -580,14 +583,35 @@ class FoxMCPTools:
                 if not data_url:
                     return "No screenshot data received"
 
-                # Extract just the base64 part and show info
+                # Extract the base64 part from data URL
                 data_prefix = f"data:image/{captured_format};base64,"
-                if data_url.startswith(data_prefix):
-                    base64_data = data_url[len(data_prefix):]
+                if not data_url.startswith(data_prefix):
+                    return f"Screenshot captured but unexpected format: {data_url[:100]}..."
+
+                base64_data = data_url[len(data_prefix):]
+
+                # If filename is provided, save to file
+                if filename:
+                    try:
+                        # Add file extension if not provided
+                        if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            filename = f"{filename}.{captured_format}"
+
+                        # Decode base64 and save to file
+                        image_data = base64.b64decode(base64_data)
+                        with open(filename, 'wb') as f:
+                            f.write(image_data)
+
+                        file_size = len(image_data)
+                        return f"Screenshot saved to '{filename}' (window {captured_window_id}, {captured_format}, quality: {captured_quality}, size: {file_size} bytes)"
+
+                    except Exception as e:
+                        return f"Error saving screenshot to file '{filename}': {str(e)}"
+
+                else:
+                    # Return base64 data as before when no filename provided
                     data_size = len(base64_data)
                     return f"Screenshot captured successfully from window {captured_window_id} ({captured_format}, quality: {captured_quality}):\n{data_url[:100]}...\n\nBase64 data size: {data_size} characters"
-                else:
-                    return f"Screenshot captured but unexpected format: {data_url[:100]}..."
 
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")

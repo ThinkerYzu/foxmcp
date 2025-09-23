@@ -1752,8 +1752,36 @@ class TestEndToEndMCP:
         assert "(jpeg, quality: 80)" in jpeg_content, "Should show JPEG format and quality"
         print("   ✅ JPEG format screenshot successful")
 
-        # Step 6: Test error handling with invalid window ID
-        print("\\n6️⃣  Testing error handling...")
+        # Step 6: Test screenshot with filename (file saving)
+        print("\\n6️⃣  Testing screenshot with filename...")
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_filename = os.path.join(temp_dir, "test_screenshot.png")
+
+            filename_result = await mcp_client.call_tool("tabs_capture_screenshot", {
+                "filename": test_filename,
+                "format": "png",
+                "quality": 90
+            })
+
+            assert not filename_result.get('isError', False), f"Screenshot with filename should not error: {filename_result}"
+            filename_content = filename_result.get('content', '')
+            print(f"   Filename result: {filename_content}")
+
+            assert "Screenshot saved to" in filename_content, "Should report file saved"
+            assert test_filename in filename_content, "Should show correct filename"
+            assert os.path.exists(test_filename), "Screenshot file should be created"
+
+            # Verify file is not empty and is a valid image
+            file_size = os.path.getsize(test_filename)
+            assert file_size > 0, "Screenshot file should not be empty"
+
+            print(f"   ✅ Screenshot saved to file ({file_size} bytes)")
+
+        # Step 7: Test error handling with invalid window ID
+        print("\\n7️⃣  Testing error handling...")
         try:
             error_result = await mcp_client.call_tool("tabs_capture_screenshot", {
                 "window_id": 99999  # Invalid window ID
@@ -1779,6 +1807,7 @@ class TestEndToEndMCP:
         print("  - Basic screenshot capture")
         print("  - PNG format with quality settings")
         print("  - JPEG format with quality settings")
+        print("  - Screenshot with filename (file saving)")
         print("  - Error handling for invalid parameters")
         print("  - Data URL format validation")
 
