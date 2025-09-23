@@ -353,6 +353,26 @@ async function handleTabsAction(id, action, data) {
         sendResponse(id, action, { success: true });
         break;
 
+      case 'tabs.captureVisibleTab':
+        const windowId = data.windowId || null;
+        const options = {
+          format: data.format || 'png',
+          quality: data.quality || 90
+        };
+
+        try {
+          const dataUrl = await browser.tabs.captureVisibleTab(windowId, options);
+          sendResponse(id, action, {
+            dataUrl: dataUrl,
+            format: options.format,
+            quality: options.quality,
+            windowId: windowId
+          });
+        } catch (captureError) {
+          sendError(id, 'CAPTURE_ERROR', `Failed to capture screenshot: ${captureError.message}`);
+        }
+        break;
+
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown tabs action: ${action}`);
     }

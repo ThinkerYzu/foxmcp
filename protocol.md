@@ -188,13 +188,45 @@ All messages follow this JSON structure:
 **Request:**
 ```json
 {
-  "id": "req_007", 
+  "id": "req_007",
   "type": "request",
   "action": "tabs.switch",
   "data": {
     "tabId": 123
   },
   "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+#### Capture Screenshot of Tab
+**Request:**
+```json
+{
+  "id": "req_007b",
+  "type": "request",
+  "action": "tabs.captureVisibleTab",
+  "data": {
+    "windowId": 1,
+    "format": "png",
+    "quality": 90
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_007b",
+  "type": "response",
+  "action": "tabs.captureVisibleTab",
+  "data": {
+    "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "format": "png",
+    "quality": 90,
+    "windowId": 1
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
 
@@ -729,6 +761,7 @@ All messages follow this JSON structure:
 - `SCRIPT_NOT_EXECUTABLE` - External script file lacks execute permissions
 - `INVALID_JSON` - Script arguments contain malformed JSON
 - `INVALID_SCRIPT_ARGS` - Script arguments must be JSON array of strings or empty string
+- `CAPTURE_ERROR` - Failed to capture screenshot of the visible tab
 
 ## Test Helper Messages
 

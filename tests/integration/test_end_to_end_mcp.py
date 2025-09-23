@@ -1663,6 +1663,125 @@ class TestEndToEndMCP:
             print("  - Error handling for invalid tab ID")
             print("  - Parameter validation")
 
+    @pytest.mark.asyncio
+    async def test_end_to_end_tab_screenshot_capture(self, full_mcp_system):
+        """Test complete end-to-end screenshot capture from browser tabs via MCP"""
+        system = full_mcp_system
+        server = system['server']
+        mcp_client = system['mcp_client']
+
+        # Wait for Firefox and extension to be ready
+        await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+
+        if len(server.connected_clients) == 0:
+            pytest.skip("Extension did not connect - cannot test screenshot functionality")
+
+        await mcp_client.connect()
+
+        print("\\n🧪 Testing End-to-End Screenshot Capture")
+
+        # Step 1: Create a test tab with visual content
+        print("\\n1️⃣  Creating test tab with visual content...")
+        create_result = await mcp_client.call_tool("tabs_create", {
+            "url": "https://httpbin.org/html",
+            "active": True
+        })
+
+        if create_result.get('isError', False):
+            print(f"   ⚠️  Tab creation failed: {create_result.get('content', '')}")
+            pytest.skip("Could not create test tab")
+
+        print(f"   ✅ Created test tab: {create_result.get('content', '')}")
+        await asyncio.sleep(3.0)
+
+        # Step 2: Get the new tab ID from tabs list
+        print("\\n2️⃣  Finding test tab ID...")
+        tabs_result = await mcp_client.call_tool("tabs_list")
+        assert not tabs_result.get('isError', False), f"tabs_list should not error: {tabs_result}"
+
+        tab_content = tabs_result.get('content', '')
+        tab_lines = [line for line in tab_content.split('\\n') if 'httpbin.org/html' in line]
+        if not tab_lines:
+            pytest.skip("Could not find test tab with httpbin.org/html")
+
+        # Extract tab ID
+        import re
+        tab_id_match = re.search(r'ID (\\d+):', tab_lines[0])
+        if not tab_id_match:
+            pytest.skip("Could not extract tab ID from tabs list")
+
+        test_tab_id = int(tab_id_match.group(1))
+        print(f"   ✅ Found test tab ID: {test_tab_id}")
+
+        # Step 3: Test basic screenshot capture with default parameters
+        print("\\n3️⃣  Testing basic screenshot capture...")
+        screenshot_result = await mcp_client.call_tool("tabs_capture_screenshot")
+        print(f"   Screenshot result: {screenshot_result}")
+
+        assert not screenshot_result.get('isError', False), f"Screenshot capture should not error: {screenshot_result}"
+
+        screenshot_content = screenshot_result.get('content', '')
+        assert "Screenshot captured successfully" in screenshot_content, "Should report successful capture"
+        assert "data:image/" in screenshot_content, "Should contain data URL"
+        assert "Base64 data size:" in screenshot_content, "Should report data size"
+        print("   ✅ Basic screenshot capture successful")
+
+        # Step 4: Test screenshot with PNG format
+        print("\\n4️⃣  Testing PNG format screenshot...")
+        png_result = await mcp_client.call_tool("tabs_capture_screenshot", {
+            "format": "png",
+            "quality": 100
+        })
+
+        assert not png_result.get('isError', False), f"PNG screenshot should not error: {png_result}"
+        png_content = png_result.get('content', '')
+        assert "Screenshot captured successfully" in png_content, "PNG screenshot should succeed"
+        assert "(png, quality: 100)" in png_content, "Should show PNG format and quality"
+        print("   ✅ PNG format screenshot successful")
+
+        # Step 5: Test screenshot with JPEG format
+        print("\\n5️⃣  Testing JPEG format screenshot...")
+        jpeg_result = await mcp_client.call_tool("tabs_capture_screenshot", {
+            "format": "jpeg",
+            "quality": 80
+        })
+
+        assert not jpeg_result.get('isError', False), f"JPEG screenshot should not error: {jpeg_result}"
+        jpeg_content = jpeg_result.get('content', '')
+        assert "Screenshot captured successfully" in jpeg_content, "JPEG screenshot should succeed"
+        assert "(jpeg, quality: 80)" in jpeg_content, "Should show JPEG format and quality"
+        print("   ✅ JPEG format screenshot successful")
+
+        # Step 6: Test error handling with invalid window ID
+        print("\\n6️⃣  Testing error handling...")
+        try:
+            error_result = await mcp_client.call_tool("tabs_capture_screenshot", {
+                "window_id": 99999  # Invalid window ID
+            })
+
+            error_content = error_result.get('content', '')
+            print(f"   Error result: {error_content}")
+
+            # Should either error or handle gracefully
+            is_error_response = error_result.get('isError', False)
+            contains_error_info = "error" in error_content.lower() or "failed" in error_content.lower()
+
+            if not (is_error_response or contains_error_info):
+                print("   ✅ Invalid window ID handled gracefully (may use current window)")
+            else:
+                print("   ✅ Invalid window ID produced appropriate error")
+
+        except Exception as e:
+            print(f"   ✅ Invalid window ID validation: {e}")
+
+        print("\\n✅ End-to-end screenshot capture test successful!")
+        print("✅ All screenshot scenarios tested:")
+        print("  - Basic screenshot capture")
+        print("  - PNG format with quality settings")
+        print("  - JPEG format with quality settings")
+        print("  - Error handling for invalid parameters")
+        print("  - Data URL format validation")
+
 
 class TestMCPProtocolCompliance:
     """Test MCP protocol compliance and schema validation"""

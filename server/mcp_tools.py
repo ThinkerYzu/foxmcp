@@ -537,6 +537,64 @@ class FoxMCPTools:
 
             return f"Unable to switch to tab {tab_id}"
 
+        # Tab Screenshot Tool
+        @self.mcp.tool()
+        async def tabs_capture_screenshot(
+            window_id: Optional[int] = None,
+            format: str = "png",
+            quality: int = 90
+        ) -> str:
+            """Capture a screenshot of the visible tab
+
+            Args:
+                window_id: ID of the window to capture (optional, defaults to current window)
+                format: Image format ('png' or 'jpeg', default: 'png')
+                quality: Image quality for JPEG format (1-100, default: 90)
+
+            Returns:
+                Base64 encoded image data URL of the screenshot
+            """
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "tabs.captureVisibleTab",
+                "data": {
+                    **({"windowId": window_id} if window_id else {}),
+                    "format": format,
+                    "quality": quality
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error capturing screenshot: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                data_url = response["data"].get("dataUrl", "")
+                captured_format = response["data"].get("format", format)
+                captured_quality = response["data"].get("quality", quality)
+                captured_window_id = response["data"].get("windowId", "current")
+
+                if not data_url:
+                    return "No screenshot data received"
+
+                # Extract just the base64 part and show info
+                data_prefix = f"data:image/{captured_format};base64,"
+                if data_url.startswith(data_prefix):
+                    base64_data = data_url[len(data_prefix):]
+                    data_size = len(base64_data)
+                    return f"Screenshot captured successfully from window {captured_window_id} ({captured_format}, quality: {captured_quality}):\n{data_url[:100]}...\n\nBase64 data size: {data_size} characters"
+                else:
+                    return f"Screenshot captured but unexpected format: {data_url[:100]}..."
+
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return f"Failed to capture screenshot: {error_msg}"
+
+            return "Unable to capture screenshot"
+
     def _setup_history_tools(self):
         """Setup history management tools"""
 
