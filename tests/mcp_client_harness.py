@@ -19,11 +19,14 @@ except ImportError:
 
 class MCPTestClient:
     """A real MCP client for testing the complete chain"""
-    
-    def __init__(self, server_host="localhost", server_port=3000):
+
+    def __init__(self, server_host="localhost", server_port=None):
         self.server_host = server_host
         self.server_port = server_port
-        self.base_url = f"http://{server_host}:{server_port}"
+        if server_port is not None:
+            self.base_url = f"http://{server_host}:{server_port}"
+        else:
+            self.base_url = None  # Will be set when connecting
         self.session = None
         self.connected = False
     

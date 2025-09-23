@@ -7,6 +7,9 @@ import argparse
 import asyncio
 import json
 import logging
+import socket
+import sys
+import os
 import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -18,15 +21,66 @@ try:
 except ImportError:
     from mcp_tools import FoxMCPTools
 
+# Try to import port coordinator for dynamic port allocation
+try:
+    tests_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests')
+    sys.path.insert(0, tests_dir)
+    from port_coordinator import DEFAULT_PORT_RANGE, get_safe_port_range
+    HAS_PORT_COORDINATOR = True
+except ImportError:
+    HAS_PORT_COORDINATOR = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def find_available_port(start_port=3000, max_attempts=100):
+    """Find an available port starting from start_port"""
+    if HAS_PORT_COORDINATOR:
+        # Use the safe port range for MCP if available
+        port_range = get_safe_port_range('integration_mcp')
+        for port in range(port_range[0], port_range[1] + 1):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sock.bind(('localhost', port))
+                    return port
+            except OSError:
+                continue
+    else:
+        # Fallback to traditional approach
+        for i in range(max_attempts):
+            port = start_port + i
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sock.bind(('localhost', port))
+                    return port
+            except OSError:
+                continue
+
+    raise RuntimeError(f"Could not find available port starting from {start_port}")
+
 class FoxMCPServer:
-    def __init__(self, host: str = "localhost", port: int = 8765, mcp_port: int = 3000, start_mcp: bool = True):
+    def __init__(self, host: str = "localhost", port: int = 8765, mcp_port: int = None, start_mcp: bool = True):
         self.host = host
         self.port = port
-        self.mcp_port = mcp_port
+
+        # Use dynamic port allocation if mcp_port is None or if port is in use
+        if mcp_port is None:
+            self.mcp_port = find_available_port(3000)
+        else:
+            # Check if requested port is available
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sock.bind(('localhost', mcp_port))
+                    self.mcp_port = mcp_port
+            except OSError:
+                logger.warning(f"Requested MCP port {mcp_port} is in use, finding alternative...")
+                self.mcp_port = find_available_port(mcp_port)
+
+        logger.info(f"MCP server will use port {self.mcp_port}")
         self.start_mcp = start_mcp
         self.extension_connection = None
         self.pending_requests = {}  # Map of request IDs to Future objects
@@ -384,8 +438,8 @@ async def main():
                         help='Host to bind to (default: localhost)')
     parser.add_argument('--port', type=int, default=8765,
                         help='WebSocket port (default: 8765)')
-    parser.add_argument('--mcp-port', type=int, default=3000,
-                        help='MCP server port (default: 3000)')
+    parser.add_argument('--mcp-port', type=int, default=None,
+                        help='MCP server port (default: auto-detect available port)')
     parser.add_argument('--no-mcp', action='store_true',
                         help='Disable MCP server')
 

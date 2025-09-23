@@ -11,11 +11,27 @@ import random
 from contextlib import contextmanager
 from typing import Tuple, Dict, Optional
 
+# Module-level port range constants - use high ephemeral port range to avoid conflicts
+DEFAULT_PORT_RANGE = (40000, 40999)
+
+# Test suite specific port ranges
+TEST_SUITE_PORT_RANGES = {
+    'unit': (40000, 40099),
+    'integration_basic': (40100, 40199),
+    'integration_live': (40200, 40299),
+    'integration_websocket': (40300, 40399),
+    'integration_firefox': (40400, 40499),
+    'integration_mcp': (40500, 40599),
+    'integration_ping_pong': (40600, 40699),
+    'real_firefox': (40700, 40799),
+    'default': (40800, 40899)
+}
+
 
 class PortCoordinator:
     """Manages dynamic port allocation and coordination for testing"""
     
-    def __init__(self, base_port_range=(9000, 9999)):
+    def __init__(self, base_port_range=DEFAULT_PORT_RANGE):
         self.base_port_range = base_port_range
         self.allocated_ports = set()
         self.coordination_file = None
@@ -110,7 +126,7 @@ class PortCoordinator:
 
 
 @contextmanager
-def coordinated_test_ports(base_range=(9000, 9999)):
+def coordinated_test_ports(base_range=DEFAULT_PORT_RANGE):
     """Context manager for coordinated test ports"""
     coordinator = PortCoordinator(base_range)
     ports = None
@@ -178,20 +194,7 @@ class FirefoxPortCoordinator:
 
 def get_safe_port_range(test_suite: str) -> Tuple[int, int]:
     """Get safe port range for a specific test suite"""
-    # Each test suite gets a dedicated range to minimize conflicts
-    ranges = {
-        'unit': (9000, 9099),
-        'integration_basic': (9100, 9199),
-        'integration_live': (9200, 9299), 
-        'integration_websocket': (9300, 9399),
-        'integration_firefox': (9400, 9499),
-        'integration_mcp': (9500, 9599),
-        'integration_ping_pong': (9600, 9699),
-        'real_firefox': (9700, 9799),
-        'default': (9800, 9899)
-    }
-    
-    return ranges.get(test_suite, ranges['default'])
+    return TEST_SUITE_PORT_RANGES.get(test_suite, TEST_SUITE_PORT_RANGES['default'])
 
 
 # Convenience functions for common test scenarios

@@ -391,13 +391,42 @@ async function getCurrentTabUrl(tabId) {
   }
 }
 
+// Helper function to send message with retry logic for content script
+async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 2000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Check if tab exists and is accessible
+      const tab = await browser.tabs.get(tabId);
+      if (!tab) {
+        throw new Error('Tab not found');
+      }
+
+      // Skip status check for now and try to send message
+      // The content script should be available on all URLs except chrome:// pages
+      if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('moz-extension://'))) {
+        throw new Error('Cannot access content script on system pages');
+      }
+
+      const result = await browser.tabs.sendMessage(tabId, message);
+      return result;
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw new Error(`Content script not available after ${maxRetries} attempts: ${error.message}`);
+      }
+
+      // Wait longer before retry
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 // Content handlers
 async function handleContentAction(id, action, data) {
   try {
     switch (action) {
       case 'content.text':
       case 'content.get_text':
-        const textResult = await browser.tabs.sendMessage(data.tabId, {
+        const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'
         });
         sendResponse(id, action, { text: textResult.text });
@@ -405,7 +434,7 @@ async function handleContentAction(id, action, data) {
 
       case 'content.html':
       case 'content.get_html':
-        const htmlResult = await browser.tabs.sendMessage(data.tabId, {
+        const htmlResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractHTML'
         });
         sendResponse(id, action, { html: htmlResult.html });

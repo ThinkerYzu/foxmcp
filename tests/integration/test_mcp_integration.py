@@ -18,6 +18,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from server.server import FoxMCPServer
 from server.mcp_tools import FoxMCPTools
 
+# Import port constants
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from port_coordinator import DEFAULT_PORT_RANGE
+
 
 class TestMCPIntegration:
     """Test MCP server integration"""
@@ -193,17 +197,19 @@ class TestMCPServerConfiguration:
     """Test MCP server configuration options"""
     
     def test_default_ports(self):
-        """Test default port configuration"""
+        """Test default port configuration uses dynamic allocation"""
         server = FoxMCPServer(start_mcp=False)
-        
+
         assert server.port == 8765  # Default WebSocket port
-        assert server.mcp_port == 3000  # Default MCP port
+        assert server.mcp_port >= DEFAULT_PORT_RANGE[0]  # Uses dynamic allocation in safe range
+        assert server.mcp_port <= DEFAULT_PORT_RANGE[1]
     
     def test_custom_ports(self):
         """Test custom port configuration"""
-        server = FoxMCPServer(port=9000, mcp_port=4000)
-        
-        assert server.port == 9000
+        test_port = DEFAULT_PORT_RANGE[0] + 100  # Use a port from our safe range
+        server = FoxMCPServer(port=test_port, mcp_port=4000)
+
+        assert server.port == test_port
         assert server.mcp_port == 4000
     
     def test_mcp_components_initialized(self):

@@ -1038,7 +1038,7 @@ class TestEndToEndMCP:
             print(f"   ✅ Created tab: {create_result.get('content', '')}")
 
             # Wait for tab to fully load
-            await asyncio.sleep(3.0)
+            await asyncio.sleep(8.0)
 
             # Step 2: Get the new tab ID from tabs list
             print("\n2️⃣  Finding test tab ID...")
@@ -1520,7 +1520,7 @@ class TestEndToEndMCP:
             print(f"   ✅ Created tab: {create_result.get('content', '')}")
 
             # Wait for tab to fully load
-            await asyncio.sleep(3.0)
+            await asyncio.sleep(8.0)
 
             # Step 2: Get the new tab ID from tabs list
             print("\n2️⃣  Finding test tab ID...")
