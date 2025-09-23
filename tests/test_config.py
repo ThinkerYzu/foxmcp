@@ -33,7 +33,11 @@ def get_firefox_test_port():
     return ports['websocket']
 
 # Legacy TEST_PORTS for backward compatibility
-TEST_PORTS = {
-    'integration_firefox': lambda: get_test_ports('integration_firefox'),
-    'integration_mcp': lambda: get_test_ports('integration_mcp'),
-}
+def _get_test_ports_dict():
+    """Get test ports dictionary with dynamic allocation"""
+    return {
+        'integration_firefox': get_test_ports('integration_firefox'),
+        'integration_mcp': get_test_ports('integration_mcp'),
+    }
+
+TEST_PORTS = _get_test_ports_dict()

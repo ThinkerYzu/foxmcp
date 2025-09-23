@@ -66,9 +66,18 @@ class FoxMCPServer:
         self.host = host
         self.port = port
 
-        # Use dynamic port allocation if mcp_port is None or if port is in use
+        # Set MCP port - default to 3000 for production, dynamic allocation only for tests
         if mcp_port is None:
-            self.mcp_port = find_available_port(3000)
+            # Check if we're in a test environment by checking for pytest or explicit test indicators
+            in_test_env = ('pytest' in sys.modules or
+                          'PYTEST_CURRENT_TEST' in os.environ or
+                          any('pytest' in path or 'test_' in os.path.basename(path) for path in sys.path))
+            if in_test_env and HAS_PORT_COORDINATOR:
+                # Use dynamic port allocation for tests to avoid conflicts
+                self.mcp_port = find_available_port(3000)
+            else:
+                # Use fixed port 3000 for production
+                self.mcp_port = 3000
         else:
             # Check if requested port is available
             try:
@@ -439,7 +448,7 @@ async def main():
     parser.add_argument('--port', type=int, default=8765,
                         help='WebSocket port (default: 8765)')
     parser.add_argument('--mcp-port', type=int, default=None,
-                        help='MCP server port (default: auto-detect available port)')
+                        help='MCP server port (default: 3000, dynamic allocation in tests)')
     parser.add_argument('--no-mcp', action='store_true',
                         help='Disable MCP server')
 
