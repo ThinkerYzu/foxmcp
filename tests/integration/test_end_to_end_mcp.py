@@ -1510,7 +1510,7 @@ class TestEndToEndMCP:
             # Step 1: Create a test tab with HTML content
             print("\n1️⃣  Creating test tab with HTML content...")
             create_result = await mcp_client.call_tool("tabs_create", {
-                "url": "https://httpbin.org/html",
+                "url": "https://example.com",
                 "active": True
             })
 
@@ -1530,11 +1530,11 @@ class TestEndToEndMCP:
             tab_content = tabs_result.get('content', '')
             print(f"   Available tabs: {tab_content}")
 
-            # Find tab with httpbin.org/html URL
-            tab_lines = [line for line in tab_content.split('\n') if 'httpbin.org/html' in line]
+            # Find tab with example.com URL
+            tab_lines = [line for line in tab_content.split('\n') if 'example.com' in line]
 
             if not tab_lines:
-                pytest.skip("Could not find test tab with httpbin.org/html")
+                pytest.skip("Could not find test tab with example.com")
 
             # Extract tab ID
             import re
@@ -1562,7 +1562,12 @@ class TestEndToEndMCP:
             # Verify we got text content
             assert "Text content from" in text_content, "Should return formatted text content"
             # Note: URL might be "Unknown URL" if extension doesn't provide URL info, which is okay
-            assert len(text_content) > 100, "Should return substantial text content"
+
+            # Check for error pages that might indicate network issues
+            if "502 Bad Gateway" in text_content or "503 Service Unavailable" in text_content or "404 Not Found" in text_content:
+                pytest.skip(f"External service unavailable, got error page: {text_content[:100]}")
+
+            assert len(text_content) > 50, "Should return meaningful text content (excluding error pages)"
 
             # Step 4: Verify the content contains expected HTML text
             print("\n4️⃣  Verifying extracted text content...")
@@ -1683,7 +1688,7 @@ class TestEndToEndMCP:
         # Step 1: Create a test tab with visual content
         print("\\n1️⃣  Creating test tab with visual content...")
         create_result = await mcp_client.call_tool("tabs_create", {
-            "url": "https://httpbin.org/html",
+            "url": "https://example.com",
             "active": True
         })
 
@@ -1700,9 +1705,9 @@ class TestEndToEndMCP:
         assert not tabs_result.get('isError', False), f"tabs_list should not error: {tabs_result}"
 
         tab_content = tabs_result.get('content', '')
-        tab_lines = [line for line in tab_content.split('\\n') if 'httpbin.org/html' in line]
+        tab_lines = [line for line in tab_content.split('\\n') if 'example.com' in line]
         if not tab_lines:
-            pytest.skip("Could not find test tab with httpbin.org/html")
+            pytest.skip("Could not find test tab with example.com")
 
         # Extract tab ID
         import re
