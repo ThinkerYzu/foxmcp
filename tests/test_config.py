@@ -36,9 +36,9 @@ def get_firefox_test_port():
 def _get_test_ports_dict():
     """Get test ports dictionary with dynamic allocation"""
     return {
-        'integration_firefox': get_test_ports('integration_firefox'),
-        'integration_mcp': get_test_ports('integration_mcp'),
-        'integration_live': get_test_ports('integration_live'),  # Required by test_live_server_communication.py - tests expect TEST_PORTS['integration_live'] to exist
+        'integration_firefox': get_test_ports('integration_firefox'),    # Firefox browser + extension tests
+        'integration_mcp': get_test_ports('integration_mcp'),            # MCP protocol functionality tests
+        'integration_live': get_test_ports('integration_live'),          # Basic WebSocket server tests (no Firefox)
     }
 
 TEST_PORTS = _get_test_ports_dict()
