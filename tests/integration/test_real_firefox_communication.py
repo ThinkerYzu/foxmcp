@@ -18,11 +18,11 @@ from server.server import FoxMCPServer
 # Import test utilities
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 try:
-    from ..test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
+    from ..test_config import TEST_PORTS, FIREFOX_TEST_CONFIG, get_test_ports
     from ..firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
     from ..port_coordinator import coordinated_test_ports
 except ImportError:
-    from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
+    from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG, get_test_ports
     from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
     from port_coordinator import coordinated_test_ports
 
@@ -255,8 +255,9 @@ class TestFirefoxIntegrationScenarios:
     async def test_server_starts_before_extension(self):
         """Test scenario where server starts before extension connects"""
 
-        # Start server first
-        test_port = FIREFOX_TEST_CONFIG['websocket_port'] + 10  # Avoid conflicts
+        # Start server first - use dynamic port allocation
+        ports = get_test_ports('integration_basic')
+        test_port = ports['websocket']
         server = FoxMCPServer(host="localhost", port=test_port, start_mcp=False)
         server_task = asyncio.create_task(server.start_server())
 
@@ -299,7 +300,9 @@ class TestFirefoxIntegrationScenarios:
         # This would require real extension testing
         # For now, just test the server restart capability
 
-        test_port = FIREFOX_TEST_CONFIG['websocket_port'] + 20
+        # Use dynamic port allocation for server restart test
+        ports = get_test_ports('integration_basic')
+        test_port = ports['websocket']
 
         # Start first server instance
         server1 = FoxMCPServer(host="localhost", port=test_port, start_mcp=False)
