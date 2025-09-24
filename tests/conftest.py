@@ -5,8 +5,80 @@ Pytest configuration and fixtures
 import asyncio
 import json
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, patch
 from typing import Dict, Any
+import sys
+import os
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from port_coordinator import PortCoordinator, get_safe_port_range
+
+# Global port coordinator for tests
+_test_port_coordinator = PortCoordinator(get_safe_port_range('default'))
+
+# Store allocated ports for Firefox configuration
+_allocated_test_ports = {}
+
+@pytest.fixture(scope="session", autouse=True)
+def auto_dynamic_ports():
+    """
+    Automatically patch FoxMCPServer to use dynamic ports in tests.
+    This fixture runs automatically for all tests and monkey-patches
+    FoxMCPServer instantiation to use dynamic ports when none are specified.
+    """
+    # Import here to avoid circular imports
+    try:
+        from server.server import FoxMCPServer
+        original_init = FoxMCPServer.__init__
+
+        def patched_init(self, host="localhost", port=None, mcp_port=None, start_mcp=True):
+            # ALWAYS allocate dynamic ports in test environment to prevent conflicts
+            # This overrides any explicit port to ensure complete isolation
+            if port is None or port == 8765:  # Override default port
+                port = _test_port_coordinator.find_available_port()
+            if (mcp_port is None or mcp_port == 3000) and start_mcp:  # Override default MCP port
+                mcp_port = _test_port_coordinator.find_available_port()
+
+            # Store ports for potential Firefox use
+            _allocated_test_ports['websocket'] = port
+            if mcp_port:
+                _allocated_test_ports['mcp'] = mcp_port
+
+            print(f"🔧 Test server using WebSocket port: {port}, MCP port: {mcp_port}")
+
+            # Call original init with dynamic ports
+            return original_init(self, host=host, port=port, mcp_port=mcp_port, start_mcp=start_mcp)
+
+        # Apply the patch
+        with patch.object(FoxMCPServer, '__init__', patched_init):
+            yield
+
+    except ImportError:
+        # If FoxMCPServer can't be imported, just yield without patching
+        yield
+
+@pytest.fixture(scope="function")
+def firefox_with_test_ports():
+    """
+    Provides a Firefox configuration that uses the currently allocated test ports.
+    This can be used to create Firefox instances that connect to test servers.
+    """
+    try:
+        from firefox_test_utils import FirefoxTestManager
+
+        # Get the most recently allocated ports
+        websocket_port = _allocated_test_ports.get('websocket')
+        if websocket_port:
+            return FirefoxTestManager(test_port=websocket_port)
+        else:
+            # Fallback: allocate a new port
+            port = _test_port_coordinator.find_available_port()
+            return FirefoxTestManager(test_port=port)
+
+    except ImportError:
+        return None
 
 # Test fixtures
 @pytest.fixture

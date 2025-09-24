@@ -288,6 +288,28 @@ All major browser functions are tested:
 
 **Content Access:** `content.get_text`, `content.get_html`, `content.get_title`, `content.get_url`, `content.execute_script` (with comprehensive end-to-end JavaScript execution tests) - ✅ All implemented and tested
 
+## Test Environment Isolation
+
+### Development Environment Protection
+
+The test suite implements comprehensive port isolation to prevent interference with development environments:
+
+**Automatic Port Allocation:**
+- Tests use dynamic ports (40000+ range) instead of default ports (8765, 3000)
+- `conftest.py` automatically patches `FoxMCPServer` to override default ports
+- Extension build process changes default fallback port from 8765 to 48765
+
+**Firefox Profile Isolation:**
+- Test Firefox profiles disable storage.sync to prevent cross-contamination
+- Profile-specific configurations ensure test settings don't affect development browsers
+- Automatic cleanup of test profiles and processes
+
+**Key Benefits:**
+- ✅ Integration tests never connect to development servers
+- ✅ Development workflow uninterrupted by test execution
+- ✅ Complete isolation between test and production environments
+- ✅ Safe parallel execution of tests and development servers
+
 ## Continuous Integration
 
 Tests should be run before:

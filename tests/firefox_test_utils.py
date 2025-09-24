@@ -58,6 +58,18 @@ user_pref("datareporting.healthreport.uploadEnabled", false);
 // Speed up for testing
 user_pref("dom.max_script_run_time", 0);
 user_pref("dom.max_chrome_script_run_time", 0);
+
+// Disable storage.sync to prevent interference with development Firefox
+user_pref("webextensions.storage.sync.enabled", false);
+user_pref("services.sync.engine.extension-storage", false);
+user_pref("identity.fxaccounts.enabled", false);
+
+// Force extension to use local storage only
+user_pref("extensions.webextensions.storage.sync.enabled", false);
+
+// FORCE override default WebSocket port to prevent connecting to development server
+user_pref("extensions.foxmcp.forceTestPort", true);
+user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
 '''
 
         with open(os.path.join(self.profile_dir, 'user.js'), 'w') as f:

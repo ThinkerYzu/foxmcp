@@ -62,8 +62,18 @@ build-extension:
 	@mkdir -p dist
 	@rm -rf dist/extension
 	@cp -r extension dist/
+
+	# CRITICAL: Patch extension to use safe test port instead of 8765
+	# This prevents test Firefox from connecting to development servers
+	@echo "Patching extension for test isolation..."
+	@sed -i 's/8765/48765/g' dist/extension/background.js
+	@sed -i 's/8765/48765/g' dist/extension/popup/popup.js
+	@sed -i 's/8765/48765/g' dist/extension/options.js
+	@sed -i 's/8765/48765/g' dist/extension/popup/popup.html
+	@sed -i 's/8765/48765/g' dist/extension/options.html
+
 	@echo "Extension built at: dist/extension/"
-	@echo "✅ Extension build complete!"
+	@echo "✅ Extension build complete with test isolation!"
 
 package: build
 	@echo "Creating distributable packages..."
