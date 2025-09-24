@@ -98,6 +98,35 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
 
         print(f"✓ Pre-configured extension for test server port {self.test_port}")
 
+    def _preconfigure_extension_storage(self):
+        """Pre-configure extension storage before Firefox runs for the first time"""
+        try:
+            # Create browser extension data directory structure manually
+            storage_dir = os.path.join(self.profile_dir, 'browser-extension-data', 'foxmcp@codemud.org')
+            os.makedirs(storage_dir, exist_ok=True)
+
+            # Create a simple local storage file with test configuration
+            config = {
+                'hostname': 'localhost',
+                'port': self.test_port,
+                'testPort': self.test_port,
+                'testHostname': 'localhost',
+                'retryInterval': 1000,
+                'maxRetries': 5,
+                'pingTimeout': 2000
+            }
+
+            config_file = os.path.join(storage_dir, 'storage.json')
+            with open(config_file, 'w') as f:
+                json.dump(config, f, indent=2)
+
+            print(f"✓ Pre-configured extension storage with test port {self.test_port}")
+            return True
+
+        except Exception as e:
+            print(f"✗ Failed to pre-configure extension storage: {e}")
+            return False
+
     def install_extension(self, extension_path):
         """Install extension to the test profile and initialize extensions.json"""
         if not self.profile_dir:
@@ -116,6 +145,11 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
         shutil.copy2(extension_path, dest_path)
         print(f"✓ Extension copied to test profile: {extension_name}")
 
+        # IMPORTANT: Configure extension storage BEFORE running Firefox
+        # This prevents the extension from connecting to default port during initialization
+        if not self._preconfigure_extension_storage():
+            return False
+
         # Run Firefox temporarily to initialize extensions.json
         if not self._initialize_extensions_json():
             return False
@@ -124,7 +158,7 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
         if not self._enable_extension_in_profile():
             return False
 
-        # Configure extension storage with test settings
+        # Ensure extension storage is properly configured (may be redundant but safe)
         if not self._configure_extension_storage():
             return False
 

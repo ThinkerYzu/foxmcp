@@ -43,9 +43,16 @@ class PortCoordinator:
         else:
             # Try random ports in the range to reduce conflicts
             start, end = self.base_port_range
-            # Increase retry limit and try more ports if needed
-            max_tries = min(500, end - start + 1)
-            ports_to_try = random.sample(range(start, end + 1), max_tries)
+            # Try all available ports in the range if it's small, otherwise sample
+            range_size = end - start + 1
+            if range_size <= 100:
+                # Small range - try all ports
+                ports_to_try = list(range(start, end + 1))
+                random.shuffle(ports_to_try)
+            else:
+                # Large range - sample more ports
+                max_tries = min(800, range_size)
+                ports_to_try = random.sample(range(start, end + 1), max_tries)
         
         for port in ports_to_try:
             if port in self.allocated_ports:
@@ -61,7 +68,14 @@ class PortCoordinator:
             except OSError:
                 continue
         
-        raise RuntimeError(f"No available ports found in range {self.base_port_range}")
+        range_size = self.base_port_range[1] - self.base_port_range[0] + 1
+        ports_tried = len(ports_to_try) if not start_port else 1
+        allocated_count = len(self.allocated_ports)
+        raise RuntimeError(
+            f"No available ports found in range {self.base_port_range}. "
+            f"Range size: {range_size}, ports tried: {ports_tried}, "
+            f"already allocated by this coordinator: {allocated_count}"
+        )
 
     def release_port(self, port: int):
         """Release a port back to the available pool"""

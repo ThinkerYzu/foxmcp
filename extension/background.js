@@ -1,6 +1,18 @@
 let websocket = null;
 let isConnected = false;
 
+// DEBUGGING: Track all WebSocket creation attempts
+const originalWebSocket = WebSocket;
+WebSocket = function(url, ...args) {
+  console.log('🔍 WebSocket created:', url);
+  console.log('🔍 Stack trace:', new Error().stack);
+  if (typeof url === 'string' && url.includes(':8765')) {
+    console.error('🚨 WARNING: Connection to default port 8765 detected!');
+    console.error('Current CONFIG state:', JSON.stringify(CONFIG, null, 2));
+  }
+  return new originalWebSocket(url, ...args);
+};
+
 // Default configuration - will be loaded from storage
 let CONFIG = {
   hostname: 'localhost',
@@ -10,14 +22,23 @@ let CONFIG = {
   pingTimeout: 5000 // ping timeout in milliseconds
 };
 
-// Computed WebSocket URL
-let WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
-
 let retryAttempts = 0;
 
 function connectToMCPServer() {
   try {
-    console.log(`Attempting to connect to ${WS_URL} (attempt ${retryAttempts + 1})`);
+    // DEBUGGING: Track where this connection attempt came from
+    const stack = new Error().stack;
+    console.error('🚨 connectToMCPServer called from:', stack);
+
+    // Compute WebSocket URL dynamically using current config
+    const WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
+    console.log(`🔗 connectToMCPServer: CONFIG.port = ${CONFIG.port}`);
+    console.log(`🔗 connectToMCPServer: Connecting to ${WS_URL} (attempt ${retryAttempts + 1})`);
+
+    if (CONFIG.port === 8765) {
+      console.error('🚨🚨🚨 CONNECTING TO DEFAULT PORT 8765! Stack:', stack);
+    }
+
     websocket = new WebSocket(WS_URL);
 
     websocket.onopen = () => {
@@ -62,9 +83,7 @@ function scheduleReconnect() {
 function updateConfig(newConfig) {
   Object.assign(CONFIG, newConfig);
   console.log('Configuration updated:', CONFIG);
-
-  // Update WebSocket URL
-  WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
+  console.log('New WebSocket URL will be:', `ws://${CONFIG.hostname}:${CONFIG.port}`);
 
   // Save to storage for persistence
   browser.storage.sync.set({
@@ -105,11 +124,13 @@ async function loadConfig() {
     CONFIG.maxRetries = result.maxRetries;
     CONFIG.pingTimeout = result.pingTimeout;
 
-    // Update WebSocket URL with loaded configuration
-    WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
-
-    console.log('Configuration loaded:', CONFIG);
-    console.log('WebSocket URL:', WS_URL);
+    console.log('📋 Configuration loaded:', CONFIG);
+    console.log('🌐 WebSocket URL will be:', `ws://${CONFIG.hostname}:${CONFIG.port}`);
+    console.log('🔧 Test overrides active:', {
+      testPort: result.testPort,
+      testHostname: result.testHostname,
+      hasTestOverrides: !!(result.testPort || result.testHostname)
+    });
 
     if (result.testPort || result.testHostname) {
       console.log('Using test configuration overrides:', {
@@ -117,6 +138,7 @@ async function loadConfig() {
         testHostname: result.testHostname
       });
     }
+
   } catch (error) {
     console.error('Error loading configuration:', error);
   }
@@ -683,11 +705,8 @@ async function handleWindowsAction(id, action, data) {
   }
 }
 
-// Start connection when extension loads
-browser.runtime.onStartup.addListener(async () => {
-  await loadConfig();
-  connectToMCPServer();
-});
+// REMOVED: onStartup listener to prevent race conditions during testing
+// Extension will only connect on explicit user actions or valid storage events
 
 // Test helper action handler
 async function handleTestAction(id, action, data) {
@@ -728,7 +747,11 @@ async function handleTestAction(id, action, data) {
       case 'test.create_test_tabs':
         await handleCreateTestTabs(id, data);
         break;
-        
+
+      case 'test.initialize_connection':
+        await handleInitializeConnection(id, data);
+        break;
+
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown test action: ${action}`);
     }
@@ -1143,13 +1166,31 @@ async function handleCreateTestTabs(id, data) {
   }
 }
 
-browser.runtime.onInstalled.addListener(async () => {
-  await loadConfig();
-  connectToMCPServer();
-});
+async function handleInitializeConnection(id, data) {
+  try {
+    console.log('🔥 Test framework requesting connection initialization');
+    console.log('🔄 Loading configuration...');
+    await loadConfig();
+    console.log('🔄 Configuration loaded:', JSON.stringify(CONFIG, null, 2));
+    console.log('🔄 Attempting connection...');
+    connectToMCPServer();
 
-// Initialize and connect immediately
-(async () => {
-  await loadConfig();
-  connectToMCPServer();
-})();
+    sendResponse(id, 'test.initialize_connection', {
+      success: true,
+      message: 'Connection initialization requested',
+      config: CONFIG
+    });
+  } catch (error) {
+    console.error('Failed to initialize connection:', error);
+    sendError(id, 'INITIALIZE_CONNECTION_ERROR', `Failed to initialize connection: ${error.message}`);
+  }
+}
+
+// ✅ RACE CONDITION ELIMINATED: No automatic connection on extension load
+// Extension will connect only when:
+// 1. User explicitly triggers connection (popup, options page)
+// 2. Test framework explicitly requests connection via test helper
+// 3. Extension receives a forceReconnect message
+//
+// This ensures storage configuration is fully loaded before any connection attempts
+console.log('🧊 Extension loaded in cold state - waiting for explicit connection trigger');
