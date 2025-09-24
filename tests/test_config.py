@@ -38,7 +38,7 @@ def _get_test_ports_dict():
     return {
         'integration_firefox': get_test_ports('integration_firefox'),
         'integration_mcp': get_test_ports('integration_mcp'),
-        'integration_live': get_test_ports('integration_live'),  # Required by test_live_server_communication.py
+        'integration_live': get_test_ports('integration_live'),  # Required by test_live_server_communication.py - tests expect TEST_PORTS['integration_live'] to exist
     }
 
 TEST_PORTS = _get_test_ports_dict()
