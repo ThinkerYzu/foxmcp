@@ -28,6 +28,9 @@ def auto_dynamic_ports():
     This fixture runs automatically for all tests and monkey-patches
     FoxMCPServer instantiation to use dynamic ports when none are specified.
     """
+    # Clean up any leftover port allocations from previous runs
+    _test_port_coordinator.release_all_ports()
+
     # Import here to avoid circular imports
     try:
         from server.server import FoxMCPServer

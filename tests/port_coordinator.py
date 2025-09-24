@@ -43,7 +43,9 @@ class PortCoordinator:
         else:
             # Try random ports in the range to reduce conflicts
             start, end = self.base_port_range
-            ports_to_try = random.sample(range(start, end + 1), min(100, end - start + 1))
+            # Increase retry limit and try more ports if needed
+            max_tries = min(500, end - start + 1)
+            ports_to_try = random.sample(range(start, end + 1), max_tries)
         
         for port in ports_to_try:
             if port in self.allocated_ports:
@@ -60,7 +62,15 @@ class PortCoordinator:
                 continue
         
         raise RuntimeError(f"No available ports found in range {self.base_port_range}")
-    
+
+    def release_port(self, port: int):
+        """Release a port back to the available pool"""
+        self.allocated_ports.discard(port)
+
+    def release_all_ports(self):
+        """Release all allocated ports - useful for cleanup between tests"""
+        self.allocated_ports.clear()
+
     def allocate_test_ports(self) -> Dict[str, int]:
         """Allocate a coordinated set of ports for testing"""
         websocket_port = self.find_available_port()
