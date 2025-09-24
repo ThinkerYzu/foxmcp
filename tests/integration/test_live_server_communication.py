@@ -28,7 +28,7 @@ class TestLiveServerCommunication:
     async def test_server_can_start_and_stop(self):
         """Test that server can start and stop cleanly"""
         # Use fixed ports for reliable testing
-        ports = TEST_PORTS['integration_live']
+        ports = TEST_PORTS['integration']
         server = FoxMCPServer(host="localhost", port=ports['websocket'], mcp_port=ports['mcp'], start_mcp=False)  # Disable MCP for basic tests
         
         # Test server startup
@@ -52,7 +52,7 @@ class TestLiveServerCommunication:
     async def test_client_can_connect_to_server(self):
         """Test that a WebSocket client can connect to the server"""
         # Use fixed ports with offset to avoid conflicts
-        ports = TEST_PORTS['integration_live']
+        ports = TEST_PORTS['integration']
         port = ports['websocket'] + 1
         mcp_port = ports['mcp'] + 1
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)

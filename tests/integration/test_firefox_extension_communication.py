@@ -69,7 +69,7 @@ user_pref("browser.tabs.remote.autostart", false);
     async def running_server(self):
         """Start FoxMCPServer for testing with fixed Firefox test port"""
         # Use fixed ports for Firefox extension testing
-        ports = TEST_PORTS['integration_firefox']
+        ports = TEST_PORTS['integration']
         server = FoxMCPServer(
             host="localhost", 
             port=ports['websocket'],
@@ -342,7 +342,7 @@ class TestFirefoxConnectionResilience:
     async def test_server_handles_connection_loss(self):
         """Test server handles connection loss gracefully"""
         # Use fixed ports for resilience testing
-        ports = TEST_PORTS['integration_firefox']
+        ports = TEST_PORTS['integration']
         port = ports['websocket'] + 1  # Offset to avoid conflict with main test
         mcp_port = ports['mcp'] + 1
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
@@ -386,7 +386,7 @@ class TestFirefoxConnectionResilience:
     async def test_multiple_connection_attempts(self):
         """Test server can handle multiple connection attempts"""
         # Use fixed ports for multiple connection testing
-        ports = TEST_PORTS['integration_firefox']
+        ports = TEST_PORTS['integration']
         port = ports['websocket'] + 2  # Different offset to avoid conflict
         mcp_port = ports['mcp'] + 2
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
