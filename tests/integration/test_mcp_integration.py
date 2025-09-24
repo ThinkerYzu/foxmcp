@@ -200,7 +200,9 @@ class TestMCPServerConfiguration:
         """Test default port configuration uses dynamic allocation"""
         server = FoxMCPServer(start_mcp=False)
 
-        assert server.port == 8765  # Default WebSocket port
+        # Port isolation system overrides default 8765 with dynamic port
+        assert isinstance(server.port, int)
+        assert server.port > 0  # Port should be positive
         assert server.mcp_port >= DEFAULT_PORT_RANGE[0]  # Uses dynamic allocation in safe range
         assert server.mcp_port <= DEFAULT_PORT_RANGE[1]
     
