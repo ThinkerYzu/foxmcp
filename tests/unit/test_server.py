@@ -18,7 +18,8 @@ class TestFoxMCPServer:
     def test_server_initialization(self, server):
         """Test server initialization"""
         assert server.host == "localhost"
-        assert server.port == 8765
+        assert isinstance(server.port, int)  # Port should be an integer (dynamic in tests)
+        assert server.port > 0  # Port should be positive
         assert server.extension_connection is None
     
     @pytest.mark.asyncio
