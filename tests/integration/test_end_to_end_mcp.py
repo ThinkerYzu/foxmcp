@@ -723,88 +723,88 @@ class TestEndToEndMCP:
             initial_content = result.get('content', '')
             print(f"   Initial tab state: {initial_content}")
             
-            # Step 2: Create test tabs using extension helper
-            print("\\n2️⃣  Creating test tabs via extension...")
-            
-            # Use the WebSocket to send test helper command
-            if hasattr(server, 'send_to_extension'):
-                test_create_request = {
-                    "id": str(uuid.uuid4()),
-                    "type": "request",
-                    "action": "test.create_test_tabs",
-                    "data": {
-                        "count": 3,
-                        "closeExisting": True,
-                        "urls": [
-                            "https://example.com",
-                            "https://httpbin.org/status/200", 
-                            "https://httpbin.org/html"
-                        ]
-                    },
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                try:
-                    create_response = await server.send_to_extension(test_create_request)
-                    
-                    if create_response.get("type") == "response":
-                        print(f"   ✅ Created test tabs: {create_response.get('data', {}).get('message')}")
-                        
-                        # Wait for tabs to be created and loaded
-                        await asyncio.sleep(3.0)
-                        
-                        # Step 3: Test tabs_list with created tabs
-                        print("\\n3️⃣  Testing tabs_list with created tabs...")
-                        result = await mcp_client.call_tool("tabs_list")
-                        
-                        assert not result.get('isError', False), f"tabs_list should not error after creating tabs: {result}"
-                        
-                        tab_content = result.get('content', '')
-                        print(f"   Tab list content: {tab_content}")
-                        
-                        # Verify we got actual tab data, not "No tabs found"
-                        assert "No tabs found" not in tab_content, "Should find tabs after creating them"
-                        assert "Open tabs:" in tab_content or "ID " in tab_content, "Should show tab information"
-                        
-                        # Step 4: Verify tab creation tool
-                        print("\\n4️⃣  Testing tabs_create via MCP...")
-                        create_result = await mcp_client.call_tool("tabs_create", {
-                            "url": "https://httpbin.org/json",
-                            "active": True
-                        })
-                        
-                        assert not create_result.get('isError', False), f"tabs_create should not error: {create_result}"
-                        
-                        create_content = create_result.get('content', '')
-                        print(f"   Tab creation result: {create_content}")
-                        
-                        # Verify creation was successful
-                        assert "Created tab:" in create_content or "Successfully" in create_content, "Should confirm tab creation"
-                        
-                        # Step 5: Final tabs_list to verify all tabs
-                        print("\\n5️⃣  Final tabs_list verification...")
-                        final_result = await mcp_client.call_tool("tabs_list")
-                        
-                        assert not final_result.get('isError', False), f"Final tabs_list should not error: {final_result}"
-                        
-                        final_content = final_result.get('content', '')
-                        print(f"   Final tab count verification: {final_content}")
-                        
-                        # Should have at least 4 tabs (3 from helper + 1 from MCP)
-                        tab_lines = [line for line in final_content.split('\\n') if 'ID ' in line]
-                        assert len(tab_lines) >= 3, f"Should have at least 3 tabs, found: {len(tab_lines)}"
-                        
-                        print(f"✅ End-to-end tab test successful! Found {len(tab_lines)} tabs")
-                        
+            # Step 2: Create test tabs using MCP tab_create tool
+            print("\\n2️⃣  Creating test tabs via MCP tools...")
+
+            test_urls = [
+                "https://example.com",
+                "https://httpbin.org/status/200",
+                "https://httpbin.org/html"
+            ]
+
+            created_tabs = []
+
+            try:
+                # Create tabs using the MCP tab_create tool
+                for i, url in enumerate(test_urls):
+                    print(f"   Creating tab {i+1}: {url}")
+                    result = await mcp_client.call_tool("tabs_create", {"url": url, "active": False})
+
+                    if not result.get('isError', False):
+                        created_tabs.append(url)
+                        print(f"   ✅ Tab created: {result.get('content', '')}")
                     else:
-                        print(f"   ⚠️  Failed to create test tabs: {create_response}")
-                        pytest.skip("Could not create test tabs for verification")
-                        
-                except Exception as e:
-                    print(f"   ⚠️  Extension test helper error: {e}")
-                    pytest.skip("Extension test helper not available")
-            else:
-                pytest.skip("WebSocket server doesn't support extension communication")
+                        print(f"   ⚠️  Tab creation failed: {result.get('content', '')}")
+
+                    # Small delay between tab creation
+                    await asyncio.sleep(1.0)
+
+                if len(created_tabs) > 0:
+                    print(f"   ✅ Successfully created {len(created_tabs)} test tabs")
+
+                    # Wait for tabs to be loaded
+                    await asyncio.sleep(2.0)
+
+                    # Step 3: Test tabs_list with created tabs
+                    print("\\n3️⃣  Testing tabs_list with created tabs...")
+                    result = await mcp_client.call_tool("tabs_list")
+
+                    assert not result.get('isError', False), f"tabs_list should not error after creating tabs: {result}"
+
+                    tab_content = result.get('content', '')
+                    print(f"   Tab list content: {tab_content}")
+
+                    # Verify we got actual tab data, not "No tabs found"
+                    assert "No tabs found" not in tab_content, "Should find tabs after creating them"
+                    assert "Open tabs:" in tab_content or "ID " in tab_content, "Should show tab information"
+
+                    # Step 4: Verify tab creation tool
+                    print("\\n4️⃣  Testing tabs_create via MCP...")
+                    create_result = await mcp_client.call_tool("tabs_create", {
+                        "url": "https://httpbin.org/json",
+                        "active": True
+                    })
+
+                    assert not create_result.get('isError', False), f"tabs_create should not error: {create_result}"
+
+                    create_content = create_result.get('content', '')
+                    print(f"   Tab creation result: {create_content}")
+
+                    # Verify creation was successful
+                    assert "Created tab:" in create_content or "Successfully" in create_content, "Should confirm tab creation"
+
+                    # Step 5: Final tabs_list to verify all tabs
+                    print("\\n5️⃣  Final tabs_list verification...")
+                    final_result = await mcp_client.call_tool("tabs_list")
+
+                    assert not final_result.get('isError', False), f"Final tabs_list should not error: {final_result}"
+
+                    final_content = final_result.get('content', '')
+                    print(f"   Final tab count verification: {final_content}")
+
+                    # Should have at least 4 tabs (3 from MCP + 1 original + 1 extra)
+                    tab_lines = [line for line in final_content.split('\n') if '- ID ' in line]
+                    assert len(tab_lines) >= 3, f"Should have at least 3 tabs, found: {len(tab_lines)}"
+
+                    print(f"✅ End-to-end tab test successful! Found {len(tab_lines)} tabs")
+
+                else:
+                    print("   ⚠️  No test tabs were successfully created")
+                    pytest.skip("Could not create test tabs for verification")
+
+            except Exception as e:
+                print(f"   ⚠️  Tab creation error: {e}")
+                pytest.skip("Tab creation functionality not available")
 
     @pytest.mark.asyncio
     async def test_end_to_end_content_execute_script(self, full_mcp_system):
