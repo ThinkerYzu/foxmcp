@@ -38,6 +38,7 @@ def _get_test_ports_dict():
     return {
         'integration_firefox': get_test_ports('integration_firefox'),
         'integration_mcp': get_test_ports('integration_mcp'),
+        'integration_live': get_test_ports('integration_live'),
     }
 
 TEST_PORTS = _get_test_ports_dict()
