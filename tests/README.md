@@ -19,7 +19,16 @@ tests/
 │   ├── test_live_server_communication.py    # Real server startup and communication tests
 │   ├── test_real_websocket_communication.py # Advanced WebSocket protocol tests
 │   ├── test_firefox_extension_communication.py # Firefox extension integration tests
-│   └── test_ping_pong_integration.py        # Ping-pong protocol tests
+│   ├── test_ping_pong_integration.py        # Ping-pong protocol tests
+│   ├── test_mcp_integration.py              # FastMCP server integration tests
+│   ├── test_real_firefox_communication.py  # Actual Firefox browser integration
+│   ├── test_history_management.py           # Browser history management tests
+│   ├── test_history_mcp_integration.py      # History MCP protocol integration
+│   ├── test_mcp_server_integration.py       # MCP server startup and connections
+│   ├── test_mcp_protocol_compliance.py      # MCP protocol compliance tests
+│   ├── test_browser_functionality.py        # Browser functionality end-to-end tests
+│   ├── test_window_management.py            # Window management tests
+│   └── test_bookmark_management.py          # Bookmark management tests
 └── fixtures/               # Test data files
 ```
 
@@ -156,14 +165,26 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
   - MCP-WebSocket layer integration for history operations
   - End-to-end MCP tool workflow validation
 
-- **test_end_to_end_mcp.py**: Comprehensive MCP protocol compliance tests
+- **test_mcp_server_integration.py**: MCP server startup and connection integration tests
+  - **Server initialization**: MCP and WebSocket servers startup verification
+  - **Client connections**: MCP client connection and communication testing
+  - **Extension connectivity**: Firefox extension WebSocket connection testing
+  - **Tool execution**: Multiple MCP tool call testing and validation
+  - **History functionality**: Recent history retrieval with parameter combinations
+
+- **test_mcp_protocol_compliance.py**: MCP protocol compliance and HTTP endpoint tests
   - **Schema validation**: All history and tab tools have correct parameter schemas
   - **Parameter format validation**: Direct parameters (no `params` wrapper)
   - **Agent error reproduction**: Tests for common external agent issues
   - **HTTP endpoint validation**: FastMCP server accessibility testing
   - **Tool naming validation**: Prevents naming mismatches between test and production
+
+- **test_browser_functionality.py**: Browser functionality end-to-end tests
   - **End-to-end tab testing**: Creates actual browser tabs and verifies tab listing functionality
+  - **JavaScript execution**: Complete browser script execution testing
   - **Navigation reload testing**: Complete end-to-end page reload functionality with cache bypass options
+  - **Content extraction**: Text content extraction from browser tabs
+  - **Screenshot capture**: Tab screenshot functionality testing
 
 - **test_window_management.py**: Comprehensive window management end-to-end tests
   - **Window creation and properties**: Creates windows with specific dimensions and properties
