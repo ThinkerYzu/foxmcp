@@ -1,17 +1,6 @@
 let websocket = null;
 let isConnected = false;
 
-// DEBUGGING: Track all WebSocket creation attempts
-const originalWebSocket = WebSocket;
-WebSocket = function(url, ...args) {
-  console.log('🔍 WebSocket created:', url);
-  console.log('🔍 Stack trace:', new Error().stack);
-  if (typeof url === 'string' && url.includes(':8765')) {
-    console.error('🚨 WARNING: Connection to default port 8765 detected!');
-    console.error('Current CONFIG state:', JSON.stringify(CONFIG, null, 2));
-  }
-  return new originalWebSocket(url, ...args);
-};
 
 // Default configuration - will be loaded from storage
 let CONFIG = {
@@ -23,21 +12,17 @@ let CONFIG = {
 };
 
 let retryAttempts = 0;
+const MAX_ABSOLUTE_RETRIES = 50; // Absolute maximum to prevent infinite loops
 
 function connectToMCPServer() {
   try {
-    // DEBUGGING: Track where this connection attempt came from
-    const stack = new Error().stack;
-    console.error('🚨 connectToMCPServer called from:', stack);
+    console.log('🔍 CONNECT ATTEMPT - Stack trace:');
+    console.trace();
 
     // Compute WebSocket URL dynamically using current config
     const WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
-    console.log(`🔗 connectToMCPServer: CONFIG.port = ${CONFIG.port}`);
-    console.log(`🔗 connectToMCPServer: Connecting to ${WS_URL} (attempt ${retryAttempts + 1})`);
-
-    if (CONFIG.port === 8765) {
-      console.error('🚨🚨🚨 CONNECTING TO DEFAULT PORT 8765! Stack:', stack);
-    }
+    console.log(`🔗 Connecting to ${WS_URL} (attempt ${retryAttempts + 1})`);
+    console.log(`🔧 Using CONFIG:`, JSON.stringify(CONFIG, null, 2));
 
     websocket = new WebSocket(WS_URL);
 
@@ -45,6 +30,14 @@ function connectToMCPServer() {
       console.log('Connected to MCP server');
       isConnected = true;
       retryAttempts = 0; // Reset retry counter on successful connection
+      connectionRetryAttempts = 0; // Reset connection retry counter
+
+      // Flush any buffered debug logs
+      if (typeof window.flushDebugLogBuffer === 'function') {
+        setTimeout(() => {
+          window.flushDebugLogBuffer();
+        }, 100);
+      }
     };
 
     websocket.onmessage = async (event) => {
@@ -69,9 +62,15 @@ function connectToMCPServer() {
 function scheduleReconnect() {
   retryAttempts++;
 
-  // Check if we've exceeded max retry attempts
+  // Check configured max retries
   if (CONFIG.maxRetries > 0 && retryAttempts > CONFIG.maxRetries) {
-    console.error(`Max retry attempts (${CONFIG.maxRetries}) exceeded. Stopping reconnection attempts.`);
+    console.error(`Configured max retry attempts (${CONFIG.maxRetries}) exceeded. Stopping reconnection attempts.`);
+    return;
+  }
+
+  // Check absolute max retries to prevent infinite loops
+  if (retryAttempts > MAX_ABSOLUTE_RETRIES) {
+    console.error(`Absolute max retry attempts (${MAX_ABSOLUTE_RETRIES}) exceeded. Stopping reconnection attempts.`);
     return;
   }
 
@@ -104,43 +103,47 @@ function updateConfig(newConfig) {
 
 // Load configuration from storage on startup
 async function loadConfig() {
-  try {
-    // Load from storage with defaults, including test overrides
-    const result = await browser.storage.sync.get({
-      hostname: 'localhost',
-      port: 8765,
-      retryInterval: 5000,
-      maxRetries: -1,
-      pingTimeout: 5000,
-      // Test configuration overrides (set by test framework)
-      testPort: null,
-      testHostname: null
-    });
+  console.log('📥 Loading configuration from storage...');
+  console.log('🔍 LOADCONFIG - Stack trace:');
+  console.trace();
 
-    // Apply configuration with test overrides taking priority
-    CONFIG.hostname = result.testHostname || result.hostname;
-    CONFIG.port = result.testPort || result.port;
-    CONFIG.retryInterval = result.retryInterval;
-    CONFIG.maxRetries = result.maxRetries;
-    CONFIG.pingTimeout = result.pingTimeout;
+  // Load from storage - browser.storage.sync.get() always succeeds
+  const result = await browser.storage.sync.get({
+    hostname: 'localhost',
+    port: 8765,
+    retryInterval: 5000,
+    maxRetries: -1,
+    pingTimeout: 5000,
+    // Test configuration overrides (set by test framework)
+    testPort: null,
+    testHostname: null
+  });
 
-    console.log('📋 Configuration loaded:', CONFIG);
-    console.log('🌐 WebSocket URL will be:', `ws://${CONFIG.hostname}:${CONFIG.port}`);
-    console.log('🔧 Test overrides active:', {
+  // Check if we're in a test environment waiting for configuration
+  const isTestEnvironment = result.testPort !== null || result.testHostname !== null;
+  const hasValidTestConfig = result.testPort && result.testPort !== 8765;
+
+  if (isTestEnvironment && !hasValidTestConfig) {
+    console.log('🧪 Test environment detected but no valid test config yet');
+    console.log('📋 Current storage values:', result);
+    throw new Error('Test environment detected but configuration not ready');
+  }
+
+  // Apply configuration with test overrides taking priority
+  CONFIG.hostname = result.testHostname || result.hostname;
+  CONFIG.port = result.testPort || result.port;
+  CONFIG.retryInterval = result.retryInterval;
+  CONFIG.maxRetries = result.maxRetries;
+  CONFIG.pingTimeout = result.pingTimeout;
+
+  console.log('📋 Configuration loaded:', CONFIG);
+  console.log('🌐 WebSocket URL will be:', `ws://${CONFIG.hostname}:${CONFIG.port}`);
+
+  if (result.testPort || result.testHostname) {
+    console.log('🧪 Test overrides active:', {
       testPort: result.testPort,
-      testHostname: result.testHostname,
-      hasTestOverrides: !!(result.testPort || result.testHostname)
+      testHostname: result.testHostname
     });
-
-    if (result.testPort || result.testHostname) {
-      console.log('Using test configuration overrides:', {
-        testPort: result.testPort,
-        testHostname: result.testHostname
-      });
-    }
-
-  } catch (error) {
-    console.error('Error loading configuration:', error);
   }
 }
 
@@ -748,9 +751,6 @@ async function handleTestAction(id, action, data) {
         await handleCreateTestTabs(id, data);
         break;
 
-      case 'test.initialize_connection':
-        await handleInitializeConnection(id, data);
-        break;
 
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown test action: ${action}`);
@@ -1166,31 +1166,120 @@ async function handleCreateTestTabs(id, data) {
   }
 }
 
-async function handleInitializeConnection(id, data) {
+
+// ✅ INITIALIZATION: Load config and connect automatically after loading completes
+// This ensures storage configuration is fully loaded before connection attempts
+console.log('🚀 Extension starting - loading configuration...');
+
+// Initialize extension: load config then connect
+async function initializeExtension() {
   try {
-    console.log('🔥 Test framework requesting connection initialization');
-    console.log('🔄 Loading configuration...');
+    console.log('🚀 Initializing extension...');
+    console.log('📍 BEFORE loadConfig() - CONFIG:', JSON.stringify(CONFIG, null, 2));
+
     await loadConfig();
-    console.log('🔄 Configuration loaded:', JSON.stringify(CONFIG, null, 2));
-    console.log('🔄 Attempting connection...');
+
+    console.log('✅ Configuration loaded successfully');
+    console.log('📍 AFTER loadConfig() - CONFIG:', JSON.stringify(CONFIG, null, 2));
+
+    // Connect after config load
+    console.log('🔌 Connecting to MCP server...');
     connectToMCPServer();
 
-    sendResponse(id, 'test.initialize_connection', {
-      success: true,
-      message: 'Connection initialization requested',
-      config: CONFIG
-    });
   } catch (error) {
-    console.error('Failed to initialize connection:', error);
-    sendError(id, 'INITIALIZE_CONNECTION_ERROR', `Failed to initialize connection: ${error.message}`);
+    console.error('❌ Failed to initialize extension:', error);
+    console.log('🔄 Will retry initialization in 1 second...');
+    setTimeout(() => {
+      initializeExtension();
+    }, 1000);
   }
 }
 
-// ✅ RACE CONDITION ELIMINATED: No automatic connection on extension load
-// Extension will connect only when:
-// 1. User explicitly triggers connection (popup, options page)
-// 2. Test framework explicitly requests connection via test helper
-// 3. Extension receives a forceReconnect message
-//
-// This ensures storage configuration is fully loaded before any connection attempts
-console.log('🧊 Extension loaded in cold state - waiting for explicit connection trigger');
+// Debug logging configuration - set to true to send extension logs to server
+const ENABLE_DEBUG_LOGGING_TO_SERVER = false;
+
+// Enhanced console logging that sends to server when available
+if (ENABLE_DEBUG_LOGGING_TO_SERVER) {
+  const originalConsoleLog = console.log;
+  const originalConsoleError = console.error;
+
+  // Buffer to store logs before WebSocket connection is established
+  let logBuffer = [];
+
+  function createLogMessage(level, args) {
+    return {
+      id: `debug_${Date.now()}`,
+      type: "debug_log",
+      action: "extension.debug",
+      data: {
+        level: level,
+        message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '),
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  function sendLogMessage(logMessage) {
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+      try {
+        websocket.send(JSON.stringify(logMessage));
+        return true;
+      } catch (e) {
+        // Ignore errors sending debug logs
+      }
+    }
+    return false;
+  }
+
+  function flushLogBuffer() {
+    if (logBuffer.length > 0 && websocket && websocket.readyState === WebSocket.OPEN) {
+      const bufferedLogs = [...logBuffer];
+      logBuffer = [];
+      bufferedLogs.forEach(logMessage => {
+        sendLogMessage(logMessage);
+      });
+    }
+  }
+
+  function enhancedLog(...args) {
+    // Always log to console
+    originalConsoleLog(...args);
+
+    const logMessage = createLogMessage("log", args);
+
+    // Try to send immediately, otherwise buffer it
+    if (!sendLogMessage(logMessage)) {
+      logBuffer.push(logMessage);
+      // Keep buffer size reasonable
+      if (logBuffer.length > 100) {
+        logBuffer = logBuffer.slice(-50);
+      }
+    }
+  }
+
+  function enhancedError(...args) {
+    // Always log to console
+    originalConsoleError(...args);
+
+    const logMessage = createLogMessage("error", args);
+
+    // Try to send immediately, otherwise buffer it
+    if (!sendLogMessage(logMessage)) {
+      logBuffer.push(logMessage);
+      // Keep buffer size reasonable
+      if (logBuffer.length > 100) {
+        logBuffer = logBuffer.slice(-50);
+      }
+    }
+  }
+
+  // Replace console methods with enhanced versions
+  console.log = enhancedLog;
+  console.error = enhancedError;
+
+  // Export flush function to be called when WebSocket connects
+  window.flushDebugLogBuffer = flushLogBuffer;
+}
+
+// Start initialization
+initializeExtension();

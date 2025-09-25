@@ -79,9 +79,20 @@ class TestUIStorageSync:
                 if not firefox_started:
                     pytest.skip("Firefox failed to start")
                 
-                # Wait for extension to connect
+                # Wait for extension to load configuration and connect automatically
                 await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
-                
+
+                # Wait for extension to connect automatically
+                if not server.extension_connection:
+                    print("⏳ Extension hasn't connected yet, waiting...")
+                    # Wait up to 15 seconds for extension to connect
+                    for i in range(30):  # 30 * 0.5s = 15s total
+                        await asyncio.sleep(0.5)
+                        if server.extension_connection:
+                            break
+                    else:
+                        pytest.skip("Extension did not connect to server")
+
                 # Verify connection
                 if not server.extension_connection:
                     pytest.skip("Extension did not connect to server")

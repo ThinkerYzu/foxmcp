@@ -122,6 +122,18 @@ class FoxMCPServer:
             message_id = data.get('id')
             action = data.get('action', 'unknown')
 
+            # Handle debug logs specially - print them prominently
+            if message_type == 'debug_log':
+                level = data.get('data', {}).get('level', 'log')
+                log_message = data.get('data', {}).get('message', '')
+                timestamp = data.get('data', {}).get('timestamp', '')
+
+                if level == 'error':
+                    print(f"🔴 EXTENSION ERROR [{timestamp}]: {log_message}")
+                else:
+                    print(f"🔵 EXTENSION LOG [{timestamp}]: {log_message}")
+                return
+
             logger.info(f"Received from extension: {message_type} - {action} (ID: {message_id})")
 
             if message_type == 'request':
@@ -173,6 +185,7 @@ class FoxMCPServer:
             logger.info(f"Sent ping request to extension: {request['id']}")
         else:
             logger.error(f"Failed to send ping request: {request['id']}")
+
 
     async def test_ping_extension(self) -> Dict[str, Any]:
         """Send ping to extension and wait for response"""
