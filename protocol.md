@@ -1,5 +1,14 @@
 # WebSocket Message Protocol
 
+## Connection Constraints
+
+**IMPORTANT: Only one extension connection is allowed at a time.**
+
+- The FoxMCP server accepts only one active WebSocket connection from a browser extension
+- If a new connection arrives, the existing connection is automatically closed
+- The extension disconnects any existing connection before creating a new one
+- This prevents connection races, resource conflicts, and multiple extension instances
+
 ## Message Structure
 
 All messages follow this JSON structure:

@@ -1,3 +1,4 @@
+// SINGLE CONNECTION CONSTRAINT: Only one WebSocket connection to MCP server allowed
 let websocket = null;
 let isConnected = false;
 
@@ -18,6 +19,13 @@ function connectToMCPServer() {
   try {
     console.log('🔍 CONNECT ATTEMPT - Stack trace:');
     console.trace();
+
+    // IMPORTANT: Only one WebSocket connection is allowed at a time
+    // Disconnect any existing connection first to prevent multiple connections
+    if (websocket && websocket.readyState !== WebSocket.CLOSED) {
+      console.log('🔌 Disconnecting existing connection before creating new one');
+      disconnect();
+    }
 
     // Compute WebSocket URL dynamically using current config
     const WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;

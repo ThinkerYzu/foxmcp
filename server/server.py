@@ -91,6 +91,8 @@ class FoxMCPServer:
 
         logger.info(f"MCP server will use port {self.mcp_port}")
         self.start_mcp = start_mcp
+
+        # SINGLE CONNECTION CONSTRAINT: Only one extension connection allowed
         self.extension_connection = None
         self.pending_requests = {}  # Map of request IDs to Future objects
 
@@ -100,8 +102,23 @@ class FoxMCPServer:
         self.mcp_server_task = None
 
     async def handle_extension_connection(self, websocket):
-        """Handle WebSocket connection from browser extension"""
+        """Handle WebSocket connection from browser extension
+
+        IMPORTANT: Only ONE extension connection is allowed at a time.
+        If a new connection arrives, the existing one is closed first.
+        This prevents multiple extensions or connection races.
+        """
         logger.info(f"Extension connected from {websocket.remote_address}")
+
+        # CONSTRAINT: Only one extension connection allowed at a time
+        # Close existing connection if there is one to maintain single connection policy
+        if self.extension_connection and not self.extension_connection.closed:
+            logger.info("Closing existing extension connection for new one")
+            try:
+                await self.extension_connection.close()
+            except Exception as e:
+                logger.warning(f"Error closing existing connection: {e}")
+
         self.extension_connection = websocket
 
         try:
