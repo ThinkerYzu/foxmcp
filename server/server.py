@@ -25,7 +25,7 @@ except ImportError:
 try:
     tests_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests')
     sys.path.insert(0, tests_dir)
-    from port_coordinator import DEFAULT_PORT_RANGE, get_safe_port_range
+    from port_coordinator import DEFAULT_PORT_RANGE, get_port_range
     HAS_PORT_COORDINATOR = True
 except ImportError:
     HAS_PORT_COORDINATOR = False
@@ -38,7 +38,7 @@ def find_available_port(start_port=3000, max_attempts=100):
     """Find an available port starting from start_port"""
     if HAS_PORT_COORDINATOR:
         # Use the safe port range for MCP if available
-        port_range = get_safe_port_range('integration_mcp')
+        port_range = get_port_range('mcp')
         for port in range(port_range[0], port_range[1] + 1):
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:

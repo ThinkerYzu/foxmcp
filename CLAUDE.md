@@ -12,6 +12,13 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 NEVER create git commits unless explicitly requested by the User.
 NEVER add Claude Code attribution or "Generated with Claude Code" footer in git commit messages.
 
+# Testing Guidelines
+ALWAYS use example.org for test URLs instead of httpbin.org or any other service.
+- example.org is the official reserved domain for testing and documentation
+- Use paths like https://example.org/path1, https://example.org/test, etc.
+- NEVER use httpbin.org, httpbin.com, or similar external testing services
+- This ensures tests are reliable and don't depend on external services
+
 # Documentation Files Reference
 
 ## PLAN.md

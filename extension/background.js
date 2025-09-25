@@ -956,31 +956,75 @@ async function getOptionsStateForValidation(storageConfig) {
 async function handleVisitURL(id, data) {
   try {
     const url = data.url;
-    const waitTime = data.waitTime || 6000; // Default 6 seconds wait
-    
+    const waitTime = data.waitTime || 8000; // Increased default wait time
+
     if (!url) {
       sendError(id, 'INVALID_PARAMETERS', 'URL is required for test.visit_url');
       return;
     }
-    
+
+    console.log(`[FoxMCP] Starting visit to URL: ${url}`);
+
     // Create a new tab with the URL
     const tab = await browser.tabs.create({
       url: url,
       active: false // Don't make it active to avoid disrupting tests
     });
-    
-    // Wait for the page to load
-    await new Promise(resolve => setTimeout(resolve, waitTime));
-    
+
+    console.log(`[FoxMCP] Created tab ${tab.id} for URL: ${url}`);
+
+    // Wait for the tab to actually complete loading
+    let tabLoaded = false;
+    let loadStartTime = Date.now();
+    const maxWaitTime = Math.max(waitTime, 10000); // At least 10 seconds
+
+    // Set up a listener for tab updates
+    const tabUpdateListener = (tabId, changeInfo, updatedTab) => {
+      if (tabId === tab.id && changeInfo.status === 'complete') {
+        console.log(`[FoxMCP] Tab ${tab.id} finished loading`);
+        tabLoaded = true;
+      }
+    };
+
+    browser.tabs.onUpdated.addListener(tabUpdateListener);
+
+    try {
+      // Wait for either tab to load or timeout
+      while (!tabLoaded && (Date.now() - loadStartTime) < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      if (tabLoaded) {
+        console.log(`[FoxMCP] Tab loaded in ${Date.now() - loadStartTime}ms`);
+        // Give additional time for history to be recorded
+        console.log(`[FoxMCP] Waiting additional time for history recording...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } else {
+        console.log(`[FoxMCP] Tab did not complete loading within ${maxWaitTime}ms, proceeding anyway`);
+        // Still wait the original wait time as fallback
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+    } finally {
+      // Clean up the listener
+      browser.tabs.onUpdated.removeListener(tabUpdateListener);
+    }
+
+    console.log(`[FoxMCP] Closing tab ${tab.id}`);
+
     // Close the tab
     await browser.tabs.remove(tab.id);
-    
+
+    console.log(`[FoxMCP] Successfully visited and closed: ${url}`);
+
     sendResponse(id, 'test.visit_url', {
       success: true,
       url: url,
       tabId: tab.id,
       visitTime: new Date().toISOString(),
-      message: `Successfully visited ${url}`
+      loadTime: Date.now() - loadStartTime,
+      tabLoaded: tabLoaded,
+      message: `Successfully visited ${url} (loaded: ${tabLoaded})`
     });
     
   } catch (error) {
@@ -992,37 +1036,71 @@ async function handleVisitURL(id, data) {
 async function handleVisitMultipleURLs(id, data) {
   try {
     const urls = data.urls || [];
-    const waitTime = data.waitTime || 6000; // Time to wait at each URL (increased)
-    const delayBetween = data.delayBetween || 2000; // Delay between visits (increased)
-    
+    const waitTime = data.waitTime || 8000; // Increased time to wait at each URL
+    const delayBetween = data.delayBetween || 3000; // Increased delay between visits
+
     if (!Array.isArray(urls) || urls.length === 0) {
       sendError(id, 'INVALID_PARAMETERS', 'urls array is required for test.visit_multiple_urls');
       return;
     }
-    
+
+    console.log(`[FoxMCP] Starting visit to ${urls.length} URLs`);
     const results = [];
-    
+
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
-      
+      console.log(`[FoxMCP] Visiting URL ${i + 1}/${urls.length}: ${url}`);
+
       try {
-        // Create tab and visit URL
+        // Use the same improved logic as single URL visit
         const tab = await browser.tabs.create({
           url: url,
           active: false
         });
-        
-        // Wait for page to load
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        
+
+        let tabLoaded = false;
+        let loadStartTime = Date.now();
+        const maxWaitTime = Math.max(waitTime, 10000);
+
+        // Set up tab update listener
+        const tabUpdateListener = (tabId, changeInfo, updatedTab) => {
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            console.log(`[FoxMCP] Tab ${tab.id} finished loading URL ${i + 1}`);
+            tabLoaded = true;
+          }
+        };
+
+        browser.tabs.onUpdated.addListener(tabUpdateListener);
+
+        try {
+          // Wait for tab to load or timeout
+          while (!tabLoaded && (Date.now() - loadStartTime) < maxWaitTime) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+          if (tabLoaded) {
+            console.log(`[FoxMCP] URL ${i + 1} loaded in ${Date.now() - loadStartTime}ms`);
+            // Extra wait for history recording
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } else {
+            console.log(`[FoxMCP] URL ${i + 1} did not complete loading within ${maxWaitTime}ms`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+
+        } finally {
+          browser.tabs.onUpdated.removeListener(tabUpdateListener);
+        }
+
         // Close the tab
         await browser.tabs.remove(tab.id);
-        
+
         results.push({
           url: url,
           success: true,
           tabId: tab.id,
-          visitTime: new Date().toISOString()
+          visitTime: new Date().toISOString(),
+          loadTime: Date.now() - loadStartTime,
+          tabLoaded: tabLoaded
         });
         
         // Small delay between visits

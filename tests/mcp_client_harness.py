@@ -625,8 +625,8 @@ if __name__ == "__main__":
         print("Testing MCP Client Harness...")
         
         # This would need a real MCP server running - use dynamic port for testing
-        from port_coordinator import PortCoordinator, get_safe_port_range
-        coordinator = PortCoordinator(get_safe_port_range('default'))
+        from port_coordinator import PortCoordinator, get_port_range
+        coordinator = PortCoordinator(get_port_range('mcp'))
         test_port = coordinator.find_available_port()
         client = MCPTestClient("localhost", test_port)
         

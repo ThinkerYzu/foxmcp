@@ -13,10 +13,10 @@ import os
 # Add project root to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from port_coordinator import PortCoordinator, get_safe_port_range
+from port_coordinator import PortCoordinator, get_port_range
 
 # Global port coordinator for tests
-_test_port_coordinator = PortCoordinator(get_safe_port_range('default'))
+_test_port_coordinator = PortCoordinator(get_port_range('websocket'))
 
 # Store allocated ports for Firefox configuration
 _allocated_test_ports = {}

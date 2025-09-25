@@ -12,19 +12,13 @@ from contextlib import contextmanager
 from typing import Tuple, Dict, Optional
 
 # Module-level port range constants - use high ephemeral port range to avoid conflicts
+# DEFAULT_PORT_RANGE spans both websocket and mcp ranges for backward compatibility
 DEFAULT_PORT_RANGE = (40000, 40999)
 
-# Test suite specific port ranges
-TEST_SUITE_PORT_RANGES = {
-    'unit': (40000, 40099),
-    'integration_basic': (40100, 40199),
-    'integration_live': (40200, 40299),
-    'integration_websocket': (40300, 40399),
-    'integration_firefox': (40400, 40499),
-    'integration_mcp': (40500, 40599),
-    'integration_ping_pong': (40600, 40699),
-    'real_firefox': (40700, 40799),
-    'default': (40800, 40899)
+# Port ranges for the two server types
+PORT_RANGES = {
+    'websocket': (40000, 40499),  # WebSocket server ports
+    'mcp': (40500, 40999)         # MCP server ports
 }
 
 
@@ -87,13 +81,19 @@ class PortCoordinator:
 
     def allocate_test_ports(self) -> Dict[str, int]:
         """Allocate a coordinated set of ports for testing"""
-        websocket_port = self.find_available_port()
-        mcp_port = self.find_available_port(websocket_port + 1000)  # Offset to avoid conflicts
-        
-        return {
-            'websocket': websocket_port,
-            'mcp': mcp_port
-        }
+        # For backwards compatibility, if this coordinator uses the old DEFAULT_PORT_RANGE,
+        # allocate using proper separated ranges
+        if self.base_port_range == DEFAULT_PORT_RANGE:
+            return allocate_coordinated_ports()
+        else:
+            # For specific ranges, allocate within that range
+            websocket_port = self.find_available_port()
+            mcp_port = self.find_available_port(websocket_port + 1000)  # Offset to avoid conflicts
+
+            return {
+                'websocket': websocket_port,
+                'mcp': mcp_port
+            }
     
     def create_coordination_file(self, ports: Dict[str, int]) -> str:
         """Create a temporary file with port coordination info"""
@@ -216,22 +216,44 @@ class FirefoxPortCoordinator:
         return None
 
 
-def get_safe_port_range(test_suite: str) -> Tuple[int, int]:
-    """Get safe port range for a specific test suite"""
-    return TEST_SUITE_PORT_RANGES.get(test_suite, TEST_SUITE_PORT_RANGES['default'])
+def get_port_range(port_type: str) -> Tuple[int, int]:
+    """Get port range for websocket or mcp server type"""
+    if port_type not in PORT_RANGES:
+        raise ValueError(f"Invalid port type '{port_type}'. Must be 'websocket' or 'mcp'")
+    return PORT_RANGES[port_type]
 
 
 # Convenience functions for common test scenarios
 def allocate_firefox_test_ports():
     """Allocate ports specifically for Firefox extension testing"""
-    coordinator = PortCoordinator(get_safe_port_range('integration_firefox'))
+    coordinator = PortCoordinator(get_port_range('websocket'))
     return coordinator.allocate_test_ports()
 
 
-def allocate_server_test_ports(suite_name: str = 'default'):
-    """Allocate ports for general server testing"""
-    coordinator = PortCoordinator(get_safe_port_range(suite_name))
+def allocate_websocket_test_ports():
+    """Allocate ports for WebSocket server testing"""
+    coordinator = PortCoordinator(get_port_range('websocket'))
     return coordinator.allocate_test_ports()
+
+
+def allocate_mcp_test_ports():
+    """Allocate ports for MCP server testing"""
+    coordinator = PortCoordinator(get_port_range('mcp'))
+    return coordinator.allocate_test_ports()
+
+
+def allocate_coordinated_ports() -> Dict[str, int]:
+    """Allocate coordinated ports from proper websocket and mcp ranges"""
+    websocket_coordinator = PortCoordinator(get_port_range('websocket'))
+    mcp_coordinator = PortCoordinator(get_port_range('mcp'))
+
+    websocket_port = websocket_coordinator.find_available_port()
+    mcp_port = mcp_coordinator.find_available_port()
+
+    return {
+        'websocket': websocket_port,
+        'mcp': mcp_port
+    }
 
 
 if __name__ == "__main__":
