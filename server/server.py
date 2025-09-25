@@ -112,7 +112,7 @@ class FoxMCPServer:
 
         # CONSTRAINT: Only one extension connection allowed at a time
         # Close existing connection if there is one to maintain single connection policy
-        if self.extension_connection and not self.extension_connection.closed:
+        if self.extension_connection and self.extension_connection.close_code is None:
             logger.info("Closing existing extension connection for new one")
             try:
                 await self.extension_connection.close()
