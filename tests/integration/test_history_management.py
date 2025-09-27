@@ -21,11 +21,11 @@ from server.server import FoxMCPServer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 try:
     from ..test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-    from ..firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+    from ..firefox_test_utils import FirefoxTestManager
     from ..port_coordinator import coordinated_test_ports
 except ImportError:
     from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-    from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+    from firefox_test_utils import FirefoxTestManager
     from port_coordinator import coordinated_test_ports
 
 
@@ -41,9 +41,6 @@ class TestHistoryManagementEndToEnd:
             mcp_port = ports['mcp']
             
             # Get extension XPI
-            extension_xpi = get_extension_xpi_path()
-            if not extension_xpi or not os.path.exists(extension_xpi):
-                pytest.skip("Extension XPI not found. Run 'make package' first.")
             
             # Create server
             server = FoxMCPServer(
@@ -69,16 +66,10 @@ class TestHistoryManagementEndToEnd:
             )
             
             try:
-                # Create profile and install extension
-                firefox.create_test_profile()
-                success = firefox.install_extension(extension_xpi)
+                # Set up Firefox with extension and start it
+                success = firefox.setup_and_start_firefox(headless=True)
                 if not success:
-                    pytest.skip("Extension installation failed")
-                
-                # Start Firefox
-                firefox_started = firefox.start_firefox(headless=True)
-                if not firefox_started:
-                    pytest.skip("Firefox failed to start")
+                    pytest.skip("Firefox setup or extension installation failed")
                 
                 # Wait for extension to connect
                 await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
@@ -92,11 +83,7 @@ class TestHistoryManagementEndToEnd:
             finally:
                 # Cleanup
                 firefox.cleanup()
-                server_task.cancel()
-                try:
-                    await server_task
-                except asyncio.CancelledError:
-                    pass
+                await server.shutdown(server_task)
     
     @pytest.mark.asyncio
     async def test_history_query_basic(self, server_with_extension):

@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from server.server import FoxMCPServer
 from port_coordinator import coordinated_test_ports
 from mcp_client_harness import DirectMCPTestClient
-from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+from firefox_test_utils import FirefoxTestManager
 
 
 @pytest.mark.asyncio
@@ -27,9 +27,6 @@ async def test_complete_mcp_to_firefox_chain():
     print("=" * 80)
     
     # Check requirements
-    extension_xpi = get_extension_xpi_path()
-    if not extension_xpi or not os.path.exists(extension_xpi):
-        print("❌ Extension XPI not found. Run 'make package' first.")
         return False
         
     firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
@@ -106,24 +103,14 @@ async def test_complete_mcp_to_firefox_chain():
                 coordination_file=coord_file
             ) as firefox:
                 
-                # Set up Firefox
-                firefox.create_test_profile()
-                extension_installed = firefox.install_extension(extension_xpi)
-                
-                if not extension_installed:
-                    print("❌ Failed to install extension")
+                # Set up Firefox with consolidated API
+                firefox_setup_success = firefox.setup_and_start_firefox(headless=True)
+
+                if not firefox_setup_success:
+                    print("❌ Failed to set up and start Firefox")
                     return False
-                
-                print("✅ Extension installed to Firefox profile")
-                
-                # Start Firefox
-                firefox_started = firefox.start_firefox(headless=True)
-                
-                if not firefox_started:
-                    print("❌ Failed to start Firefox")  
-                    return False
-                
-                print("✅ Firefox started")
+
+                print("✅ Firefox set up and started with extension")
                 
                 # Wait for extension to connect
                 print("⏳ Waiting for extension to connect...")

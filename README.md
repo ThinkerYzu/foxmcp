@@ -718,6 +718,13 @@ This enables **automated testing** of storage synchronization without browser au
 3. Check browser permissions granted
 4. Verify connection: Check status in extension popup
 
+### Test Suite Improvements (Recent Updates)
+Recent improvements ensure more reliable testing:
+- **Fixed project root path resolution**: Tests now use absolute paths regardless of execution directory
+- **Consistent port allocation**: Fixed ports (40000, 40200, 40400, 40600) instead of dynamic ranges
+- **Proper server cleanup**: All integration tests now properly stop MCP servers to prevent port conflicts
+- **Profile caching**: Firefox profiles are cached and reused for faster test execution
+
 ### Claude Code MCP Issues
 
 If MCP tools aren't working in Claude Code:

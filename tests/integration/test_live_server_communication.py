@@ -19,6 +19,7 @@ from server.server import FoxMCPServer
 # Import test configuration
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from test_config import TEST_PORTS
+from port_coordinator import get_port_by_type
 
 
 class TestLiveServerCommunication:
@@ -42,19 +43,14 @@ class TestLiveServerCommunication:
         assert not server_task.done()
         
         # Cleanup
-        server_task.cancel()
-        try:
-            await server_task
-        except asyncio.CancelledError:
-            pass  # Expected when cancelling
+        await server.shutdown(server_task)
 
     @pytest.mark.asyncio
     async def test_client_can_connect_to_server(self):
         """Test that a WebSocket client can connect to the server"""
-        # Use fixed ports with offset to avoid conflicts
-        ports = TEST_PORTS['integration']
-        port = ports['websocket'] + 1
-        mcp_port = ports['mcp'] + 1
+        # Use individual dynamic ports to avoid conflicts
+        port = get_port_by_type('test_individual')
+        mcp_port = get_port_by_type('test_mcp_individual')
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
@@ -89,11 +85,7 @@ class TestLiveServerCommunication:
             
         finally:
             # Cleanup
-            server_task.cancel()
-            try:
-                await server_task
-            except asyncio.CancelledError:
-                pass
+            await server.shutdown(server_task)
         
         assert connection_successful, "Client should be able to connect to server"
 
@@ -211,11 +203,7 @@ class TestLiveServerCommunication:
                 
             finally:
                 # Cleanup
-                server_task.cancel()
-                try:
-                    await server_task
-                except asyncio.CancelledError:
-                    pass
+                await server.shutdown(server_task)
             
             assert communication_successful, "Bidirectional communication should work"
 

@@ -19,6 +19,14 @@ ALWAYS use example.org for test URLs instead of httpbin.org or any other service
 - NEVER use httpbin.org, httpbin.com, or similar external testing services
 - This ensures tests are reliable and don't depend on external services
 
+## Firefox Test Setup
+ALWAYS use the consolidated method `setup_and_start_firefox()` for Firefox test setup:
+- USE: `firefox.setup_and_start_firefox(headless=True)`
+- Extension path is automatically determined internally using `_get_extension_xpi_path()`
+- The old individual methods (`create_test_profile()`, `install_extension()`, `start_firefox()`) have been removed
+- This ensures consistent setup, error handling, and reduces code duplication across tests
+- Internal methods (`_create_test_profile()`, `_get_extension_xpi_path()`, etc.) are implementation details and should not be called directly
+
 # Documentation Files Reference
 
 ## PLAN.md

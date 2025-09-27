@@ -24,7 +24,8 @@ from server.server import FoxMCPServer
 # Import test utilities
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from test_config import TEST_PORTS
-from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+from firefox_test_utils import FirefoxTestManager
+from port_coordinator import get_port_by_type
 
 
 class TestFirefoxExtensionCommunication:
@@ -57,13 +58,6 @@ user_pref("browser.tabs.remote.autostart", false);
         # Cleanup
         shutil.rmtree(profile_dir, ignore_errors=True)
 
-    @pytest.fixture
-    def extension_xpi(self):
-        """Get path to built extension XPI"""
-        xpi_path = os.path.join(os.path.dirname(__file__), '..', '..', 'dist', 'packages', 'foxmcp@codemud.org.xpi')
-        if not os.path.exists(xpi_path):
-            pytest.skip("Extension XPI not found. Run 'make package' first.")
-        return xpi_path
 
     @pytest_asyncio.fixture
     async def running_server(self):
@@ -83,53 +77,17 @@ user_pref("browser.tabs.remote.autostart", false);
         
         server._test_port = ports['websocket']
         yield server
-        
+
         # Cleanup
-        server_task.cancel()
         try:
-            await server_task
-        except asyncio.CancelledError:
-            pass
+            await server.shutdown(server_task)
         except Exception as e:
             # Log but don't fail on cleanup issues
             pass
 
-    def start_firefox_with_extension(self, firefox_path, profile_dir, extension_xpi):
-        """Start Firefox with extension installed"""
-        
-        # Install extension to profile
-        extensions_dir = os.path.join(profile_dir, 'extensions')
-        os.makedirs(extensions_dir, exist_ok=True)
-        shutil.copy2(extension_xpi, extensions_dir)
-        
-        # Expand firefox path
-        firefox_path = os.path.expanduser(firefox_path)
-        
-        # Start Firefox in headless mode
-        firefox_cmd = [
-            firefox_path,
-            '-profile', profile_dir,
-            '-no-remote',
-            '-headless'
-        ]
-        
-        try:
-            process = subprocess.Popen(
-                firefox_cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            
-            # Wait for Firefox to initialize
-            time.sleep(3)
-            
-            return process
-            
-        except Exception as e:
-            pytest.skip(f"Could not start Firefox: {e}")
 
     @pytest.mark.asyncio
-    async def test_server_starts_before_extension_connects(self, running_server, firefox_path, temp_profile, extension_xpi):
+    async def test_server_starts_before_extension_connects(self, running_server, firefox_path, temp_profile):
         """Test server is ready when extension tries to connect"""
         
         # Server should be running
@@ -164,9 +122,6 @@ user_pref("browser.tabs.remote.autostart", false);
         
         try:
             # Get extension XPI path
-            extension_xpi = get_extension_xpi_path()
-            if not extension_xpi or not os.path.exists(extension_xpi):
-                pytest.skip("Extension XPI not found. Run 'make package' first.")
             
             # Create Firefox test manager with coordinated port
             firefox_manager = FirefoxTestManager(
@@ -174,12 +129,9 @@ user_pref("browser.tabs.remote.autostart", false);
                 test_port=running_server._test_port
             )
             
-            # Set up Firefox with extension
-            firefox_manager.create_test_profile()
-            firefox_manager.install_extension(extension_xpi)
-            
-            # Start Firefox and wait for extension connection
-            if firefox_manager.start_firefox(headless=True):
+            # Set up Firefox with extension and start it
+            success = firefox_manager.setup_and_start_firefox(headless=True)
+            if success:
                 connection_detected = firefox_manager.wait_for_extension_connection(timeout=10.0)
             
         except Exception as e:
@@ -194,16 +146,20 @@ user_pref("browser.tabs.remote.autostart", false);
         assert connection_detected, "Firefox should start successfully with extension"
 
     @pytest.mark.asyncio
-    async def test_bidirectional_message_flow(self, running_server, firefox_path, temp_profile, extension_xpi):
+    async def test_bidirectional_message_flow(self, running_server, firefox_path, temp_profile):
         """Test bidirectional message flow between server and extension"""
-        
-        firefox_process = None
-        
+
+        # Create Firefox test manager
+        firefox = FirefoxTestManager(
+            firefox_path=firefox_path,
+            test_port=running_server._test_port
+        )
+
         try:
-            # Start Firefox with extension  
-            firefox_process = self.start_firefox_with_extension(
-                firefox_path, temp_profile, extension_xpi
-            )
+            # Start Firefox with extension
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
             
             # Give extension time to connect
             await asyncio.sleep(3)
@@ -255,12 +211,7 @@ user_pref("browser.tabs.remote.autostart", false);
             
         finally:
             # Cleanup Firefox
-            if firefox_process:
-                try:
-                    firefox_process.terminate()
-                    firefox_process.wait(timeout=5)
-                except:
-                    firefox_process.kill()
+            firefox.cleanup()
 
     @pytest.mark.asyncio
     async def test_extension_message_protocol_compatibility(self, running_server):
@@ -341,10 +292,9 @@ class TestFirefoxConnectionResilience:
     @pytest.mark.asyncio
     async def test_server_handles_connection_loss(self):
         """Test server handles connection loss gracefully"""
-        # Use fixed ports for resilience testing
-        ports = TEST_PORTS['integration']
-        port = ports['websocket'] + 1  # Offset to avoid conflict with main test
-        mcp_port = ports['mcp'] + 1
+        # Use individual dynamic ports for resilience testing
+        port = get_port_by_type('test_individual')
+        mcp_port = get_port_by_type('test_mcp_individual')
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         # Start server
@@ -376,19 +326,14 @@ class TestFirefoxConnectionResilience:
             assert not server_task.done()
             
         finally:
-            server_task.cancel()
-            try:
-                await server_task
-            except asyncio.CancelledError:
-                pass
+            await server.shutdown(server_task)
 
     @pytest.mark.asyncio
     async def test_multiple_connection_attempts(self):
         """Test server can handle multiple connection attempts"""
-        # Use fixed ports for multiple connection testing
-        ports = TEST_PORTS['integration']
-        port = ports['websocket'] + 2  # Different offset to avoid conflict
-        mcp_port = ports['mcp'] + 2
+        # Use individual dynamic ports for multiple connection testing
+        port = get_port_by_type('test_individual')
+        mcp_port = get_port_by_type('test_mcp_individual')
         server = FoxMCPServer(host="localhost", port=port, mcp_port=mcp_port, start_mcp=False)
         
         server_task = asyncio.create_task(server.start_server())
@@ -417,11 +362,7 @@ class TestFirefoxConnectionResilience:
                 await websocket.close()
                 
         finally:
-            server_task.cancel()
-            try:
-                await server_task
-            except asyncio.CancelledError:
-                pass
+            await server.shutdown(server_task)
 
 
 if __name__ == "__main__":

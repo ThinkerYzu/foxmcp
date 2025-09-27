@@ -25,7 +25,7 @@ except ImportError:
 try:
     tests_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests')
     sys.path.insert(0, tests_dir)
-    from port_coordinator import DEFAULT_PORT_RANGE, get_port_range
+    from port_coordinator import get_port_by_type
     HAS_PORT_COORDINATOR = True
 except ImportError:
     HAS_PORT_COORDINATOR = False
@@ -37,16 +37,11 @@ logger = logging.getLogger(__name__)
 def find_available_port(start_port=3000, max_attempts=100):
     """Find an available port starting from start_port"""
     if HAS_PORT_COORDINATOR:
-        # Use the safe port range for MCP if available
-        port_range = get_port_range('mcp')
-        for port in range(port_range[0], port_range[1] + 1):
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    sock.bind(('localhost', port))
-                    return port
-            except OSError:
-                continue
+        # Use the fixed MCP port if available
+        try:
+            return get_port_by_type('mcp')
+        except Exception:
+            pass  # Fall through to traditional approach
     else:
         # Fallback to traditional approach
         for i in range(max_attempts):
@@ -100,6 +95,10 @@ class FoxMCPServer:
         self.mcp_tools = FoxMCPTools(self)
         self.mcp_app = self.mcp_tools.get_mcp_app()
         self.mcp_server_task = None
+        self.mcp_thread = None
+        self.mcp_server_instance = None
+        self._shutdown_event = None
+        self.websocket_server = None
 
     async def handle_extension_connection(self, websocket):
         """Handle WebSocket connection from browser extension
@@ -428,26 +427,128 @@ class FoxMCPServer:
 
     async def start_mcp_server(self):
         """Start the MCP server in a separate thread"""
+        import threading
+
+        # Create shutdown event
+        self._shutdown_event = threading.Event()
+
         def run_mcp_server():
             try:
                 logger.info(f"Starting MCP server on {self.host}:{self.mcp_port}")
-                uvicorn.run(
+
+                # Create server config
+                config = uvicorn.Config(
                     self.mcp_app.http_app(),
                     host=self.host,
                     port=self.mcp_port,
                     log_level="error"  # Reduce log noise during tests
                 )
+
+                # Create server instance
+                self.mcp_server_instance = uvicorn.Server(config)
+
+                # Run server
+                self.mcp_server_instance.run()
+
             except Exception as e:
                 logger.warning(f"MCP server failed to start on {self.host}:{self.mcp_port}: {e}")
                 # Don't crash the whole server if MCP fails - this is important for tests
 
         # Run MCP server in separate thread
-        mcp_thread = threading.Thread(target=run_mcp_server, daemon=True)
-        mcp_thread.start()
+        self.mcp_thread = threading.Thread(target=run_mcp_server, daemon=True)
+        self.mcp_thread.start()
         logger.info(f"MCP server thread started for {self.host}:{self.mcp_port}")
 
         # Give MCP server time to start (reduced time for faster tests)
         await asyncio.sleep(0.5)
+
+    def _stop_mcp_server(self):
+        """Stop the MCP server gracefully"""
+        if self.mcp_server_instance:
+            try:
+                logger.info("Stopping MCP server...")
+
+                # Signal server to shutdown
+                self.mcp_server_instance.should_exit = True
+
+                # Wait for thread to finish with timeout
+                if self.mcp_thread and self.mcp_thread.is_alive():
+                    self.mcp_thread.join(timeout=5.0)
+
+                    if self.mcp_thread.is_alive():
+                        logger.warning("MCP server thread did not stop gracefully within timeout")
+                    else:
+                        logger.info("MCP server stopped gracefully")
+
+                # Clean up references
+                self.mcp_server_instance = None
+                self.mcp_thread = None
+
+            except Exception as e:
+                logger.warning(f"Error stopping MCP server: {e}")
+
+    def _stop_websocket_server(self):
+        """Stop the WebSocket server gracefully"""
+        if self.websocket_server:
+            try:
+                logger.info("Stopping WebSocket server...")
+
+                # Close all existing connections first
+                if self.extension_connection:
+                    try:
+                        # Properly close the WebSocket connection (sync call)
+                        self.extension_connection.close()
+                        logger.info("Extension connection closed")
+                    except Exception as e:
+                        logger.warning(f"Error closing extension connection: {e}")
+                    finally:
+                        self.extension_connection = None
+
+                # Close the WebSocket server
+                self.websocket_server.close()
+
+                # Clean up reference
+                self.websocket_server = None
+
+                logger.info("WebSocket server stopped gracefully")
+
+            except Exception as e:
+                logger.warning(f"Error stopping WebSocket server: {e}")
+
+    def _stop(self):
+        """Stop all servers (WebSocket and MCP)"""
+        logger.info("Stopping FoxMCP server...")
+
+        # Stop MCP server
+        self._stop_mcp_server()
+
+        # Stop WebSocket server
+        self._stop_websocket_server()
+
+        logger.info("FoxMCP server stopped")
+
+    async def shutdown(self, server_task):
+        """
+        Gracefully shutdown the server and its task.
+
+        Args:
+            server_task: asyncio.Task running the server
+        """
+        try:
+            # Stop server resources first
+            self._stop()
+
+            # Cancel the task
+            server_task.cancel()
+
+            # Wait for task to finish, handling CancelledError
+            try:
+                await server_task
+            except asyncio.CancelledError:
+                pass
+
+        except Exception as e:
+            logger.warning(f"Error during server shutdown: {e}")
 
     async def start_server(self):
         """Start both WebSocket and MCP servers"""
@@ -460,15 +561,17 @@ class FoxMCPServer:
         else:
             logger.info("MCP server disabled for this instance")
 
-        # Use modern websockets API
-        server = await websockets.serve(
+        # Use modern websockets API with SO_REUSEADDR
+        import socket
+        self.websocket_server = await websockets.serve(
             self.handle_extension_connection,
             self.host,
-            self.port
+            self.port,
+            reuse_address=True  # Enable SO_REUSEADDR for immediate port reuse
         )
 
         logger.info("FoxMCP WebSocket server is running...")
-        await server.wait_closed()
+        await self.websocket_server.wait_closed()
 
 async def main():
     """Main entry point"""

@@ -20,7 +20,7 @@ from server.mcp_tools import FoxMCPTools
 
 # Import port constants
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from port_coordinator import DEFAULT_PORT_RANGE
+from port_coordinator import get_port_by_type
 
 
 class TestMCPIntegration:
@@ -203,12 +203,13 @@ class TestMCPServerConfiguration:
         # Port isolation system overrides default 8765 with dynamic port
         assert isinstance(server.port, int)
         assert server.port > 0  # Port should be positive
-        assert server.mcp_port >= DEFAULT_PORT_RANGE[0]  # Uses dynamic allocation in safe range
-        assert server.mcp_port <= DEFAULT_PORT_RANGE[1]
+        # Should use the fixed MCP port
+        expected_mcp_port = get_port_by_type('mcp')
+        assert server.mcp_port == expected_mcp_port
     
     def test_custom_ports(self):
         """Test custom port configuration"""
-        test_port = DEFAULT_PORT_RANGE[0] + 100  # Use a port from our safe range
+        test_port = get_port_by_type('test_individual')  # Use a test-specific port
         server = FoxMCPServer(port=test_port, mcp_port=4000)
 
         assert server.port == test_port

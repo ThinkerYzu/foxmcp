@@ -66,12 +66,7 @@ class TestMCPProtocolCompliance:
             finally:
                 # Cleanup
                 await mcp_client.disconnect()
-                websocket_task.cancel()
-
-                try:
-                    await websocket_task
-                except asyncio.CancelledError:
-                    pass
+                await server.shutdown(websocket_task)
 
     @pytest.mark.asyncio
     async def test_real_mcp_http_server_tool_names(self, full_mcp_system):

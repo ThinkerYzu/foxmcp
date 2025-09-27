@@ -1,75 +1,47 @@
 """
 Dynamic Port Coordination System for FoxMCP Testing
-Provides coordination between server and extension while avoiding port conflicts
+
+Provides centralized port allocation to avoid conflicts between:
+- Main server ports (fixed: websocket=40000, mcp=40200)
+- Individual test ports (dynamic: 40400-40599, 40600-40799)
+- Coordinated test environments (Firefox extension tests)
+
+Main API:
+- get_port_by_type(port_type): Get any port by type
+- coordinated_test_ports(): Context manager for test coordination
+
+Port Types:
+- 'websocket': Fixed websocket server port (40000)
+- 'mcp': Fixed MCP server port (40200)
+- 'test_individual': Dynamic individual test ports (40400-40599)
+- 'test_mcp_individual': Dynamic individual MCP test ports (40600-40799)
 """
 
 import socket
 import tempfile
 import os
 import json
-import random
 from contextlib import contextmanager
 from typing import Tuple, Dict, Optional
 
 # Module-level port range constants - use high ephemeral port range to avoid conflicts
-# DEFAULT_PORT_RANGE spans both websocket and mcp ranges for backward compatibility
-DEFAULT_PORT_RANGE = (40000, 40999)
 
-# Port ranges for the two server types
+# Port ranges for the different server types and test scenarios
 PORT_RANGES = {
-    'websocket': (40000, 40499),  # WebSocket server ports
-    'mcp': (40500, 40999)         # MCP server ports
+    'websocket': {'type': 'fixed', 'port': 40000},
+    'mcp': {'type': 'fixed', 'port': 40200},
+    'test_individual': {'type': 'fixed', 'port': 40400},
+    'test_mcp_individual': {'type': 'fixed', 'port': 40600}
 }
 
 
 class PortCoordinator:
     """Manages dynamic port allocation and coordination for testing"""
-    
-    def __init__(self, base_port_range=DEFAULT_PORT_RANGE):
-        self.base_port_range = base_port_range
+
+    def __init__(self):
         self.allocated_ports = set()
         self.coordination_file = None
     
-    def find_available_port(self, start_port=None) -> int:
-        """Find an available port in the specified range"""
-        if start_port:
-            ports_to_try = [start_port]
-        else:
-            # Try random ports in the range to reduce conflicts
-            start, end = self.base_port_range
-            # Try all available ports in the range if it's small, otherwise sample
-            range_size = end - start + 1
-            if range_size <= 100:
-                # Small range - try all ports
-                ports_to_try = list(range(start, end + 1))
-                random.shuffle(ports_to_try)
-            else:
-                # Large range - sample more ports
-                max_tries = min(800, range_size)
-                ports_to_try = random.sample(range(start, end + 1), max_tries)
-        
-        for port in ports_to_try:
-            if port in self.allocated_ports:
-                continue
-                
-            try:
-                # Test if port is available
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    sock.bind(('localhost', port))
-                    self.allocated_ports.add(port)
-                    return port
-            except OSError:
-                continue
-        
-        range_size = self.base_port_range[1] - self.base_port_range[0] + 1
-        ports_tried = len(ports_to_try) if not start_port else 1
-        allocated_count = len(self.allocated_ports)
-        raise RuntimeError(
-            f"No available ports found in range {self.base_port_range}. "
-            f"Range size: {range_size}, ports tried: {ports_tried}, "
-            f"already allocated by this coordinator: {allocated_count}"
-        )
 
     def release_port(self, port: int):
         """Release a port back to the available pool"""
@@ -79,21 +51,34 @@ class PortCoordinator:
         """Release all allocated ports - useful for cleanup between tests"""
         self.allocated_ports.clear()
 
-    def allocate_test_ports(self) -> Dict[str, int]:
-        """Allocate a coordinated set of ports for testing"""
-        # For backwards compatibility, if this coordinator uses the old DEFAULT_PORT_RANGE,
-        # allocate using proper separated ranges
-        if self.base_port_range == DEFAULT_PORT_RANGE:
-            return allocate_coordinated_ports()
-        else:
-            # For specific ranges, allocate within that range
-            websocket_port = self.find_available_port()
-            mcp_port = self.find_available_port(websocket_port + 1000)  # Offset to avoid conflicts
+    def get_port_by_type(self, port_type: str) -> int:
+        """Get port by type - handles both fixed ports and dynamic ranges"""
+        if port_type not in PORT_RANGES:
+            raise ValueError(f"Invalid port type '{port_type}'. Available types: {list(PORT_RANGES.keys())}")
 
-            return {
-                'websocket': websocket_port,
-                'mcp': mcp_port
-            }
+        port_config = PORT_RANGES[port_type]
+
+        if port_config['type'] == 'fixed':
+            return port_config['port']
+        elif port_config['type'] == 'range':
+            # For ranges, find an available port within the range
+            start, end = port_config['range']
+            for port in range(start, end + 1):
+                if port not in self.allocated_ports:
+                    try:
+                        # Test if port is available
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                            sock.bind(('localhost', port))
+                            self.allocated_ports.add(port)
+                            return port
+                    except OSError:
+                        continue
+
+            raise RuntimeError(f"No available ports in range {port_config['range']} for type '{port_type}'")
+        else:
+            raise ValueError(f"Unknown port type configuration: {port_config['type']}")
+
     
     def create_coordination_file(self, ports: Dict[str, int]) -> str:
         """Create a temporary file with port coordination info"""
@@ -150,18 +135,26 @@ class PortCoordinator:
 
 
 @contextmanager
-def coordinated_test_ports(base_range=DEFAULT_PORT_RANGE):
-    """Context manager for coordinated test ports"""
-    coordinator = PortCoordinator(base_range)
+def coordinated_test_ports():
+    """Context manager for coordinated test ports - allocates dynamic test ports"""
+    coordinator = PortCoordinator()
     ports = None
-    
+
     try:
-        ports = coordinator.allocate_test_ports()
+        # Allocate dynamic test ports instead of fixed server ports
+        websocket_port = get_port_by_type('test_individual')
+        mcp_port = get_port_by_type('test_mcp_individual')
+
+        ports = {
+            'websocket': websocket_port,
+            'mcp': mcp_port
+        }
+
         coordination_file = coordinator.create_coordination_file(ports)
-        
+
         # Provide both ports and coordination file path
         yield ports, coordination_file
-        
+
     finally:
         if ports:
             coordinator.release_ports(ports)
@@ -216,44 +209,16 @@ class FirefoxPortCoordinator:
         return None
 
 
-def get_port_range(port_type: str) -> Tuple[int, int]:
-    """Get port range for websocket or mcp server type"""
-    if port_type not in PORT_RANGES:
-        raise ValueError(f"Invalid port type '{port_type}'. Must be 'websocket' or 'mcp'")
-    return PORT_RANGES[port_type]
+def get_port_by_type(port_type: str) -> int:
+    """Get port by type using PortCoordinator - unified interface for all port allocation"""
+    coordinator = PortCoordinator()
+    return coordinator.get_port_by_type(port_type)
 
 
-# Convenience functions for common test scenarios
-def allocate_firefox_test_ports():
-    """Allocate ports specifically for Firefox extension testing"""
-    coordinator = PortCoordinator(get_port_range('websocket'))
-    return coordinator.allocate_test_ports()
+# Note: Context manager (coordinated_test_ports) is kept for specific use cases
+# All other port allocation should use get_port_by_type() directly
 
 
-def allocate_websocket_test_ports():
-    """Allocate ports for WebSocket server testing"""
-    coordinator = PortCoordinator(get_port_range('websocket'))
-    return coordinator.allocate_test_ports()
-
-
-def allocate_mcp_test_ports():
-    """Allocate ports for MCP server testing"""
-    coordinator = PortCoordinator(get_port_range('mcp'))
-    return coordinator.allocate_test_ports()
-
-
-def allocate_coordinated_ports() -> Dict[str, int]:
-    """Allocate coordinated ports from proper websocket and mcp ranges"""
-    websocket_coordinator = PortCoordinator(get_port_range('websocket'))
-    mcp_coordinator = PortCoordinator(get_port_range('mcp'))
-
-    websocket_port = websocket_coordinator.find_available_port()
-    mcp_port = mcp_coordinator.find_available_port()
-
-    return {
-        'websocket': websocket_port,
-        'mcp': mcp_port
-    }
 
 
 if __name__ == "__main__":

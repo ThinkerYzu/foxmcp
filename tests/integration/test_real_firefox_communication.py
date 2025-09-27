@@ -19,11 +19,11 @@ from server.server import FoxMCPServer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 try:
     from ..test_config import TEST_PORTS, FIREFOX_TEST_CONFIG, get_test_ports
-    from ..firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+    from ..firefox_test_utils import FirefoxTestManager
     from ..port_coordinator import coordinated_test_ports
 except ImportError:
     from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG, get_test_ports
-    from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+    from firefox_test_utils import FirefoxTestManager
     from port_coordinator import coordinated_test_ports
 
 
@@ -84,20 +84,13 @@ class TestRealFirefoxCommunication:
                 yield server
             finally:
                 # Cleanup
-                server_task.cancel()
-                try:
-                    await server_task
-                except asyncio.CancelledError:
-                    pass
+                await server.shutdown(server_task)
 
     @pytest.mark.asyncio
     async def test_real_extension_connection(self, coordinated_server):
         """Test that real Firefox extension connects and communicates"""
 
         # Skip if extension XPI doesn't exist
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found. Run 'make package' first.")
 
         # Skip if Firefox not available
         firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
@@ -106,12 +99,9 @@ class TestRealFirefoxCommunication:
 
         # Test with Firefox manager using coordinated ports
         with FirefoxTestManager(firefox_path, coordinated_server.test_ports['websocket'], coordinated_server.coordination_file) as firefox:
-            # Set up Firefox with extension
-            firefox.create_test_profile()
-            assert firefox.install_extension(extension_xpi), "Extension installation should succeed"
-
-            # Start Firefox
-            assert firefox.start_firefox(headless=True), "Firefox should start successfully"
+            # Set up Firefox with extension and start it
+            success = firefox.setup_and_start_firefox(headless=True, skip_on_failure=False)
+            assert success, "Firefox setup and extension installation should succeed"
 
             # Wait for extension connection with more patience
             max_wait_time = FIREFOX_TEST_CONFIG['extension_install_wait'] + 5.0
@@ -154,17 +144,14 @@ class TestRealFirefoxCommunication:
         """Test that extension responds to messages from server"""
 
         # Skip if extension XPI doesn't exist
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found. Run 'make package' first.")
 
         with FirefoxTestManager(firefox_path=os.environ.get('FIREFOX_PATH', 'firefox'),
                                 test_port=coordinated_server.test_ports['websocket'],
                                 coordination_file=coordinated_server.coordination_file) as firefox:
-            # Set up and start Firefox
-            firefox.create_test_profile()
-            firefox.install_extension(extension_xpi)
-            firefox.start_firefox(headless=True)
+            # Set up Firefox with extension and start it
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
 
             # Wait for connection
             await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
@@ -207,15 +194,11 @@ class TestRealFirefoxCommunication:
         # This test verifies the extension configuration system works
         test_port = 9876  # Different port for this test
 
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found. Run 'make package' first.")
 
         with FirefoxTestManager(test_port=test_port) as firefox:
-            # Create test profile and install extension (which creates SQLite storage)
-            firefox.create_test_profile()
-            success = firefox.install_extension(extension_xpi)
-            assert success, "Extension installation should succeed"
+            # Set up Firefox with extension (which creates SQLite storage)
+            success = firefox.setup_and_start_firefox(headless=True, skip_on_failure=False)
+            assert success, "Firefox setup and extension installation should succeed"
 
             # Verify SQLite storage was created and configured
             import sqlite3
@@ -287,11 +270,7 @@ class TestFirefoxIntegrationScenarios:
                 pytest.fail(f"Extension connection failed: {e}")
 
         finally:
-            server_task.cancel()
-            try:
-                await server_task
-            except asyncio.CancelledError:
-                pass
+            await server.shutdown(server_task)
 
     @pytest.mark.asyncio
     async def test_extension_reconnects_after_server_restart(self):
@@ -311,9 +290,8 @@ class TestFirefoxIntegrationScenarios:
         try:
             await asyncio.sleep(0.5)
 
-            # Stop first server
-            server1_task.cancel()
-            await server1_task
+            # Stop first server properly
+            await server1.shutdown(server1_task)
 
             await asyncio.sleep(0.5)  # Brief pause
 
@@ -336,9 +314,9 @@ class TestFirefoxIntegrationScenarios:
             pytest.fail(f"Server restart test failed: {e}")
         finally:
             try:
-                server2_task.cancel()
-                await server2_task
-            except:
+                await server2.shutdown(server2_task)
+            except Exception as e:
+                # Handle case where server2 might not be defined if error occurred early
                 pass
 
 

@@ -25,11 +25,7 @@ class TestWebSocketCommunication:
         yield server
 
         # Cleanup
-        server_task.cancel()
-        try:
-            await server_task
-        except asyncio.CancelledError:
-            pass
+        await server.shutdown(server_task)
 
     @pytest.mark.asyncio
     async def test_extension_connection(self):
@@ -55,7 +51,8 @@ class TestWebSocketCommunication:
             mock_serve.assert_called_once_with(
                 server.handle_extension_connection,
                 "localhost",
-                8767
+                8767,
+                reuse_address=True
             )
 
     @pytest.mark.asyncio

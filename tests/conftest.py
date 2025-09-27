@@ -9,17 +9,16 @@ from unittest.mock import Mock, AsyncMock, patch
 from typing import Dict, Any
 import sys
 import os
+import logging
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from port_coordinator import PortCoordinator, get_port_range
-
-# Global port coordinator for tests
-_test_port_coordinator = PortCoordinator(get_port_range('websocket'))
+from port_coordinator import get_port_by_type
 
 # Store allocated ports for Firefox configuration
 _allocated_test_ports = {}
+
 
 @pytest.fixture(scope="session", autouse=True)
 def auto_dynamic_ports():
@@ -28,8 +27,7 @@ def auto_dynamic_ports():
     This fixture runs automatically for all tests and monkey-patches
     FoxMCPServer instantiation to use dynamic ports when none are specified.
     """
-    # Clean up any leftover port allocations from previous runs
-    _test_port_coordinator.release_all_ports()
+    # No manual cleanup needed - get_port_by_type() handles allocation internally
 
     # Import here to avoid circular imports
     try:
@@ -40,9 +38,9 @@ def auto_dynamic_ports():
             # ALWAYS allocate dynamic ports in test environment to prevent conflicts
             # This overrides any explicit port to ensure complete isolation
             if port is None or port == 8765:  # Override default port
-                port = _test_port_coordinator.find_available_port()
+                port = get_port_by_type('test_individual')
             if (mcp_port is None or mcp_port == 3000) and start_mcp:  # Override default MCP port
-                mcp_port = _test_port_coordinator.find_available_port()
+                mcp_port = get_port_by_type('test_mcp_individual')
 
             # Store ports for potential Firefox use
             _allocated_test_ports['websocket'] = port
@@ -77,7 +75,7 @@ def firefox_with_test_ports():
             return FirefoxTestManager(test_port=websocket_port)
         else:
             # Fallback: allocate a new port
-            port = _test_port_coordinator.find_available_port()
+            port = get_port_by_type('test_individual')
             return FirefoxTestManager(test_port=port)
 
     except ImportError:

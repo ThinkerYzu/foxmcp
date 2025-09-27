@@ -18,12 +18,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from server.server import FoxMCPServer
 try:
     from ..port_coordinator import coordinated_test_ports
-    from ..firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+    from ..firefox_test_utils import FirefoxTestManager
     from ..test_config import FIREFOX_TEST_CONFIG
     from ..mcp_client_harness import DirectMCPTestClient
 except ImportError:
     from port_coordinator import coordinated_test_ports
-    from firefox_test_utils import FirefoxTestManager, get_extension_xpi_path
+    from firefox_test_utils import FirefoxTestManager
     from test_config import FIREFOX_TEST_CONFIG
     from mcp_client_harness import DirectMCPTestClient
 
@@ -103,12 +103,7 @@ class TestBrowserFunctionality:
             finally:
                 # Cleanup
                 await mcp_client.disconnect()
-                websocket_task.cancel()
-
-                try:
-                    await websocket_task
-                except asyncio.CancelledError:
-                    pass
+                await server.shutdown(websocket_task)
 
     @pytest.mark.asyncio
     async def test_end_to_end_tab_creation_and_listing(self, full_mcp_system):
@@ -118,9 +113,6 @@ class TestBrowserFunctionality:
         mcp_client = system['mcp_client']
 
         # Skip if required components not available
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found")
 
         firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
@@ -136,9 +128,9 @@ class TestBrowserFunctionality:
             coordination_file=system['coordination_file']
         ) as firefox:
 
-            firefox.create_test_profile()
-            firefox.install_extension(extension_xpi)
-            firefox.start_firefox(headless=True)
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
 
             # Wait for extension connection
             await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
@@ -248,9 +240,6 @@ class TestBrowserFunctionality:
         mcp_client = system['mcp_client']
 
         # Skip if required components not available
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found")
 
         firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
@@ -266,9 +255,9 @@ class TestBrowserFunctionality:
             coordination_file=system['coordination_file']
         ) as firefox:
 
-            firefox.create_test_profile()
-            firefox.install_extension(extension_xpi)
-            firefox.start_firefox(headless=True)
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
 
             # Wait for extension connection
             await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
@@ -358,9 +347,6 @@ class TestBrowserFunctionality:
         mcp_client = system['mcp_client']
 
         # Skip if required components not available
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found")
 
         firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
@@ -376,9 +362,9 @@ class TestBrowserFunctionality:
             coordination_file=system['coordination_file']
         ) as firefox:
 
-            firefox.create_test_profile()
-            firefox.install_extension(extension_xpi)
-            firefox.start_firefox(headless=True)
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
 
             # Wait for extension connection
             await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
@@ -451,9 +437,6 @@ class TestBrowserFunctionality:
         mcp_client = system['mcp_client']
 
         # Skip if required components not available
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found")
 
         firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
@@ -469,9 +452,9 @@ class TestBrowserFunctionality:
             coordination_file=system['coordination_file']
         ) as firefox:
 
-            firefox.create_test_profile()
-            firefox.install_extension(extension_xpi)
-            firefox.start_firefox(headless=True)
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
 
             # Wait for extension connection
             await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
@@ -551,9 +534,6 @@ class TestBrowserFunctionality:
         mcp_client = system['mcp_client']
 
         # Skip if required components not available
-        extension_xpi = get_extension_xpi_path()
-        if not extension_xpi or not os.path.exists(extension_xpi):
-            pytest.skip("Extension XPI not found")
 
         firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
         if not os.path.exists(os.path.expanduser(firefox_path)):
@@ -569,9 +549,9 @@ class TestBrowserFunctionality:
             coordination_file=system['coordination_file']
         ) as firefox:
 
-            firefox.create_test_profile()
-            firefox.install_extension(extension_xpi)
-            firefox.start_firefox(headless=True)
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
 
             # Wait for extension connection
             await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])

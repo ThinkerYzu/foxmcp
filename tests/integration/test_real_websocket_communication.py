@@ -47,11 +47,9 @@ class TestRealWebSocketCommunication:
         
         # Cleanup
         logger.info("Cleaning up test server...")
-        server_task.cancel()
         try:
-            await server_task
-        except asyncio.CancelledError:
-            logger.info("Server task cancelled successfully")
+            await server.shutdown(server_task)
+            logger.info("Server shutdown successfully")
         except Exception as e:
             logger.warning(f"Server cleanup warning: {e}")
         

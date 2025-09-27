@@ -3,7 +3,7 @@ Test configuration constants for FoxMCP testing
 Uses dynamic port allocation to avoid conflicts
 """
 
-from port_coordinator import get_port_range, allocate_websocket_test_ports
+from port_coordinator import get_port_by_type
 
 # Default test configuration - uses dynamic ports
 DEFAULT_TEST_CONFIG = {
@@ -20,11 +20,16 @@ FIREFOX_TEST_CONFIG = {
 
 def get_test_ports(suite_name):
     """Get dynamically allocated port configuration for a specific test suite"""
-    return allocate_websocket_test_ports()
+    return {
+        'websocket': get_port_by_type('websocket'),
+        'mcp': get_port_by_type('mcp')
+    }
 
 def get_available_port_range(suite_name):
     """Get a safe port range for dynamic allocation within a test suite"""
-    return get_port_range('websocket')
+    # Return the websocket port as a single-port range (for backward compatibility)
+    websocket_port = get_port_by_type('websocket')
+    return (websocket_port, websocket_port)
 
 # Backward compatibility - kept for existing tests
 def get_firefox_test_port():
