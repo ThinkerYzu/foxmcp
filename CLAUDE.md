@@ -4,6 +4,13 @@ It will create an extension and a MCP server that talk to the extension.
 The MCP server will be implemented in Python with FastMCP.
 It is Websocket between the extension and the MCP server.
 
+# Claude Code Integration
+
+## FM_ROOT Environment Variable
+The `FM_ROOT` environment variable is set to the project root directory. This enables Claude Code to reference project paths consistently when running bash commands.
+
+The `$FM_ROOT` variable is available in all bash commands for referencing project files and directories.
+
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.

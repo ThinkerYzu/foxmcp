@@ -11,6 +11,7 @@ foxmcp/
 ├── protocol.md        # WebSocket message protocol specification
 ├── files.md           # This file - explains project structure
 ├── README.md          # Main project documentation and quick start
+├── claude.sh          # Claude Code integration script with FM_ROOT environment
 ├── Makefile           # Build system and development commands
 ├── venv-setup.md      # Virtual environment setup documentation
 ├── venv/              # Python virtual environment (created)
@@ -312,6 +313,14 @@ foxmcp/
   - **Packaging**: `make package` - Create distributable ZIP files
   - **Maintenance**: `make clean` - Clean build artifacts and remove symbolic links
   - **Status Monitoring**: `make status` - Check project status including test import system
+
+### `claude.sh`
+- **Purpose**: Claude Code integration script
+- **Key Features**:
+  - **Automatic FM_ROOT setup** - Sets environment variable to project root directory
+  - **Argument pass-through** - Forwards all command line arguments to claude
+  - **Project context** - Enables Claude Code to reference project paths in bash commands
+  - **Zero configuration** - Automatically detects project root from script location
 
 ### `README.md`
 - **Purpose**: Main project documentation and quick start guide

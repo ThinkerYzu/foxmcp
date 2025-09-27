@@ -28,6 +28,20 @@ You may aware that this project is helped by Claude Code. By asking
 Claude Code to update several documents periodically, it understands
 the goal of the project pretty well. Check CLAUDE.md.
 
+## Claude Code Integration
+
+For Claude Code users, use the provided script to ensure the project root is available:
+
+```bash
+# Run Claude Code with FM_ROOT environment variable set
+./claude.sh [claude-arguments]
+
+# Example: Start Claude Code with project context
+./claude.sh
+```
+
+This sets the `FM_ROOT` environment variable to the project root directory, allowing Claude Code to reference project paths when running bash commands.
+
 ## Quick Start
 
 ```bash
