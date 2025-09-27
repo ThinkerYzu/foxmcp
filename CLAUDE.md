@@ -9,7 +9,29 @@ It is Websocket between the extension and the MCP server.
 ## FM_ROOT Environment Variable
 The `FM_ROOT` environment variable is set to the project root directory. This enables Claude Code to reference project paths consistently when running bash commands.
 
-The `$FM_ROOT` variable is available in all bash commands for referencing project files and directories.
+**IMPORTANT: Always use `$FM_ROOT` in bash commands to refer to project files and paths - this is much less error-prone than relative paths.**
+
+Examples of proper usage:
+```bash
+# Read project files
+cat $FM_ROOT/README.md
+ls $FM_ROOT/tests/
+
+# Run tests with proper paths
+PYTHONPATH=$FM_ROOT/tests $FM_ROOT/venv/bin/python -m pytest $FM_ROOT/tests/test_example.py
+
+# Edit files with absolute paths
+vim $FM_ROOT/server/server.py
+
+# Find files in project
+find $FM_ROOT -name "*.py" -type f
+```
+
+Benefits of using `$FM_ROOT`:
+- ✅ **Error-free paths** - No ambiguity about working directory
+- ✅ **Consistent execution** - Commands work from any directory
+- ✅ **Clear intent** - Obviously references project files
+- ✅ **Reliable automation** - No path resolution issues
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
