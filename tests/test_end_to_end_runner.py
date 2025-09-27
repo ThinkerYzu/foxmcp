@@ -8,6 +8,7 @@ import asyncio
 import sys
 import os
 import pytest
+import re
 
 # Add paths
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))

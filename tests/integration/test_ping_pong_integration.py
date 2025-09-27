@@ -6,6 +6,8 @@ import pytest
 import asyncio
 import json
 import websockets
+import os
+import re
 from unittest.mock import patch, AsyncMock
 from server.server import FoxMCPServer
 

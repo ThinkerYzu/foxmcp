@@ -4,6 +4,7 @@ Unit tests for ping-pong communication functionality
 
 import pytest
 import json
+import re
 from unittest.mock import AsyncMock, Mock
 from server.server import FoxMCPServer
 

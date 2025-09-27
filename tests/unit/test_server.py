@@ -5,6 +5,7 @@ Unit tests for WebSocket server
 import pytest
 import json
 import asyncio
+import re
 from unittest.mock import AsyncMock, Mock, patch
 from server.server import FoxMCPServer
 

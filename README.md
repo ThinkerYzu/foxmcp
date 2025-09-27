@@ -603,8 +603,9 @@ MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser AP
 
 ```bash
 # Setup and Installation
-make setup              # Install all dependencies
+make setup              # Install all dependencies + setup test import system
 make install           # Install server dependencies only
+make setup-test-imports # Create symbolic links for test import system
 make dev               # Setup development environment
 
 # Building and Packaging
@@ -612,9 +613,9 @@ make build             # Build extension package
 make package           # Create distributable ZIP files
 
 # Testing
-make test              # Run all tests
-make test-unit         # Run unit tests only
-make test-integration  # Run integration tests only
+make test              # Run all tests (auto-creates test imports)
+make test-unit         # Run unit tests only (auto-creates test imports)
+make test-integration  # Run integration tests only (auto-creates test imports)
 make check             # Run linting + tests
 
 # Development
@@ -623,10 +624,44 @@ make lint              # Run Python linting
 make format            # Format Python code
 
 # Maintenance
-make clean             # Clean build artifacts
+make clean             # Clean build artifacts + remove test import symlinks
 make clean-all         # Deep clean including dependencies
-make status            # Show project status
+make status            # Show project status + test import system status
 ```
+
+### Test Import System
+
+The project uses an automated test import system to ensure consistent module imports across all test files, regardless of how they're executed (pytest, direct execution, different working directories).
+
+**Key Features:**
+- **Automatic path setup** - No manual `sys.path` manipulation needed
+- **Symbolic links** - Managed automatically by Makefile
+- **Git-friendly** - Only source files tracked, symlinks ignored
+- **Zero configuration** - Works seamlessly across all test environments
+
+**How it works:**
+1. `tests/test_imports.py` - Main import utility (tracked by git)
+2. Symbolic links in subdirectories (ignored by git, created by Makefile):
+   - `tests/integration/test_imports.py` → `../test_imports.py`
+   - `tests/unit/test_imports.py` → `../test_imports.py`
+
+**Usage in test files:**
+```python
+import test_imports  # Automatic path setup
+from server.server import FoxMCPServer
+from test_config import TEST_PORTS
+```
+
+**Developer workflow:**
+- `make setup` automatically creates symbolic links
+- `make test*` commands ensure symbolic links exist
+- `make clean` removes symbolic links for cleanup
+- `make status` shows symbolic link status
+
+**Troubleshooting:**
+- Missing symlinks: Run `make setup-test-imports`
+- Import errors: Check `make status` for symbolic link status
+- Path issues: Use `python tests/test_imports.py` for debug info
 
 
 ## Testing

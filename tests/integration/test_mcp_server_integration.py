@@ -8,23 +8,20 @@ import pytest_asyncio
 import asyncio
 import json
 import os
-import sys
+import time
+import re
 
-# Add parent directories to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Set up consistent imports
+import test_imports
 
+# Import project modules
 from server.server import FoxMCPServer
-try:
-    from ..port_coordinator import coordinated_test_ports
-    from ..firefox_test_utils import FirefoxTestManager
-    from ..test_config import FIREFOX_TEST_CONFIG
-    from ..mcp_client_harness import DirectMCPTestClient, MCPTestClient
-except ImportError:
-    from port_coordinator import coordinated_test_ports
-    from firefox_test_utils import FirefoxTestManager
-    from test_config import FIREFOX_TEST_CONFIG
-    from mcp_client_harness import DirectMCPTestClient, MCPTestClient
+
+# Import test utilities
+from port_coordinator import coordinated_test_ports
+from firefox_test_utils import FirefoxTestManager
+from test_config import FIREFOX_TEST_CONFIG
+from mcp_client_harness import DirectMCPTestClient, MCPTestClient
 
 
 class TestMCPServerIntegration:

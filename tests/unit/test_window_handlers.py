@@ -5,6 +5,7 @@ Unit tests for window management handlers
 import pytest
 import json
 import asyncio
+import re
 from unittest.mock import AsyncMock, Mock, patch, MagicMock
 import sys
 import os

@@ -36,6 +36,10 @@ coverage.xml
 .hypothesis/
 htmlcov/
 
+# Test import symbolic links (managed by Makefile)
+tests/integration/test_imports.py
+tests/unit/test_imports.py
+
 # IDE
 .vscode/
 .idea/

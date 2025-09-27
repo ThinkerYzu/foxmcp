@@ -12,14 +12,15 @@ import subprocess
 import sqlite3
 import atexit
 import tarfile
+import re
 from dataclasses import dataclass
 from pathlib import Path
-try:
-    from .test_config import FIREFOX_TEST_CONFIG, get_firefox_test_port
-    from .port_coordinator import FirefoxPortCoordinator
-except ImportError:
-    from test_config import FIREFOX_TEST_CONFIG, get_firefox_test_port
-    from port_coordinator import FirefoxPortCoordinator
+
+# Set up consistent imports
+import test_imports
+
+from test_config import FIREFOX_TEST_CONFIG, get_firefox_test_port
+from port_coordinator import FirefoxPortCoordinator
 
 project_root = Path(__file__).resolve().parent.parent
 

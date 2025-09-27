@@ -33,6 +33,7 @@ foxmcp/
     ├── pytest.ini     # Pytest settings
     ├── requirements.txt # Test dependencies (with pytest-cov)
     ├── run_tests.py   # Test runner script (with PYTHONPATH fix)
+    ├── test_imports.py # Test import system with automatic path setup
     ├── README.md      # Test documentation
     ├── htmlcov/       # Coverage HTML reports (generated)
     ├── firefox_test_utils.py   # Firefox testing utilities with SQLite configuration
@@ -264,6 +265,17 @@ foxmcp/
 - **Purpose**: Test-specific Python dependencies
 - **Dependencies**: pytest, pytest-asyncio, pytest-mock, coverage, websockets
 
+### `test_imports.py`
+- **Purpose**: Test import system with automatic path configuration
+- **Key Features**:
+  - **Automatic project root detection** by locating 'server' package
+  - **Zero-configuration path setup** - eliminates manual sys.path manipulation
+  - **Symbolic link support** - available in subdirectories via symlinks
+  - **Works everywhere** - pytest, direct execution, any working directory
+  - **Debug utilities** - verification, status reporting, and troubleshooting
+  - **Type hints and error handling** for robust operation
+  - **CLI interface** for debugging import system status
+
 ### `run_tests.py`
 - **Purpose**: Test runner script with coverage
 - **Key Features**:
@@ -289,16 +301,17 @@ foxmcp/
 ### `Makefile`
 - **Purpose**: Complete build system and development workflow
 - **Key Features**:
-  - **Setup and Installation**: `make setup` - Install all dependencies
-  - **Building**: `make build` - Build extension package  
+  - **Setup and Installation**: `make setup` - Install all dependencies and setup test imports
+  - **Test Import Management**: `make setup-test-imports` - Create symbolic links for test import system
+  - **Building**: `make build` - Build extension package
   - **Testing**: `make test` - Run comprehensive test suite with coverage
   - **Unit Testing**: `make test-unit` - Run unit tests only (fast)
   - **Integration Testing**: `make test-integration` - Run integration tests with Firefox automation
   - **Development**: `make run-server` - Start WebSocket server
   - **Quality Assurance**: `make check` - Run linting and tests
   - **Packaging**: `make package` - Create distributable ZIP files
-  - **Maintenance**: `make clean` - Clean build artifacts
-  - **Status Monitoring**: `make status` - Check project status
+  - **Maintenance**: `make clean` - Clean build artifacts and remove symbolic links
+  - **Status Monitoring**: `make status` - Check project status including test import system
 
 ### `README.md`
 - **Purpose**: Main project documentation and quick start guide

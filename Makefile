@@ -4,7 +4,7 @@
 # Variables
 FIREFOX_PATH ?= firefox
 
-.PHONY: help install build test clean run-server run-tests dev setup check lint package all
+.PHONY: help install build test clean run-server run-tests dev setup check lint package all setup-test-imports
 
 # Default target
 all: setup build test
@@ -15,6 +15,7 @@ help:
 	@echo "Setup & Installation:"
 	@echo "  setup          - Install all dependencies (server + test requirements)"
 	@echo "  install        - Install Python server dependencies only"
+	@echo "  setup-test-imports - Create symbolic links for test import system"
 	@echo ""
 	@echo "Building:"
 	@echo "  build          - Build extension package"
@@ -38,7 +39,7 @@ help:
 	@echo ""
 
 # Setup and Installation
-setup: install
+setup: install setup-test-imports
 	@echo "Installing test dependencies..."
 	cd tests && pip install -r requirements.txt
 	@echo "✅ Setup complete!"
@@ -47,6 +48,30 @@ install:
 	@echo "Installing server dependencies..."
 	cd server && pip install -r requirements.txt
 	@echo "✅ Server dependencies installed!"
+
+setup-test-imports:
+	@echo "Setting up test import symbolic links..."
+	@# Create symbolic links for test_imports.py in subdirectories
+	@if [ ! -L tests/integration/test_imports.py ]; then \
+		echo "  Creating tests/integration/test_imports.py -> ../test_imports.py"; \
+		ln -sf ../test_imports.py tests/integration/test_imports.py; \
+	else \
+		echo "  ✓ tests/integration/test_imports.py already exists"; \
+	fi
+	@if [ ! -L tests/unit/test_imports.py ]; then \
+		echo "  Creating tests/unit/test_imports.py -> ../test_imports.py"; \
+		ln -sf ../test_imports.py tests/unit/test_imports.py; \
+	else \
+		echo "  ✓ tests/unit/test_imports.py already exists"; \
+	fi
+	@# Verify the links work
+	@echo "  Verifying symbolic links..."
+	@if [ -L tests/integration/test_imports.py ] && [ -L tests/unit/test_imports.py ]; then \
+		echo "  ✅ Test import symbolic links configured successfully!"; \
+	else \
+		echo "  ❌ Failed to create symbolic links"; \
+		exit 1; \
+	fi
 
 dev: setup
 	@echo "Setting up development environment..."
@@ -90,15 +115,15 @@ run-server:
 # Testing
 test: run-tests
 
-run-tests: package
+run-tests: setup-test-imports package
 	@echo "Running all tests with coverage..."
 	cd tests && FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py
 
-test-unit:
+test-unit: setup-test-imports
 	@echo "Running unit tests..."
 	cd tests && PYTHONPATH=.. FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py unit
 
-test-integration: package
+test-integration: setup-test-imports package
 	@echo "Running integration tests..."
 	cd tests && PYTHONPATH=.. FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py integration
 
@@ -127,6 +152,8 @@ clean:
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	@# Remove test import symbolic links
+	@rm -f tests/integration/test_imports.py tests/unit/test_imports.py
 	@echo "✅ Clean complete!"
 
 clean-all: clean
@@ -177,6 +204,10 @@ status:
 	@echo ""
 	@echo "🔗 WebSocket Server:"
 	@netstat -ln 2>/dev/null | grep ":8765" >/dev/null && echo "  ✅ Port 8765 in use (server may be running)" || echo "  ❌ Port 8765 available (server not running)"
+	@echo ""
+	@echo "🔧 Test Import System:"
+	@if [ -L tests/integration/test_imports.py ]; then echo "  ✅ tests/integration/test_imports.py symlink exists"; else echo "  ❌ tests/integration/test_imports.py symlink missing"; fi
+	@if [ -L tests/unit/test_imports.py ]; then echo "  ✅ tests/unit/test_imports.py symlink exists"; else echo "  ❌ tests/unit/test_imports.py symlink missing"; fi
 
 # Continuous Integration simulation
 ci: clean setup lint test package

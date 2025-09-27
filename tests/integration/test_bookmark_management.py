@@ -9,26 +9,22 @@ import pytest
 import pytest_asyncio
 import asyncio
 import json
-import sys
 import os
+import time
+import re
 from datetime import datetime, timedelta
 
-# Add the parent directory to the path to import server module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# Set up consistent imports
+import test_imports
+
+# Import project modules
 from server.server import FoxMCPServer
 
 # Import test utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-try:
-    from ..test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-    from ..firefox_test_utils import FirefoxTestManager
-    from ..port_coordinator import coordinated_test_ports
-    from ..mcp_client_harness import DirectMCPTestClient
-except ImportError:
-    from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-    from firefox_test_utils import FirefoxTestManager
-    from port_coordinator import coordinated_test_ports
-    from mcp_client_harness import DirectMCPTestClient
+from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
+from firefox_test_utils import FirefoxTestManager
+from port_coordinator import coordinated_test_ports
+from mcp_client_harness import DirectMCPTestClient
 
 
 class TestBookmarkManagementEndToEnd:

@@ -15,6 +15,7 @@ import os
 import tempfile
 import shutil
 import sys
+import re
 from pathlib import Path
 
 # Add the parent directory to the path to import server module

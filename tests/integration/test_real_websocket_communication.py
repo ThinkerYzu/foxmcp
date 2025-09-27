@@ -8,6 +8,7 @@ import pytest_asyncio
 import json
 import asyncio
 import websockets
+import re
 from unittest.mock import patch
 import time
 import threading

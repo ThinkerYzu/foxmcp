@@ -10,6 +10,7 @@ tests/
 ├── pytest.ini              # Pytest settings
 ├── requirements.txt         # Test dependencies
 ├── run_tests.py            # Test runner script
+├── test_imports.py          # Test import system (auto-path setup)
 ├── README.md               # This file
 ├── unit/                   # Unit tests
 │   ├── test_server.py      # Server component tests
@@ -30,6 +31,45 @@ tests/
 │   ├── test_window_management.py            # Window management tests
 │   └── test_bookmark_management.py          # Bookmark management tests
 └── fixtures/               # Test data files
+```
+
+## Test Import System
+
+This test suite uses an automated import system that eliminates the need for manual path manipulation in test files.
+
+### How It Works
+
+**Automatic Path Setup:**
+- `test_imports.py` - Main import utility that auto-configures Python paths
+- Symbolic links in subdirectories (managed automatically):
+  - `integration/test_imports.py` → `../test_imports.py`
+  - `unit/test_imports.py` → `../test_imports.py`
+
+**Usage in Test Files:**
+```python
+import test_imports  # Automatic path setup - always first import
+from server.server import FoxMCPServer
+from test_config import TEST_PORTS
+from firefox_test_utils import FirefoxTestManager
+```
+
+**Key Benefits:**
+- ✅ **Zero configuration** - No manual `sys.path` manipulation
+- ✅ **Works everywhere** - pytest, direct execution, any working directory
+- ✅ **Git-friendly** - Only source file tracked, symlinks auto-managed
+- ✅ **Self-healing** - Makefile automatically creates missing symlinks
+
+### Debugging Import Issues
+
+```bash
+# Check import system status
+python test_imports.py
+
+# Recreate symbolic links if missing
+make setup-test-imports
+
+# Full project status including import system
+make status
 ```
 
 ## Running Tests

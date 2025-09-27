@@ -9,6 +9,7 @@ import pytest_asyncio
 import tempfile
 import os
 import base64
+import re
 from unittest.mock import Mock, AsyncMock
 import sys
 

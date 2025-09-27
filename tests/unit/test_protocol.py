@@ -4,6 +4,8 @@ Unit tests for WebSocket protocol message handling
 
 import pytest
 import json
+import time
+import re
 from datetime import datetime
 
 class TestProtocolMessages:

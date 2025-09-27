@@ -5,6 +5,7 @@ Pytest configuration and fixtures
 import asyncio
 import json
 import pytest
+import re
 from unittest.mock import Mock, AsyncMock, patch
 from typing import Dict, Any
 import sys

@@ -6,6 +6,8 @@ A real MCP client that can connect to the FoxMCP server and make tool calls
 import asyncio
 import json
 import uuid
+import time
+import re
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
