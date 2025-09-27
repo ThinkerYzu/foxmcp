@@ -74,11 +74,13 @@ class TestHistoryMCPIntegration:
                 if not success:
                     pytest.skip("Firefox setup or extension installation failed")
                 
-                # Wait for extension to connect
-                await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
-                
+                # Wait for extension to connect using awaitable mechanism
+                connected = await firefox.async_wait_for_extension_connection(
+                    timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+                )
+
                 # Verify connection
-                if not server.extension_connection:
+                if not connected:
                     pytest.skip("Extension did not connect to server")
                 
                 yield server, firefox, test_port, mcp_port

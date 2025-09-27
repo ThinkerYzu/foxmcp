@@ -113,28 +113,24 @@ async def test_complete_mcp_to_firefox_chain():
 
                 print("✅ Firefox set up and started with extension")
                 
-                # Wait for extension to connect
+                # Wait for extension to connect using awaitable mechanism
                 print("⏳ Waiting for extension to connect...")
-                
+
                 connection_timeout = 15.0  # Give more time for real Firefox
-                start_time = time.time()
-                
-                while time.time() - start_time < connection_timeout:
-                    if server.connection_log:
-                        break
-                    await asyncio.sleep(1.0)
-                    print(f"  Waiting... ({int(time.time() - start_time)}s)")
-                
-                if not server.connection_log:
+                connected = await firefox.async_wait_for_extension_connection(
+                    timeout=connection_timeout, server=server
+                )
+
+                if not connected:
                     print(f"⚠️  Extension did not connect within {connection_timeout}s")
                     print("   This may be due to Firefox startup time or configuration issues")
                     print("   Continuing with simulated test...")
-                    
+
                     # Fall back to direct test
                     return await test_mcp_tools_direct()
-                
+
                 print("✅ Extension connected to WebSocket server!")
-                print(f"   Connection events: {len(server.connection_log)}")
+                print(f"   Connection established successfully")
                 
                 # Now test the complete chain
                 print("\n🧪 Testing Complete Chain: MCP → Server → WebSocket → Extension → Browser")

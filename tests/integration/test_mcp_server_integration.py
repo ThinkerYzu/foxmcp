@@ -155,21 +155,18 @@ class TestMCPServerIntegration:
             success = firefox.setup_and_start_firefox(headless=True, skip_on_failure=False)
             assert success, "Firefox setup and extension installation should succeed"
 
-            # Wait for extension to connect (give it more time)
+            # Wait for extension to connect using awaitable mechanism (give it more time)
             max_wait_time = FIREFOX_TEST_CONFIG['extension_install_wait'] + 5.0
-            connect_wait_step = 1.0
-            total_waited = 0
-
             print(f"Waiting up to {max_wait_time}s for extension to connect...")
-            while total_waited < max_wait_time:
-                await asyncio.sleep(connect_wait_step)
-                total_waited += connect_wait_step
 
-                if len(server.connected_clients) > 0:
-                    print(f"✓ Extension connected after {total_waited}s")
-                    break
-                else:
-                    print(f"Still waiting... {total_waited}/{max_wait_time}s (clients: {len(server.connected_clients)})")
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=max_wait_time, server=server
+            )
+
+            if connected:
+                print(f"✓ Extension connected successfully")
+            else:
+                print(f"✗ Extension failed to connect within {max_wait_time}s")
 
             # Check if Firefox process is still running
             if firefox.firefox_process and firefox.firefox_process.poll() is not None:
@@ -215,10 +212,12 @@ class TestMCPServerIntegration:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for extension connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
 
-            if len(server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test full chain")
 
             initial_message_count = len(server.received_messages)

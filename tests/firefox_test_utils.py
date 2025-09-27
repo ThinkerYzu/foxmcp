@@ -666,13 +666,89 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
             print(f"✗ Failed to start Firefox: {e}")
             return False
 
-    def wait_for_extension_connection(self, timeout=10.0):
-        """Wait for extension to connect to test server"""
+    def wait_for_extension_connection(self, timeout=10.0, server=None):
+        """Wait for extension to connect to test server
+
+        Args:
+            timeout: Maximum time to wait for connection
+            server: Optional FoxMCPServer instance to use for awaitable connection check
+
+        Returns:
+            bool: True if connection was established, False otherwise
+        """
         print(f"Waiting up to {timeout}s for extension to connect to port {self.test_port}...")
 
-        # This would typically involve checking server connection status
-        # For now, just wait the expected connection time
+        if server and hasattr(server, 'wait_for_extension_connection'):
+            # Use server's awaitable connection mechanism if available
+            import asyncio
+            try:
+                # Create new event loop if none exists
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                # Run the async wait_for_extension_connection method
+                connected = loop.run_until_complete(
+                    server.wait_for_extension_connection(timeout=timeout)
+                )
+
+                if connected:
+                    print("✓ Extension connected to server")
+                    return True
+                else:
+                    print("✗ Extension connection timeout")
+                    return False
+
+            except Exception as e:
+                print(f"✗ Error waiting for extension connection: {e}")
+                # Fallback to time-based waiting
+                pass
+
+        # Fallback: use time-based waiting
         time.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+
+        if self.firefox_process and self.firefox_process.poll() is None:
+            print("✓ Firefox process running, extension should be connected")
+            return True
+        else:
+            print("✗ Firefox process not running")
+            return False
+
+    async def async_wait_for_extension_connection(self, timeout=10.0, server=None):
+        """Async version of wait_for_extension_connection for use in async test contexts
+
+        Args:
+            timeout: Maximum time to wait for connection
+            server: Optional FoxMCPServer instance to use for awaitable connection check
+
+        Returns:
+            bool: True if connection was established, False otherwise
+        """
+        print(f"Waiting up to {timeout}s for extension to connect to port {self.test_port}...")
+
+        if server and hasattr(server, 'wait_for_extension_connection'):
+            # Use server's awaitable connection mechanism directly
+            try:
+                connected = await server.wait_for_extension_connection(timeout=timeout)
+
+                if connected:
+                    print("✓ Extension connected to server")
+                    return True
+                else:
+                    print("✗ Extension connection timeout")
+                    return False
+
+            except Exception as e:
+                print(f"✗ Error waiting for extension connection: {e}")
+                # Fallback to time-based waiting
+                pass
+
+        # Fallback: use time-based waiting with async sleep
+        import asyncio
+        await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
 
         if self.firefox_process and self.firefox_process.poll() is None:
             print("✓ Firefox process running, extension should be connected")

@@ -106,25 +106,17 @@ class TestRealFirefoxCommunication:
             success = firefox.setup_and_start_firefox(headless=True, skip_on_failure=False)
             assert success, "Firefox setup and extension installation should succeed"
 
-            # Wait for extension connection with more patience
+            # Wait for extension connection using awaitable mechanism (with more patience)
             max_wait_time = FIREFOX_TEST_CONFIG['extension_install_wait'] + 5.0
-            connect_wait_step = 1.0
-            total_waited = 0
-
             print(f"Waiting up to {max_wait_time}s for extension to connect...")
-            while total_waited < max_wait_time:
-                await asyncio.sleep(connect_wait_step)
-                total_waited += connect_wait_step
 
-                if len(coordinated_server.connected_clients) > 0:
-                    print(f"✓ Extension connected after {total_waited}s")
-                    break
-                else:
-                    print(f"Still waiting... {total_waited}/{max_wait_time}s")
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=max_wait_time, server=coordinated_server
+            )
 
-            # Note: Extension might be connecting to default port 8765 instead of test port
-            # This is a known issue where extension uses browser storage config vs file config
-            if len(coordinated_server.connected_clients) == 0:
+            if connected:
+                print(f"✓ Extension connected successfully")
+            else:
                 print(f"⚠ Extension did not connect to test port {coordinated_server.test_ports['websocket']}")
                 print("Note: Extension may be trying to connect to default port 8765")
                 pytest.skip("Extension connection issue - likely config mismatch")
@@ -156,10 +148,12 @@ class TestRealFirefoxCommunication:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=coordinated_server
+            )
 
-            if len(coordinated_server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test message exchange")
 
             # Send a test message to extension

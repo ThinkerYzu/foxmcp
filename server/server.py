@@ -91,6 +91,9 @@ class FoxMCPServer:
         self.extension_connection = None
         self.pending_requests = {}  # Map of request IDs to Future objects
 
+        # Connection event management
+        self._connection_waiters = []  # List of futures waiting for connection
+
         # Initialize MCP tools
         self.mcp_tools = FoxMCPTools(self)
         self.mcp_app = self.mcp_tools.get_mcp_app()
@@ -119,6 +122,9 @@ class FoxMCPServer:
                 logger.warning(f"Error closing existing connection: {e}")
 
         self.extension_connection = websocket
+
+        # Notify all waiters that a connection has been established
+        self._notify_connection_waiters()
 
         try:
             async for message in websocket:
@@ -424,6 +430,54 @@ class FoxMCPServer:
         except Exception as e:
             results["errors"].append(f"Workflow exception: {str(e)}")
             return results
+
+    def _notify_connection_waiters(self):
+        """Notify all futures waiting for a connection"""
+        for future in self._connection_waiters:
+            if not future.cancelled():
+                future.set_result(True)
+        self._connection_waiters.clear()
+
+    async def wait_for_extension_connection(self, timeout: float = 30.0) -> bool:
+        """
+        Wait for an extension connection to be established.
+
+        Args:
+            timeout: Maximum time to wait for connection in seconds
+
+        Returns:
+            bool: True if connection was established, False if timeout occurred
+
+        Example:
+            # Wait for Firefox extension to connect
+            connected = await server.wait_for_extension_connection(timeout=10.0)
+            if connected:
+                print("Extension connected!")
+            else:
+                print("Connection timeout")
+        """
+        # If already connected, return immediately
+        if self.extension_connection and self.extension_connection.close_code is None:
+            return True
+
+        # Create a future to wait for connection
+        connection_future = asyncio.Future()
+        self._connection_waiters.append(connection_future)
+
+        try:
+            # Wait for connection with timeout
+            await asyncio.wait_for(connection_future, timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            # Remove the future from waiters if it timed out
+            if connection_future in self._connection_waiters:
+                self._connection_waiters.remove(connection_future)
+            return False
+        except Exception:
+            # Remove the future from waiters on any other error
+            if connection_future in self._connection_waiters:
+                self._connection_waiters.remove(connection_future)
+            return False
 
     async def start_mcp_server(self):
         """Start the MCP server in a separate thread"""

@@ -133,7 +133,10 @@ user_pref("browser.tabs.remote.autostart", false);
             # Set up Firefox with extension and start it
             success = firefox_manager.setup_and_start_firefox(headless=True)
             if success:
-                connection_detected = firefox_manager.wait_for_extension_connection(timeout=10.0)
+                # Use the new awaitable connection mechanism
+                connection_detected = await firefox_manager.async_wait_for_extension_connection(
+                    timeout=10.0, server=running_server
+                )
             
         except Exception as e:
             print(f"Extension connection test error: {e}")
@@ -161,9 +164,13 @@ user_pref("browser.tabs.remote.autostart", false);
             success = firefox.setup_and_start_firefox(headless=True)
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
-            
-            # Give extension time to connect
-            await asyncio.sleep(3)
+
+            # Wait for extension to connect using the new awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=10.0, server=running_server
+            )
+            if not connected:
+                pytest.skip("Extension failed to connect to server")
             
             # Test message handling on server side
             test_messages = [

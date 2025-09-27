@@ -327,6 +327,29 @@ The test suite includes comprehensive Firefox browser integration:
 - Real WebSocket communication between server and extension
 - Browser API function verification
 
+#### Awaitable Connection Mechanism
+Tests use an **event-driven connection system** instead of fixed wait periods:
+
+**Server-Side Awaitable:**
+```python
+# Wait for actual extension connection (not fixed timeout)
+connected = await server.wait_for_extension_connection(timeout=10.0)
+```
+
+**Test Integration:**
+```python
+# Firefox test utilities support awaitable connections
+connected = await firefox.async_wait_for_extension_connection(
+    timeout=15.0, server=server
+)
+```
+
+**Benefits:**
+- ⚡ **Faster tests** - No fixed waits when connections happen quickly
+- 🎯 **More reliable** - Wait for actual events, not arbitrary timeouts
+- 🔄 **Better error handling** - Clear timeout vs connection failure distinction
+- 📊 **Improved visibility** - Better logging of connection timing
+
 ## Browser API Test Coverage
 
 All major browser functions are tested:

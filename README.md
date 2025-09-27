@@ -500,7 +500,24 @@ FoxMCP now includes FastMCP integration that transforms browser functions into c
 ### MCP Server
 - **WebSocket Server**: Port 8765 (default) for Firefox extension communication
 - **MCP Server**: Port 3000 (default) for MCP client connections
-- **FastMCP Tools**: All browser functions exposed as MCP tools
+
+#### Awaitable Connection System
+The server provides an **event-driven connection mechanism** for reliable extension connectivity:
+
+```python
+# Wait for extension connection (instead of fixed timeouts)
+connected = await server.wait_for_extension_connection(timeout=10.0)
+if connected:
+    print("Extension connected!")
+```
+
+**Benefits:**
+- ⚡ **Faster startup** - No fixed wait periods when connections are quick
+- 🎯 **More reliable** - Wait for actual connection events
+- 🔄 **Better error handling** - Clear timeout vs connection failure distinction
+
+### FastMCP Tools
+All browser functions are exposed as MCP tools:
 
 
 ### MCP Parameter Format

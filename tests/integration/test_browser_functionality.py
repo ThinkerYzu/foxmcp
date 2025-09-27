@@ -132,10 +132,12 @@ class TestBrowserFunctionality:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for extension connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
 
-            if len(server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test tab functionality")
 
             print("\n🧪 Testing End-to-End Tab Creation and Listing")
@@ -259,10 +261,12 @@ class TestBrowserFunctionality:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for extension connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
 
-            if len(server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test script execution")
 
             print("\n🧪 Testing End-to-End JavaScript Execution")
@@ -366,10 +370,12 @@ class TestBrowserFunctionality:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for extension connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
 
-            if len(server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test navigation reload")
 
             print("\n🧪 Testing End-to-End Navigation Reload")
@@ -456,10 +462,12 @@ class TestBrowserFunctionality:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for extension connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
 
-            if len(server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test content_get_text")
 
             print("\n🧪 Testing End-to-End Content Text Extraction")
@@ -553,10 +561,12 @@ class TestBrowserFunctionality:
             if not success:
                 pytest.skip("Firefox setup or extension installation failed")
 
-            # Wait for extension connection
-            await asyncio.sleep(FIREFOX_TEST_CONFIG['extension_install_wait'])
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
 
-            if len(server.connected_clients) == 0:
+            if not connected:
                 pytest.skip("Extension did not connect - cannot test screenshot functionality")
 
             print("\n🧪 Testing End-to-End Screenshot Capture")
