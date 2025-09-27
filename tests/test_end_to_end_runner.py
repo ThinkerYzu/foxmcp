@@ -4,15 +4,12 @@ Simple test runner for end-to-end MCP testing
 Runs without pytest to validate the complete chain
 """
 
+import test_imports  # Automatic path setup
 import asyncio
 import sys
 import os
 import pytest
 import re
-
-# Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from server.server import FoxMCPServer
 from port_coordinator import coordinated_test_ports

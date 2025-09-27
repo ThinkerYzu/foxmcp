@@ -3,6 +3,7 @@
 Test runner script for FoxMCP tests
 """
 
+import test_imports  # Automatic path setup
 import sys
 import subprocess
 import os
@@ -10,14 +11,13 @@ from pathlib import Path
 
 def run_tests():
     """Run all tests with coverage"""
-    
+
     # Change to tests directory
     test_dir = Path(__file__).parent
     os.chdir(test_dir)
-    
-    # Add project root to Python path so we can import server module
-    project_root = test_dir.parent
-    sys.path.insert(0, str(project_root))
+
+    # Get project root from test_imports
+    project_root = test_imports.get_project_root()
     
     # Run pytest with coverage
     cmd = [
@@ -46,10 +46,9 @@ def run_unit_tests_only():
     # Change to tests directory
     test_dir = Path(__file__).parent
     os.chdir(test_dir)
-    
-    # Add project root to Python path so we can import server module
-    project_root = test_dir.parent
-    sys.path.insert(0, str(project_root))
+
+    # Get project root from test_imports
+    project_root = test_imports.get_project_root()
     
     # Set PYTHONPATH environment variable
     env = os.environ.copy()
@@ -63,10 +62,9 @@ def run_integration_tests_only():
     # Change to tests directory
     test_dir = Path(__file__).parent
     os.chdir(test_dir)
-    
-    # Add project root to Python path so we can import server module
-    project_root = test_dir.parent
-    sys.path.insert(0, str(project_root))
+
+    # Get project root from test_imports
+    project_root = test_imports.get_project_root()
     
     # Set PYTHONPATH environment variable
     env = os.environ.copy()

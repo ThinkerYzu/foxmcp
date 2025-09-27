@@ -13,8 +13,7 @@ import re
 from unittest.mock import Mock, AsyncMock
 import sys
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import test_imports  # Automatic path setup
 from server.mcp_tools import FoxMCPTools
 
 

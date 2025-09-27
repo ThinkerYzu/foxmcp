@@ -22,20 +22,11 @@ pytestmark = pytest.mark.skipif(
     reason="Skipping network-dependent tests"
 )
 
-# Add the parent directory to the path to import server module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
-
-# Import test utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-try:
-    from ..test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-    from ..firefox_test_utils import FirefoxTestManager
-    from ..port_coordinator import coordinated_test_ports
-except ImportError:
-    from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-    from firefox_test_utils import FirefoxTestManager
-    from port_coordinator import coordinated_test_ports
+from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
+from firefox_test_utils import FirefoxTestManager
+from port_coordinator import coordinated_test_ports
 
 
 def normalize_url(url):

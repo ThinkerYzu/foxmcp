@@ -13,12 +13,8 @@ import time
 import sys
 import os
 
-# Add the parent directory to the path to import server module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
-
-# Import test utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from port_coordinator import get_port_by_type
 
 class TestAwaitableConnection:

@@ -3,6 +3,7 @@ Simple integration test for live server communication
 Tests actual WebSocket communication between server and clients
 """
 
+import test_imports  # Automatic path setup
 import pytest
 import pytest_asyncio
 import json
@@ -13,12 +14,7 @@ import sys
 import os
 import re
 
-# Add the parent directory to the path to import server module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from server.server import FoxMCPServer
-
-# Import test configuration
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from test_config import TEST_PORTS
 from port_coordinator import get_port_by_type
 

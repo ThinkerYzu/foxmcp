@@ -3,15 +3,12 @@
 Test the port coordination system
 """
 
+import test_imports  # Automatic path setup
 import sys
 import os
 import json
 import tempfile
 import re
-
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from port_coordinator import coordinated_test_ports, FirefoxPortCoordinator
 from firefox_test_utils import FirefoxTestManager

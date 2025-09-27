@@ -4,16 +4,13 @@ Complete Integration Test: MCP Client → Server → WebSocket → Firefox Exten
 This is the ultimate end-to-end test that verifies the complete chain
 """
 
+import test_imports  # Automatic path setup
 import asyncio
 import sys
 import os
 import time
 import pytest
 import re
-
-# Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from server.server import FoxMCPServer
 from port_coordinator import coordinated_test_ports
@@ -27,8 +24,7 @@ async def test_complete_mcp_to_firefox_chain():
     print("🚀 Testing Complete Integration: MCP → Server → WebSocket → Firefox Extension → Browser")
     print("=" * 80)
     
-    # Check requirements
-        return False
+    # Check requirements - placeholder for any additional checks
         
     firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
     if not os.path.exists(os.path.expanduser(firefox_path)):

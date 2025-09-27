@@ -2,6 +2,7 @@
 Pytest configuration and fixtures
 """
 
+import test_imports  # Automatic path setup
 import asyncio
 import json
 import pytest
@@ -11,9 +12,6 @@ from typing import Dict, Any
 import sys
 import os
 import logging
-
-# Add project root to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from port_coordinator import get_port_by_type
 

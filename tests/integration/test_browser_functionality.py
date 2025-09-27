@@ -11,21 +11,12 @@ import os
 import sys
 import re
 
-# Add parent directories to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
+import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
-try:
-    from ..port_coordinator import coordinated_test_ports
-    from ..firefox_test_utils import FirefoxTestManager
-    from ..test_config import FIREFOX_TEST_CONFIG
-    from ..mcp_client_harness import DirectMCPTestClient
-except ImportError:
-    from port_coordinator import coordinated_test_ports
-    from firefox_test_utils import FirefoxTestManager
-    from test_config import FIREFOX_TEST_CONFIG
-    from mcp_client_harness import DirectMCPTestClient
+from port_coordinator import coordinated_test_ports
+from firefox_test_utils import FirefoxTestManager
+from test_config import FIREFOX_TEST_CONFIG
+from mcp_client_harness import DirectMCPTestClient
 
 
 class TestBrowserFunctionality:

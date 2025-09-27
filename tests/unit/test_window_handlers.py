@@ -10,8 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch, MagicMock
 import sys
 import os
 
-# Add the project root to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
 
 

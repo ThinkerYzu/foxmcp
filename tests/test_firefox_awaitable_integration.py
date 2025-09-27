@@ -3,6 +3,7 @@
 Test integration of Firefox test utilities with awaitable connection mechanism
 """
 
+import test_imports  # Automatic path setup
 import pytest
 import pytest_asyncio
 import asyncio
@@ -10,12 +11,7 @@ import websockets
 import sys
 import os
 
-# Add the parent directory to the path to import server module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from server.server import FoxMCPServer
-
-# Import test utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from firefox_test_utils import FirefoxTestManager
 from port_coordinator import get_port_by_type
 
