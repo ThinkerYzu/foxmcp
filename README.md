@@ -58,6 +58,9 @@ make package
 ### 3. Start Server
 
 ```bash
+# Activate virtual environment (if not already active)
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Start both WebSocket and MCP servers
 make run-server
 
