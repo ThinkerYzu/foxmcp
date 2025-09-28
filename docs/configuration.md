@@ -81,6 +81,16 @@ server = FoxMCPServer(port=8765, start_mcp=False)
 2. **Load Firefox extension** (connects automatically to WebSocket)
 3. **Connect MCP client** to `http://localhost:3000`
 
+### Supported MCP Clients
+
+**Claude Code**:
+```bash
+claude mcp add foxmcp http://localhost:3000/mcp/
+```
+
+**Other MCP Clients**:
+Connect directly to `http://localhost:3000/mcp/`
+
 **Complete Workflow**:
 ```
 MCP Client → FastMCP Server → WebSocket → Firefox Extension → Browser API

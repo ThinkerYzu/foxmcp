@@ -10,7 +10,7 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 
 - **Complete Browser Control**: Tabs, windows, navigation, bookmarks, history
 - **Content Access**: Extract text, HTML, execute JavaScript in pages
-- **MCP Integration**: Works with Claude, ChatGPT, and other MCP clients
+- **MCP Integration**: Works with Claude Desktop, Claude Code, and other MCP clients
 - **Custom Scripts**: Execute parameterized scripts in browser tabs
 - **Real-time Communication**: WebSocket-based with automatic reconnection
 - **Security**: Localhost-only operation with comprehensive input validation
@@ -71,21 +71,13 @@ The server will start on:
 
 ### 4. Connect Your AI Client
 
-**For Claude Desktop** (`claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "foxmcp": {
-      "command": "python",
-      "args": ["/path/to/foxmcp/server/server.py", "--mcp-only"],
-      "cwd": "/path/to/foxmcp"
-    }
-  }
-}
+**For Claude Code**:
+```bash
+claude mcp add foxmcp http://localhost:3000/mcp/
 ```
 
 **For Other MCP Clients**:
-Connect to `http://localhost:3000`
+Connect to `http://localhost:3000/mcp/`
 
 ## Basic Usage
 
