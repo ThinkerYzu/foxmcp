@@ -55,6 +55,7 @@ make package
 
 **Install in Firefox (Method 3 - Automated Script)**:
 ```bash
+# IMPORTANT: Close Firefox completely first!
 # Find your profile directory in about:profiles, then:
 ./scripts/install-xpi.sh /path/to/firefox/profile
 ```

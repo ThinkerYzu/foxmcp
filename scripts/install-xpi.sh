@@ -24,7 +24,8 @@ usage() {
     echo "  $0 ~/.mozilla/firefox/abc123.default-release"
     echo "  $0 /path/to/profile"
     echo ""
-    echo "Note: Firefox must be closed before running this script."
+    echo "⚠️  IMPORTANT: Firefox must be completely closed before running this script."
+    echo "   Profile modifications while Firefox is running may be ignored or cause issues."
     exit 1
 }
 
@@ -124,4 +125,4 @@ echo "1. Start Firefox with this profile"
 echo "2. Go to about:addons to verify the extension is installed"
 echo "3. The extension should be automatically enabled"
 echo ""
-echo "Note: Firefox preferences are automatically configured by this script."
+echo "⚠️  Remember: Only start Firefox AFTER this installation is complete."

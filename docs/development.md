@@ -131,6 +131,7 @@ make package
 
 **Method 3: Profile Directory Installation (Script)**
 ```bash
+# IMPORTANT: Close Firefox completely first!
 # Find your profile directory in about:profiles, then:
 ./scripts/install-xpi.sh /path/to/firefox/profile
 ```
