@@ -73,7 +73,7 @@ The server will start on:
 
 **For Claude Code**:
 ```bash
-claude mcp add foxmcp http://localhost:3000/mcp/
+claude mcp add --transport http foxmcp http://localhost:3000/mcp/
 ```
 
 **For Other MCP Clients**:

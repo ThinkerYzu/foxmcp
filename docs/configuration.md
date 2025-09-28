@@ -85,7 +85,7 @@ server = FoxMCPServer(port=8765, start_mcp=False)
 
 **Claude Code**:
 ```bash
-claude mcp add foxmcp http://localhost:3000/mcp/
+claude mcp add --transport http foxmcp http://localhost:3000/mcp/
 ```
 
 **Other MCP Clients**:
