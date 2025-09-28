@@ -37,7 +37,7 @@ This document provides release notes and upgrade instructions for FoxMCP.
 curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh | bash
 ```
 
-This automatically downloads v1.0.0 binaries, sets up Python environment, installs dependencies, configures Firefox extension, and creates Claude Code integration files.
+This automatically downloads v1.0.0 binaries, sets up Python environment, installs dependencies, configures Firefox extension, downloads Google Calendar automation scripts, and creates Claude Code integration files.
 
 #### **Package Downloads**
 - **Firefox Extension**: [foxmcp@codemud.org.xpi](https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/foxmcp@codemud.org.xpi)

@@ -93,6 +93,21 @@ download_release() {
     fi
     chmod +x install-xpi.sh
 
+    # Download predefined scripts
+    info "Downloading predefined scripts..."
+    mkdir -p predefined-scripts-download
+
+    # List of predefined scripts to download
+    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh")
+
+    for script in "${scripts[@]}"; do
+        if curl -L -o "predefined-scripts-download/$script" "https://raw.githubusercontent.com/$GITHUB_REPO/$VERSION/predefined-ex/$script"; then
+            chmod +x "predefined-scripts-download/$script"
+        else
+            warning "Failed to download predefined script: $script (continuing anyway)"
+        fi
+    done
+
     success "Downloads completed successfully"
 }
 
@@ -117,9 +132,11 @@ extract_and_setup() {
     cp foxmcp-downloads/"foxmcp@codemud.org.xpi" dist/packages/
     cp foxmcp-downloads/install-xpi.sh scripts/
 
-
-    # Also keep XPI copy in root for convenience
-    cp dist/packages/"foxmcp@codemud.org.xpi" .
+    # Create predefined scripts directory and move downloaded scripts
+    mkdir -p predefined-scripts
+    if [ -d foxmcp-downloads/predefined-scripts-download ]; then
+        cp foxmcp-downloads/predefined-scripts-download/* predefined-scripts/ 2>/dev/null || true
+    fi
 
     # Clean up downloads directory
     rm -rf foxmcp-downloads
@@ -169,6 +186,12 @@ To call a script, for example, `hello.sh` with two arguments, it means to call
 `content_execute_predefined(tab_id, "hello.sh", "[\"arg1\", \"arg2\"]")`.
 The last argument is a stringified JSON object that is a list of strings.
 
+Available predefined scripts in predefined-scripts/:
+- gcal-cal-event-js.sh: extracts Google Calendar event details
+- gcal-daily-events-js.sh: retrieves daily calendar events
+- gcal-monthly-events-js.sh: extracts monthly calendar view
+- hello.sh: example script for testing
+
 Add your custom predefined scripts to the predefined-scripts/ directory.
 
 ## Browser Content Scripts
@@ -207,18 +230,20 @@ Use these tools proactively to help with workflow management and information ret
 4. Begin automating your browser tasks!
 EOF
 
-    # Create predefined scripts directory
+    # Ensure predefined scripts directory exists
     mkdir -p predefined-scripts
 
-    # Create example script
-    cat > predefined-scripts/hello.sh << 'EOF'
+    # Create example script only if it doesn't exist
+    if [ ! -f predefined-scripts/hello.sh ]; then
+        cat > predefined-scripts/hello.sh << 'EOF'
 #!/bin/bash
 # Example predefined script for FoxMCP
 # Usage: content_execute_predefined(tab_id, "hello.sh", "[\"name\"]")
 
 echo "console.log('Hello from FoxMCP predefined script! Args: $*');"
 EOF
-    chmod +x predefined-scripts/hello.sh
+        chmod +x predefined-scripts/hello.sh
+    fi
 
     success "Claude Code integration setup complete"
 }

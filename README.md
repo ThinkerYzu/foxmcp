@@ -37,7 +37,7 @@ This script automatically:
 - Sets up Python virtual environment and dependencies
 - Downloads the Firefox extension and installation script
 - Creates CLAUDE.md for Claude Code integration
-- Sets up predefined-scripts directory for custom browser automation
+- Downloads Google Calendar automation scripts to predefined-scripts/ directory
 - Optionally connects to Claude Code
 - Creates a startup script for easy server management
 
