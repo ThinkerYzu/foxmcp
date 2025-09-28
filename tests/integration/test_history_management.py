@@ -29,60 +29,6 @@ from port_coordinator import coordinated_test_ports
 class TestHistoryManagementEndToEnd:
     """End-to-end tests for history management functionality"""
     
-    @pytest_asyncio.fixture
-    async def server_with_extension(self):
-        """Start server and Firefox extension for history testing"""
-        # Use dynamic port allocation
-        with coordinated_test_ports() as (ports, coord_file):
-            test_port = ports['websocket']
-            mcp_port = ports['mcp']
-            
-            # Get extension XPI
-            
-            # Create server
-            server = FoxMCPServer(
-                host="localhost",
-                port=test_port,
-                mcp_port=mcp_port,
-                start_mcp=False
-            )
-            
-            # Start server
-            server_task = asyncio.create_task(server.start_server())
-            await asyncio.sleep(0.5)  # Allow server to start
-            
-            # Start Firefox with extension
-            firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
-            if not os.path.exists(os.path.expanduser(firefox_path)):
-                pytest.skip(f"Firefox not found at {firefox_path}")
-            
-            firefox = FirefoxTestManager(
-                firefox_path=firefox_path,
-                test_port=test_port,
-                coordination_file=coord_file
-            )
-            
-            try:
-                # Set up Firefox with extension and start it
-                success = firefox.setup_and_start_firefox(headless=True)
-                if not success:
-                    pytest.skip("Firefox setup or extension installation failed")
-                
-                # Wait for extension to connect using awaitable mechanism
-                connected = await firefox.async_wait_for_extension_connection(
-                    timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
-                )
-
-                # Verify connection
-                if not connected:
-                    pytest.skip("Extension did not connect to server")
-                
-                yield server, firefox, test_port
-                
-            finally:
-                # Cleanup
-                firefox.cleanup()
-                await server.shutdown(server_task)
     
     @pytest.mark.asyncio
     async def test_history_query_basic(self, server_with_extension):

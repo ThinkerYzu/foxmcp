@@ -138,15 +138,8 @@ class TestMCPServerIntegration:
         system = full_mcp_system
         server = system['server']
 
-        # Skip if extension or Firefox not available
-
-        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
-        if not os.path.exists(os.path.expanduser(firefox_path)):
-            pytest.skip(f"Firefox not found at {firefox_path}. Set FIREFOX_PATH environment variable.")
-
         # Start Firefox with extension
         with FirefoxTestManager(
-            firefox_path=firefox_path,
             test_port=system['websocket_port'],
             coordination_file=system['coordination_file']
         ) as firefox:
@@ -192,18 +185,11 @@ class TestMCPServerIntegration:
         server = system['server']
         mcp_client = system['mcp_client']
 
-        # Skip if required components not available
-
-        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
-        if not os.path.exists(os.path.expanduser(firefox_path)):
-            pytest.skip("Firefox not found")
-
         # Connect MCP client
         await mcp_client.connect()
 
         # Start Firefox with extension
         with FirefoxTestManager(
-            firefox_path=firefox_path,
             test_port=system['websocket_port'],
             coordination_file=system['coordination_file']
         ) as firefox:

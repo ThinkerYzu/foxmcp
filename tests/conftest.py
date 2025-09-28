@@ -6,6 +6,7 @@ import test_imports  # Automatic path setup
 import asyncio
 import json
 import pytest
+import pytest_asyncio
 import re
 from unittest.mock import Mock, AsyncMock, patch
 from typing import Dict, Any
@@ -13,7 +14,10 @@ import sys
 import os
 import logging
 
-from port_coordinator import get_port_by_type
+from port_coordinator import get_port_by_type, coordinated_test_ports
+from server.server import FoxMCPServer
+from firefox_test_utils import FirefoxTestManager
+from test_config import FIREFOX_TEST_CONFIG
 
 # Store allocated ports for Firefox configuration
 _allocated_test_ports = {}
@@ -79,6 +83,97 @@ def firefox_with_test_ports():
 
     except ImportError:
         return None
+
+
+@pytest_asyncio.fixture
+async def server_with_extension():
+    """
+    Shared fixture for starting server and Firefox extension for integration testing.
+
+    This centralizes the common pattern of:
+    1. Setting up coordinated ports
+    2. Starting FoxMCP server with MCP support
+    3. Launching Firefox with the extension
+    4. Waiting for extension connection
+    5. Cleanup on teardown
+
+    Returns:
+        tuple: (server, firefox, test_port) for use in tests
+    """
+    # Use dynamic port allocation
+    with coordinated_test_ports() as (ports, coord_file):
+        test_port = ports['websocket']
+        mcp_port = ports['mcp']
+
+        # Create server
+        server = FoxMCPServer(
+            host="localhost",
+            port=test_port,
+            mcp_port=mcp_port,
+            start_mcp=True
+        )
+
+        # Start server
+        server_task = asyncio.create_task(server.start_server())
+        await asyncio.sleep(0.1)  # Let server start
+
+        # Check Firefox path
+        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
+        if not os.path.exists(os.path.expanduser(firefox_path)):
+            pytest.skip(f"Firefox not found at {firefox_path}")
+
+        firefox = FirefoxTestManager(
+            firefox_path=firefox_path,
+            test_port=test_port,
+            coordination_file=coord_file
+        )
+
+        try:
+            # Set up Firefox with extension and start it
+            success = firefox.setup_and_start_firefox(headless=True)
+            if not success:
+                pytest.skip("Firefox setup or extension installation failed")
+
+            # Wait for extension to connect using awaitable mechanism
+            connected = await firefox.async_wait_for_extension_connection(
+                timeout=FIREFOX_TEST_CONFIG['extension_install_wait'], server=server
+            )
+
+            # Verify connection
+            if not connected:
+                pytest.skip("Extension did not connect to server")
+
+            # Return a dict that also acts like a tuple for backward compatibility
+            # This allows both patterns:
+            # - setup = server_with_extension; setup['server']
+            # - server, firefox, test_port = server_with_extension
+
+            class FixtureResult:
+                def __init__(self, server, firefox, test_port, mcp_port, ports):
+                    self.server = server
+                    self.firefox = firefox
+                    self.test_port = test_port
+                    self.mcp_port = mcp_port
+                    self.ports = ports
+
+                def __getitem__(self, key):
+                    return getattr(self, key)
+
+                def __iter__(self):
+                    yield self.server
+                    yield self.firefox
+                    yield self.test_port
+
+                def get(self, key, default=None):
+                    return getattr(self, key, default)
+
+            yield FixtureResult(server, firefox, test_port, mcp_port, ports)
+
+        finally:
+            # Cleanup
+            firefox.cleanup()
+            await server.shutdown(server_task)
+
 
 # Test fixtures
 @pytest.fixture

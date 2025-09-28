@@ -238,6 +238,11 @@ pytest --cov=../server --cov-report=html --cov-report=term-missing
 
 The `conftest.py` file provides shared test fixtures:
 
+### Core Testing Infrastructure
+- `server_with_extension`: **Centralized Firefox + Extension Fixture** - Provides ready-to-use server with Firefox extension connected
+- `auto_dynamic_ports`: Automatic port allocation for all test servers (prevents conflicts)
+
+### Mock Data Fixtures
 - `sample_request`: Sample WebSocket request message
 - `sample_response`: Sample WebSocket response message
 - `sample_error`: Sample error message
@@ -246,6 +251,30 @@ The `conftest.py` file provides shared test fixtures:
 - `sample_tab_data`: Sample tab data for testing
 - `sample_history_data`: Sample history data
 - `sample_bookmark_data`: Sample bookmark data
+
+### Centralized Firefox Extension Testing
+
+The `server_with_extension` fixture provides a complete testing environment:
+
+```python
+@pytest.mark.asyncio
+async def test_my_feature(self, server_with_extension):
+    """Test using centralized Firefox fixture"""
+    server = server_with_extension['server']
+    firefox = server_with_extension['firefox']
+    test_port = server_with_extension['test_port']
+    mcp_port = server_with_extension['mcp_port']
+
+    # Firefox and extension are already connected and ready
+    # Send requests through server...
+```
+
+**Benefits:**
+- ✅ **No duplicate setup** - Firefox setup centralized in one place
+- ✅ **Consistent environment** - All tests use same Firefox configuration
+- ✅ **Automatic cleanup** - Server and Firefox properly cleaned up after tests
+- ✅ **Port coordination** - No port conflicts between tests
+- ✅ **Connection verification** - Extension connection verified before test execution
 
 ## Writing New Tests
 
@@ -262,6 +291,65 @@ def test_new_functionality(self, fixture_name):
 
     # Assert
     assert result["status"] == "success"
+```
+
+### Integration Test with Firefox Extension
+
+For tests that need real Firefox + extension integration, use the centralized fixture:
+
+```python
+import test_imports  # Always first import
+import pytest
+
+@pytest.mark.asyncio
+async def test_browser_feature(self, server_with_extension):
+    """Test browser functionality using centralized fixture"""
+    server = server_with_extension['server']
+    firefox = server_with_extension['firefox']
+    test_port = server_with_extension['test_port']
+
+    # Firefox and extension are already connected
+    request = {
+        "id": "test-001",
+        "type": "request",
+        "action": "tabs.list",
+        "data": {}
+    }
+
+    response = await server.send_request_and_wait(request)
+    assert response["type"] == "response"
+```
+
+### Tests with MCP Client Integration
+
+For tests that need MCP client functionality, wrap the centralized fixture:
+
+```python
+@pytest_asyncio.fixture
+async def full_system(self, server_with_extension):
+    """Custom fixture that adds MCP client to centralized fixture"""
+    from mcp_client_harness import DirectMCPTestClient
+
+    server = server_with_extension['server']
+    mcp_client = DirectMCPTestClient(server.mcp_tools)
+
+    yield {
+        'server': server,
+        'firefox': server_with_extension['firefox'],
+        'mcp_client': mcp_client,
+        'test_port': server_with_extension['test_port']
+    }
+
+    await mcp_client.disconnect()
+
+@pytest.mark.asyncio
+async def test_mcp_feature(self, full_system):
+    """Test using MCP client with Firefox"""
+    mcp_client = full_system['mcp_client']
+    await mcp_client.connect()
+
+    result = await mcp_client.call_tool("tabs_list")
+    assert not result.get('isError', False)
 ```
 
 ### Async Test Example
