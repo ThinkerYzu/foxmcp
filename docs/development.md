@@ -129,11 +129,23 @@ make package
 5. Click gear icon → "Install Add-on From File"
 6. Select `dist/packages/foxmcp@codemud.org.xpi`
 
+**Method 3: Profile Directory Installation (Script)**
+```bash
+# Find your profile directory in about:profiles, then:
+./scripts/install-xpi.sh /path/to/firefox/profile
+```
+
+This script automatically:
+- Installs the extension to the profile's extensions directory
+- Configures `user.js` to allow unsigned extensions (`xpinstall.signatures.required = false`)
+- Sets proper file permissions
+
 **Installation Notes:**
-- **Method 1**: Extension is removed when Firefox restarts (best for development)
-- **Method 2**: Persistent installation that survives restarts, requires disabling signature verification
+- **Method 1**: Extension is removed when Firefox restarts (best for quick testing)
+- **Method 2**: Persistent installation that survives restarts, requires manual preference changes
+- **Method 3**: Automated installation with preference configuration, most reliable for development
 - Unsigned extensions cannot be installed through `about:addons` without preference changes
-- Both methods work with unsigned extensions in development mode
+- All methods work with unsigned extensions in development mode
 
 ### Extension Architecture
 

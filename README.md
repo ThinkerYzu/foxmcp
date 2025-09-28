@@ -53,7 +53,18 @@ make package
 6. Click gear icon (⚙️) → "Install Add-on From File"
 7. Select `dist/packages/foxmcp@codemud.org.xpi`
 
-**Note**: Method 1 requires reinstalling after Firefox restarts. Method 2 provides persistent installation but requires disabling signature verification for unsigned extensions.
+**Install in Firefox (Method 3 - Automated Script)**:
+```bash
+# Find your profile directory in about:profiles, then:
+./scripts/install-xpi.sh /path/to/firefox/profile
+```
+
+This script automatically:
+- Installs the extension to your Firefox profile
+- Configures Firefox to allow unsigned extensions
+- Handles existing installations and preferences
+
+**Note**: Method 1 requires reinstalling after Firefox restarts. Method 2 requires manual preference changes. Method 3 is fully automated and provides the most seamless installation experience.
 
 ### 3. Start Server
 
