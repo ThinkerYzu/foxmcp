@@ -182,15 +182,46 @@ Add your personal information and work context here.
 
 ## Foxmcp Predefined External Scripts
 A predefined external script is defined at the server side of foxmcp.
-To call a script, for example, `hello.sh` with two arguments, it means to call
-`content_execute_predefined(tab_id, "hello.sh", "[\"arg1\", \"arg2\"]")`.
-The last argument is a stringified JSON object that is a list of strings.
+To call a script, use `content_execute_predefined(tab_id, "script_name", "[\"arg1\", \"arg2\"]")`.
+The last argument is a stringified JSON array of strings.
 
-Available predefined scripts in predefined-scripts/:
-- gcal-cal-event-js.sh: extracts Google Calendar event details
-- gcal-daily-events-js.sh: retrieves daily calendar events
-- gcal-monthly-events-js.sh: extracts monthly calendar view
-- hello.sh: example script for testing
+### Available Google Calendar Scripts
+
+**gcal-cal-event-js.sh** - Extract specific event details
+- Usage: `content_execute_predefined(tab_id, "gcal-cal-event-js.sh", "[\"Event Title\", \"8\", \"11:30am\"]")`
+- Arguments: [event_title, day_of_month, time]
+- Example: `content_execute_predefined(tab_id, "gcal-cal-event-js.sh", "[\"Team Lunch\", \"15\", \"12:00pm\"]")`
+- Returns: Detailed event information including attendees, meeting links, and location
+
+**gcal-daily-events-js.sh** - Get all events for a specific day
+- Usage: `content_execute_predefined(tab_id, "gcal-daily-events-js.sh", "[\"8\"]")` (current month/year)
+- Usage: `content_execute_predefined(tab_id, "gcal-daily-events-js.sh", "[\"15\", \"10\"]")` (October 15, current year)
+- Usage: `content_execute_predefined(tab_id, "gcal-daily-events-js.sh", "[\"25\", \"12\", \"2024\"]")` (December 25, 2024)
+- Arguments: [day] or [day, month] or [day, month, year]
+- Returns: All events for the specified day with chronological sorting
+
+**gcal-monthly-events-js.sh** - Extract entire month view
+- Usage: `content_execute_predefined(tab_id, "gcal-monthly-events-js.sh", "[]")` (no arguments)
+- Returns: All events grouped by day for current month view with summary statistics
+
+### Important Notes for Claude Code:
+1. **Always use Google Calendar tab**: Make sure the active tab is on calendar.google.com
+2. **Ensure month view**: For monthly scripts, make sure calendar is in month view
+3. **Check calendar is loaded**: Wait for calendar to fully load before running scripts
+4. **Handle errors gracefully**: Scripts return error messages if calendar elements aren't found
+5. **Arguments are strings**: All arguments must be passed as strings in the JSON array
+
+### Common Usage Patterns:
+```javascript
+// Get today's events (assuming today is the 15th)
+content_execute_predefined(tab_id, "gcal-daily-events-js.sh", "[\"15\"]")
+
+// Get specific meeting details
+content_execute_predefined(tab_id, "gcal-cal-event-js.sh", "[\"Weekly Standup\", \"16\", \"9:00am\"]")
+
+// Get full month overview
+content_execute_predefined(tab_id, "gcal-monthly-events-js.sh", "[]")
+```
 
 Add your custom predefined scripts to the predefined-scripts/ directory.
 
@@ -233,17 +264,6 @@ EOF
     # Ensure predefined scripts directory exists
     mkdir -p predefined-scripts
 
-    # Create example script only if it doesn't exist
-    if [ ! -f predefined-scripts/hello.sh ]; then
-        cat > predefined-scripts/hello.sh << 'EOF'
-#!/bin/bash
-# Example predefined script for FoxMCP
-# Usage: content_execute_predefined(tab_id, "hello.sh", "[\"name\"]")
-
-echo "console.log('Hello from FoxMCP predefined script! Args: $*');"
-EOF
-        chmod +x predefined-scripts/hello.sh
-    fi
 
     success "Claude Code integration setup complete"
 }
