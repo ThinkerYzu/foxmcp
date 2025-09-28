@@ -1,3 +1,9 @@
+/*
+ * FoxMCP Firefox Extension - Background Script
+ * Copyright (c) 2024 FoxMCP Project
+ * Licensed under the MIT License - see LICENSE file for details
+ */
+
 // SINGLE CONNECTION CONSTRAINT: Only one WebSocket connection to MCP server allowed
 let websocket = null;
 let isConnected = false;

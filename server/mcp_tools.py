@@ -2,6 +2,9 @@
 """
 MCP Tool definitions for FoxMCP server
 These tools bridge browser functions through WebSocket to the Firefox extension
+
+Copyright (c) 2024 FoxMCP Project
+Licensed under the MIT License - see LICENSE file for details
 """
 
 import asyncio

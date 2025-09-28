@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
 FoxMCP Server - WebSocket server that bridges browser extension with MCP clients
+
+Copyright (c) 2024 FoxMCP Project
+Licensed under the MIT License - see LICENSE file for details
 """
 
 import argparse

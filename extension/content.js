@@ -1,3 +1,9 @@
+/*
+ * FoxMCP Firefox Extension - Content Script
+ * Copyright (c) 2024 FoxMCP Project
+ * Licensed under the MIT License - see LICENSE file for details
+ */
+
 // Content script for page interaction
 console.log('FoxMCP content script loaded');
 

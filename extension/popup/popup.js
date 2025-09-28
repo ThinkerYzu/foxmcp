@@ -1,3 +1,9 @@
+/*
+ * FoxMCP Firefox Extension - Popup Script
+ * Copyright (c) 2024 FoxMCP Project
+ * Licensed under the MIT License - see LICENSE file for details
+ */
+
 // Check connection status on popup open
 document.addEventListener('DOMContentLoaded', async () => {
   const statusElement = document.getElementById('status');
