@@ -33,8 +33,8 @@ pip install -r requirements.txt
 ### 2. Build & Install Extension
 
 ```bash
-# Build extension
-make build
+# Build and package extension
+make package
 ```
 
 **Install in Firefox (Method 1 - Temporary Add-on)**:

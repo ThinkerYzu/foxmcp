@@ -23,8 +23,8 @@ make dev               # Setup development environment
 
 ### Building and Packaging
 ```bash
-make build             # Build extension package
-make package           # Create distributable ZIP files
+make build             # Build extension only
+make package           # Build and create distributable packages (XPI + server ZIP)
 ```
 
 ### Testing
@@ -103,10 +103,11 @@ foxmcp/
 ### Building the Extension
 
 ```bash
-# Build extension XPI package
-make build
+# Build and package extension
+make package
 
 # Extension will be created at: dist/packages/foxmcp@codemud.org.xpi
+# Server package will be created at: dist/packages/foxmcp-server.zip
 ```
 
 ### Loading in Firefox
