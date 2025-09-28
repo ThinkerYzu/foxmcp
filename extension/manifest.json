@@ -9,7 +9,7 @@
   "permissions": [
     "tabs",
     "windows",
-    "history", 
+    "history",
     "bookmarks",
     "activeTab",
     "storage",

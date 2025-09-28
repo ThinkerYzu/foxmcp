@@ -74,7 +74,21 @@
    - Event streaming from browser (real-time tab changes, navigation events)
    - Authentication and authorization for MCP clients
 
-3. **Documentation and Examples** 🎯 **PRIORITY 3**
+3. **Extended Browser API Support** 🎯 **PRIORITY 3**
+   - **Downloads Management**: Complete downloads API integration
+     - Start, pause, cancel, monitor downloads
+     - Download history and file location access
+     - Progress tracking and completion notifications
+   - **Cookie Management**: Comprehensive cookie operations
+     - Read, write, delete cookies with domain/path filtering
+     - Bulk cookie operations for testing and privacy
+     - Session management through cookie control
+   - **Web Request Interception**: HTTP request/response manipulation
+     - Intercept and modify network requests
+     - Block requests, modify headers, redirect URLs
+     - Network traffic analysis and filtering capabilities
+
+4. **Documentation and Examples** 🎯 **PRIORITY 4**
    - MCP client examples for different use cases
    - API documentation for all tools
    - Deployment guides for different environments
