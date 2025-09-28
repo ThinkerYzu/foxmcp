@@ -104,9 +104,11 @@ async def wait_for_history_update(server, search_criteria, max_attempts=15, inte
         if response and not response.get('error'):
             response_data = response.get('data', {})
             results = response_data.get('results', [])
+            items = response_data.get('items', [])  # Firefox uses 'items' for history responses
 
             # Check if we have results (indicating history was recorded)
-            if results:
+            # Check both 'results' and 'items' keys for compatibility
+            if results or items:
                 print(f"✓ History found after {attempt + 1} attempts ({(attempt + 1) * interval:.1f}s)")
                 return True, response_data
 
@@ -197,7 +199,10 @@ class TestHistoryWithContent:
         
         # Define test URL
         test_url = "https://example.org"
-        
+
+        # Capture time before visit for history search
+        visit_start_time = int(datetime.now().timestamp() * 1000)
+
         # Visit the URL with timeout protection
         try:
             visit_result = await asyncio.wait_for(
@@ -217,23 +222,27 @@ class TestHistoryWithContent:
         
         print(f"✓ Successfully visited: {test_url}")
 
-        # Poll for history to be recorded instead of fixed wait
-        print("⏳ Polling for history to be recorded...")
+        # Wait 10 seconds first (like the working approach) then poll if needed
+        print("⏳ Waiting 10 seconds for history to be recorded...")
+        await asyncio.sleep(10.0)
+
+        print("⏳ Checking for history...")
         search_criteria = {
-            "text": "",  # Empty text to get recent history
+            "text": "",  # Broad search - any history
             "maxResults": 50,
-            "startTime": 0,
+            "startTime": 0,  # Search all history (like the working sleep approach)
             "endTime": int(datetime.now().timestamp() * 1000)
         }
 
-        history_found, broad_response_data = await wait_for_history_update(server, search_criteria)
+        # After initial wait, do a few quick checks with shorter intervals
+        history_found, broad_response_data = await wait_for_history_update(server, search_criteria, max_attempts=5, interval=1.0)
 
         if not history_found:
             pytest.skip("History was not recorded within timeout period")
 
-        print(f"📊 Broad history query found results")
+        print(f"📊 History polling found results")
 
-        broad_items = broad_response_data.get("results", [])
+        broad_items = broad_response_data.get("items", [])  # Firefox uses 'items' key
         print(f"📚 Total history items found: {len(broad_items)}")
         if broad_items:
             print(f"📚 Sample URLs: {[item.get('url', 'No URL') for item in broad_items[:3]]}")
@@ -381,8 +390,11 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         
         print(f"✓ Successfully visited {len(test_urls)} URLs")
 
-        # Poll for history to be recorded instead of fixed wait
-        print("⏳ Polling for multiple URLs to appear in history...")
+        # Wait 10 seconds first (like other working tests) then poll if needed
+        print("⏳ Waiting 10 seconds for history to be recorded...")
+        await asyncio.sleep(10.0)
+
+        print("⏳ Checking for multiple URLs in history...")
         search_criteria = {
             "text": "example.org",  # Search for our test domain
             "maxResults": 20,
@@ -390,13 +402,13 @@ Consider increasing wait times or using a non-headless Firefox instance for this
             "endTime": int(datetime.now().timestamp() * 1000)
         }
 
-        history_found, history_response_data = await wait_for_history_update(server, search_criteria, max_attempts=12)
+        history_found, history_response_data = await wait_for_history_update(server, search_criteria, max_attempts=5)
 
         if not history_found:
             pytest.skip("History entries for multiple URLs were not recorded within timeout period")
 
         # Get all history URLs from successful polling result
-        history_items = history_response_data.get("results", [])
+        history_items = history_response_data.get("items", [])  # Firefox uses 'items' key
         visited_urls = [item["url"] for item in history_items]
         
         # Verify all our test URLs are in the history (accounting for URL normalization)
@@ -524,7 +536,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         if not history_found:
             pytest.skip("History entries for search test URLs were not recorded within timeout period")
 
-        all_history_urls = [item["url"] for item in general_response_data.get("results", [])]
+        all_history_urls = [item["url"] for item in general_response_data.get("items", [])]
         print(f"All URLs found in history: {all_history_urls}")
         
         # Verify our URLs are in history first
@@ -608,7 +620,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         if not history_found:
             pytest.skip("Cleanup URLs were not recorded in history within timeout period")
 
-        before_cleanup_urls = [item["url"] for item in verify_response_data.get("results", [])]
+        before_cleanup_urls = [item["url"] for item in verify_response_data.get("items", [])]
         print(f"URLs in history before cleanup: {before_cleanup_urls}")
         
         # Check which of our URLs are actually in history
@@ -655,7 +667,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
             server, search_criteria, max_attempts=5
         )
 
-        after_cleanup_urls = [item["url"] for item in verify_after_response_data.get("results", [])]
+        after_cleanup_urls = [item["url"] for item in verify_after_response_data.get("items", [])]
         print(f"URLs in history after cleanup: {after_cleanup_urls}")
         
         # Verify cleaned URLs are no longer there
