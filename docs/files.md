@@ -7,13 +7,14 @@ This document explains the basic skeleton structure created for the FoxMCP proje
 ```
 foxmcp/
 ├── CLAUDE.md           # Project requirements and instructions
-├── PLAN.md            # Development plan and phases
-├── protocol.md        # WebSocket message protocol specification
-├── files.md           # This file - explains project structure
 ├── README.md          # Main project documentation and quick start
 ├── claude.sh          # Claude Code integration script with FM_ROOT environment
 ├── Makefile           # Build system and development commands
-├── venv-setup.md      # Virtual environment setup documentation
+├── docs/               # Documentation directory
+│   ├── PLAN.md        # Development plan and phases
+│   ├── protocol.md    # WebSocket message protocol specification
+│   ├── files.md       # This file - explains project structure
+│   └── venv-setup.md  # Virtual environment setup documentation
 ├── venv/              # Python virtual environment (created)
 ├── extension/         # Browser extension directory
 │   ├── manifest.json  # Extension configuration and permissions
@@ -339,7 +340,7 @@ foxmcp/
 - **Dependencies**: websockets, pytest, pytest-asyncio, pytest-mock, pytest-cov, coverage
 - **Usage**: `source venv/bin/activate` to activate environment
 
-### `venv-setup.md` - Setup Documentation
+### `docs/venv-setup.md` - Setup Documentation
 - Complete virtual environment setup instructions
 - Package installation commands and verification steps
 - Server and test running instructions

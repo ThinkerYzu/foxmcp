@@ -491,7 +491,7 @@ All communication uses JSON messages over WebSocket:
 }
 ```
 
-See `protocol.md` for complete message specifications.
+See `docs/protocol.md` for complete message specifications.
 
 ## MCP Integration
 

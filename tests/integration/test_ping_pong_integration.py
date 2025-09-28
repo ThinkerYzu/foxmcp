@@ -182,7 +182,7 @@ class TestPingPongProtocolCompliance:
     
     def test_ping_message_protocol_compliance(self):
         """Test ping messages comply with protocol specification"""
-        # Test message structure matches protocol.md specification
+        # Test message structure matches docs/protocol.md specification
         
         ping_request_structure = {
             "id": str,
