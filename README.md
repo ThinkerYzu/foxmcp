@@ -181,6 +181,12 @@ echo "(function() {
 "Run the highlight_text script with 'important' as the search term"
 ```
 
+### 4. Claude Code Integration
+The `claude-ex/` directory contains example CLAUDE.md templates that help Claude Code understand how to create predefined external scripts. Copy `claude-ex/CLAUDE.md.template` to your project's CLAUDE.md to enable Claude Code to:
+- Understand your script creation workflow
+- Help you create new predefined external scripts
+- Provide context about foxmcp tools and capabilities
+
 ## Documentation
 
 - **[API Reference](docs/api-reference.md)** - Complete function reference

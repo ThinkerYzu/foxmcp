@@ -18,7 +18,22 @@ Set the environment variable to point to your scripts directory:
 export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
 ```
 
-### 2. Create Executable Script
+### 2. Claude Code Integration
+
+The `claude-ex/` directory contains CLAUDE.md templates that help Claude Code understand how to create predefined external scripts:
+
+```bash
+# Copy the template to enable Claude Code script assistance
+cp claude-ex/CLAUDE.md.template CLAUDE.md
+```
+
+This template provides Claude Code with:
+- Context about foxmcp predefined script system
+- Examples of script creation patterns
+- Guidelines for work-related browser automation
+- Understanding of script argument handling
+
+### 3. Create Executable Script
 
 Scripts must be executable and output JavaScript to stdout:
 
@@ -59,7 +74,7 @@ cat << EOF
 EOF
 ```
 
-### 3. Make Scripts Executable
+### 4. Make Scripts Executable
 
 ```bash
 chmod +x /path/to/your/scripts/*.sh
