@@ -32,30 +32,17 @@ This document provides release notes and upgrade instructions for FoxMCP.
 
 ### 📦 Installation
 
-#### **Quick Start**
+#### **One-Command Installation**
 ```bash
-# 1. Clone and setup
-git clone https://github.com/foxmcp/foxmcp.git
-cd foxmcp
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 2. Build and install extension
-make package
-./scripts/install-xpi.sh /path/to/firefox/profile
-
-# 3. Start server
-make run-server
-
-# 4. Connect Claude Code
-claude mcp add --transport http foxmcp http://localhost:3000/mcp/
+curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh | bash
 ```
 
+This automatically downloads v1.0.0 binaries, sets up Python environment, installs dependencies, configures Firefox extension, and creates Claude Code integration files.
+
 #### **Package Downloads**
-- **Firefox Extension**: [foxmcp@codemud.org.xpi](https://github.com/foxmcp/foxmcp/releases/download/v1.0.0/foxmcp@codemud.org.xpi)
-- **Server Package**: [foxmcp-server.zip](https://github.com/foxmcp/foxmcp/releases/download/v1.0.0/foxmcp-server.zip)
-- **Source Code**: [v1.0.0.tar.gz](https://github.com/foxmcp/foxmcp/archive/v1.0.0.tar.gz)
+- **Firefox Extension**: [foxmcp@codemud.org.xpi](https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/foxmcp@codemud.org.xpi)
+- **Server Package**: [foxmcp-server.zip](https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/foxmcp-server.zip)
+- **Source Code**: [v1.0.0.tar.gz](https://github.com/ThinkerYzu/foxmcp/archive/v1.0.0.tar.gz)
 
 ### 🔧 System Requirements
 

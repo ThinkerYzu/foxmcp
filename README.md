@@ -17,11 +17,37 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Option 1: Install from GitHub Release (Recommended)
+
+**One-command installation:**
+```bash
+curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh | bash
+```
+
+**Or safer two-step installation:**
+```bash
+# Download and run the installation script
+curl -L -o install-from-github.sh https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh
+chmod +x install-from-github.sh
+./install-from-github.sh
+```
+
+This script automatically:
+- Downloads the latest v1.0.0 release binaries
+- Sets up Python virtual environment and dependencies
+- Downloads the Firefox extension and installation script
+- Creates CLAUDE.md for Claude Code integration
+- Sets up predefined-scripts directory for custom browser automation
+- Optionally connects to Claude Code
+- Creates a startup script for easy server management
+
+### Option 2: Install from Source
+
+#### 1. Install Dependencies
 
 ```bash
 # Clone repository
-git clone https://github.com/your-repo/foxmcp.git
+git clone https://github.com/ThinkerYzu/foxmcp.git
 cd foxmcp
 
 # Create virtual environment and install dependencies
@@ -30,7 +56,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Build & Install Extension
+#### 2. Build & Install Extension
 
 ```bash
 # Build and package extension
@@ -69,6 +95,13 @@ This script automatically:
 
 ### 3. Start Server
 
+**If you used the GitHub installation script:**
+```bash
+# Use the provided startup script
+./start-foxmcp.sh
+```
+
+**If you installed from source:**
 ```bash
 # Activate virtual environment (if not already active)
 source venv/bin/activate  # On Windows: venv\Scripts\activate
