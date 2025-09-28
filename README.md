@@ -19,17 +19,8 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 
 ### Option 1: Install from GitHub Release (Recommended)
 
-**One-command installation:**
 ```bash
 curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh | bash
-```
-
-**Or safer two-step installation:**
-```bash
-# Download and run the installation script
-curl -L -o install-from-github.sh https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh
-chmod +x install-from-github.sh
-./install-from-github.sh
 ```
 
 This script automatically:
