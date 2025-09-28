@@ -35,14 +35,25 @@ pip install -r requirements.txt
 ```bash
 # Build extension
 make build
-
-# Install in Firefox:
-# 1. Open Firefox
-# 2. Go to about:debugging
-# 3. Click "This Firefox"
-# 4. Click "Load Temporary Add-on"
-# 5. Select extension/foxmcp.xpi
 ```
+
+**Install in Firefox (Method 1 - Temporary Add-on)**:
+1. Open Firefox
+2. Go to `about:debugging`
+3. Click "This Firefox"
+4. Click "Load Temporary Add-on"
+5. Select `dist/packages/foxmcp@codemud.org.xpi`
+
+**Install in Firefox (Method 2 - Persistent with Preferences)**:
+1. Open Firefox
+2. Go to `about:config` (accept the warning)
+3. Set `xpinstall.signatures.required` to `false`
+4. Set `extensions.experiments.enabled` to `true` (if needed)
+5. Go to `about:addons`
+6. Click gear icon (⚙️) → "Install Add-on From File"
+7. Select `dist/packages/foxmcp@codemud.org.xpi`
+
+**Note**: Method 1 requires reinstalling after Firefox restarts. Method 2 provides persistent installation but requires disabling signature verification for unsigned extensions.
 
 ### 3. Start Server
 

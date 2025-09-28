@@ -106,16 +106,33 @@ foxmcp/
 # Build extension XPI package
 make build
 
-# Extension will be created at: extension/foxmcp.xpi
+# Extension will be created at: dist/packages/foxmcp@codemud.org.xpi
 ```
 
 ### Loading in Firefox
 
+**Method 1: Temporary Add-on (Development)**
 1. Open Firefox
 2. Navigate to `about:debugging`
 3. Click "This Firefox"
 4. Click "Load Temporary Add-on"
-5. Select `extension/foxmcp.xpi`
+5. Select `dist/packages/foxmcp@codemud.org.xpi`
+
+**Method 2: Persistent Installation with Preferences**
+1. Open Firefox
+2. Go to `about:config` (accept the warning if shown)
+3. Search for and modify these preferences:
+   - Set `xpinstall.signatures.required` to `false`
+   - Set `extensions.experiments.enabled` to `true` (if needed for advanced features)
+4. Go to `about:addons`
+5. Click gear icon → "Install Add-on From File"
+6. Select `dist/packages/foxmcp@codemud.org.xpi`
+
+**Installation Notes:**
+- **Method 1**: Extension is removed when Firefox restarts (best for development)
+- **Method 2**: Persistent installation that survives restarts, requires disabling signature verification
+- Unsigned extensions cannot be installed through `about:addons` without preference changes
+- Both methods work with unsigned extensions in development mode
 
 ### Extension Architecture
 
