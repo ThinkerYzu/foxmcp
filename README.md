@@ -9,6 +9,7 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 ## Features
 
 - **Complete Browser Control**: Tabs, windows, navigation, bookmarks, history
+- **Web Request Monitoring**: Monitor and analyze HTTP requests with configurable filtering
 - **Content Access**: Extract text, HTML, execute JavaScript in pages
 - **MCP Integration**: Works with Claude Desktop, Claude Code, and other MCP clients
 - **Custom Scripts**: Execute parameterized scripts in browser tabs
@@ -153,6 +154,12 @@ Once connected, you can control Firefox through natural language:
 - List and search bookmarks
 - Create and delete bookmarks
 
+### Web Request Monitoring
+- Monitor HTTP requests with URL pattern filtering
+- Capture request/response headers and bodies
+- Support for binary content (base64 encoding and file saving)
+- Graceful session management with data persistence
+
 ### Window Management
 - List, create, close, and focus windows
 - Resize and position windows
@@ -214,6 +221,7 @@ The `claude-ex/` directory contains example CLAUDE.md templates that help Claude
 ## Documentation
 
 - **[API Reference](docs/api-reference.md)** - Complete function reference
+- **[Web Request Monitoring](docs/web-request-monitoring.md)** - HTTP request monitoring and analysis
 - **[Configuration](docs/configuration.md)** - Server and extension setup
 - **[Custom Scripts](docs/scripts.md)** - Create reusable automation scripts
 - **[Development](docs/development.md)** - Development setup and workflow

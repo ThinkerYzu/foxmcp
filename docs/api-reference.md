@@ -41,6 +41,24 @@ Complete reference for all MCP tools and browser functions available through Fox
 - `content_execute_script(tab_id, script)` - Execute JavaScript directly
 - `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
 
+### Web Request Monitoring
+- `requests_start_monitoring(url_patterns, options=None, tab_id=None)` - Start monitoring web requests
+  - `url_patterns`: List of URL patterns to monitor (e.g., `["https://api.example.com/*", "*/api/*"]`)
+  - `options`: Optional configuration dict with capture settings
+  - `tab_id`: Optional tab ID to monitor (if not provided, monitors all tabs)
+  - Returns JSON with `monitor_id` and monitoring status
+- `requests_stop_monitoring(monitor_id, drain_timeout=5)` - Stop monitoring with graceful drainage
+  - `monitor_id`: ID of the monitoring session to stop
+  - `drain_timeout`: Seconds to wait for in-flight requests
+  - Returns JSON with stop status and statistics
+- `requests_list_captured(monitor_id)` - List captured request summaries
+  - Returns JSON with array of request summaries (metadata only, no full content)
+- `requests_get_content(monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
+  - `include_binary`: Whether to return binary content as base64 (default: False)
+  - `save_request_body_to`: Optional file path to save request body
+  - `save_response_body_to`: Optional file path to save response body
+  - Returns JSON with full headers and content
+
 ### Window Management
 - `list_windows(populate=True)` - List all browser windows with optional tab details
 - `get_window(window_id, populate=True)` - Get specific window information

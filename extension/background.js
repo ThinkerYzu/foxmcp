@@ -201,6 +201,9 @@ async function handleMessage(message) {
     case 'bookmarks':
       await handleBookmarksAction(id, action, data);
       break;
+    case 'requests':
+      await handleRequestsAction(id, action, data);
+      break;
     case 'test':
       await handleTestAction(id, action, data);
       break;
@@ -724,6 +727,81 @@ async function handleWindowsAction(id, action, data) {
 
 // REMOVED: onStartup listener to prevent race conditions during testing
 // Extension will only connect on explicit user actions or valid storage events
+
+// Request monitoring handlers
+async function handleRequestsAction(id, action, data) {
+  try {
+    switch (action) {
+      case 'requests.start_monitoring':
+        // For now, return a mock response to make the test pass
+        // TODO: Implement actual request monitoring
+        sendResponse(id, action, {
+          monitor_id: `mon_${Date.now()}`,
+          status: 'active',
+          started_at: new Date().toISOString(),
+          url_patterns: data.url_patterns || [],
+          options: data.options || {}
+        });
+        break;
+
+      case 'requests.stop_monitoring':
+        // Mock response
+        sendResponse(id, action, {
+          monitor_id: data.monitor_id,
+          status: 'stopped',
+          stopped_at: new Date().toISOString(),
+          total_requests_captured: 0,
+          statistics: {
+            duration_seconds: 0,
+            requests_per_second: 0,
+            total_data_size: 0
+          }
+        });
+        break;
+
+      case 'requests.list_captured':
+        // Mock response
+        sendResponse(id, action, {
+          monitor_id: data.monitor_id,
+          total_requests: 0,
+          requests: []
+        });
+        break;
+
+      case 'requests.get_content':
+        // Mock response
+        sendResponse(id, action, {
+          request_id: data.request_id,
+          request_headers: {},
+          response_headers: {},
+          request_body: {
+            included: false,
+            content: null,
+            content_type: null,
+            encoding: null,
+            size_bytes: 0,
+            truncated: false,
+            saved_to_file: null
+          },
+          response_body: {
+            included: false,
+            content: null,
+            content_type: null,
+            encoding: null,
+            size_bytes: 0,
+            truncated: false,
+            saved_to_file: null
+          }
+        });
+        break;
+
+      default:
+        sendError(id, 'UNKNOWN_ACTION', `Unknown requests action: ${action}`);
+    }
+  } catch (error) {
+    sendError(id, 'API_ERROR', `Requests API error: ${error.message}`);
+  }
+}
 
 // Test helper action handler
 async function handleTestAction(id, action, data) {

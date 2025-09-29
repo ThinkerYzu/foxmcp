@@ -50,6 +50,7 @@ class FoxMCPTools:
         self._setup_bookmark_tools()
         self._setup_navigation_tools()
         self._setup_content_tools()
+        self._setup_request_monitoring_tools()
 
     def _setup_window_tools(self):
         """Setup window management tools"""
@@ -1309,6 +1310,201 @@ class FoxMCPTools:
                 return f"Error executing script '{script_name}': {e}"
             except Exception as e:
                 return f"Unexpected error running script '{script_name}': {e}"
+
+    def _setup_request_monitoring_tools(self):
+        """Setup web request monitoring tools"""
+
+        @self.mcp.tool()
+        async def requests_start_monitoring(
+            url_patterns: List[str],
+            options: Optional[Dict[str, Any]] = None,
+            tab_id: Optional[int] = None
+        ) -> str:
+            """
+            Start monitoring web requests
+
+            Args:
+                url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
+                options: Optional configuration for monitoring:
+                    - capture_request_bodies: bool (default: True)
+                    - capture_response_bodies: bool (default: True)
+                    - max_body_size: int (default: 50000)
+                    - content_types_to_capture: List[str] (default: ["application/json", "text/plain"])
+                    - sensitive_headers: List[str] (default: ["Authorization", "Cookie"])
+                tab_id: Optional tab ID to monitor (if not provided, monitors all tabs)
+
+            Returns:
+                JSON string with monitor_id and status information
+            """
+            if not url_patterns:
+                return json.dumps({"error": "url_patterns is required"})
+
+            # Set default options
+            default_options = {
+                "capture_request_bodies": True,
+                "capture_response_bodies": True,
+                "max_body_size": 50000,
+                "content_types_to_capture": ["application/json", "text/plain"],
+                "sensitive_headers": ["Authorization", "Cookie"]
+            }
+
+            if options:
+                default_options.update(options)
+
+            request_data = {
+                "url_patterns": url_patterns,
+                "options": default_options
+            }
+
+            if tab_id is not None:
+                request_data["tab_id"] = tab_id
+
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "requests.start_monitoring",
+                "data": request_data,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return json.dumps({"error": f"Failed to start monitoring: {response['error']}"})
+
+            if response.get("type") == "response" and "data" in response:
+                return json.dumps(response["data"])
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return json.dumps({"error": f"Failed to start monitoring: {error_msg}"})
+
+            return json.dumps({"error": "Unable to start monitoring"})
+
+        @self.mcp.tool()
+        async def requests_stop_monitoring(
+            monitor_id: str,
+            drain_timeout: int = 5
+        ) -> str:
+            """
+            Stop monitoring web requests with graceful drainage
+
+            Args:
+                monitor_id: ID of the monitoring session to stop
+                drain_timeout: Seconds to wait for in-flight requests (default: 5)
+
+            Returns:
+                JSON string with stop status and statistics
+            """
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "requests.stop_monitoring",
+                "data": {
+                    "monitor_id": monitor_id,
+                    "drain_timeout": drain_timeout
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return json.dumps({"error": f"Failed to stop monitoring: {response['error']}"})
+
+            if response.get("type") == "response" and "data" in response:
+                return json.dumps(response["data"])
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return json.dumps({"error": f"Failed to stop monitoring: {error_msg}"})
+
+            return json.dumps({"error": "Unable to stop monitoring"})
+
+        @self.mcp.tool()
+        async def requests_list_captured(monitor_id: str) -> str:
+            """
+            List all captured request summaries from a monitoring session
+
+            Args:
+                monitor_id: ID of the monitoring session
+
+            Returns:
+                JSON string with captured request summaries
+            """
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "requests.list_captured",
+                "data": {
+                    "monitor_id": monitor_id
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return json.dumps({"error": f"Failed to list captured requests: {response['error']}"})
+
+            if response.get("type") == "response" and "data" in response:
+                return json.dumps(response["data"])
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return json.dumps({"error": f"Failed to list captured requests: {error_msg}"})
+
+            return json.dumps({"error": "Unable to list captured requests"})
+
+        @self.mcp.tool()
+        async def requests_get_content(
+            monitor_id: str,
+            request_id: str,
+            include_binary: bool = False,
+            save_request_body_to: Optional[str] = None,
+            save_response_body_to: Optional[str] = None
+        ) -> str:
+            """
+            Get full request/response content for a specific request
+
+            Args:
+                monitor_id: ID of the monitoring session
+                request_id: ID of the specific request
+                include_binary: Whether to return binary content as base64 (default: False)
+                save_request_body_to: Optional file path to save request body
+                save_response_body_to: Optional file path to save response body
+
+            Returns:
+                JSON string with full request/response content
+            """
+            request_data = {
+                "monitor_id": monitor_id,
+                "request_id": request_id,
+                "include_binary": include_binary
+            }
+
+            if save_request_body_to:
+                request_data["save_request_body_to"] = save_request_body_to
+            if save_response_body_to:
+                request_data["save_response_body_to"] = save_response_body_to
+
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "requests.get_content",
+                "data": request_data,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return json.dumps({"error": f"Failed to get request content: {response['error']}"})
+
+            if response.get("type") == "response" and "data" in response:
+                return json.dumps(response["data"])
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return json.dumps({"error": f"Failed to get request content: {error_msg}"})
+
+            return json.dumps({"error": "Unable to get request content"})
 
     def get_mcp_app(self):
         """Get the FastMCP application instance"""
