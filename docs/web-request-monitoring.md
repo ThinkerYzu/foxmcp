@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the comprehensive plan for implementing web request interception and monitoring capabilities in FoxMCP. The feature will enable AI assistants to monitor, analyze, and modify web requests in real-time through the Model Context Protocol (MCP).
+This document outlines the comprehensive plan for implementing web request monitoring capabilities in FoxMCP. The feature will enable AI assistants to monitor and analyze web requests through the Model Context Protocol (MCP), providing deep insights into web application behavior and performance.
 
 ## Architecture Decision: Two-Phase Workflow
 
@@ -56,48 +56,374 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 
 **Session Management**:
 - `requests_start_monitoring()` - Begin data capture session
-- `requests_stop_monitoring()` - End monitoring and prepare for analysis
 - `requests_stop_monitoring_safe()` - Graceful stop with request drainage
 - `requests_list_monitors()` - List active monitoring sessions
 
 **Live Monitoring** (Optional real-time feedback):
-- `requests_get_recent()` - Get recent requests during monitoring
 - `requests_get_status()` - Current monitoring session status
 - `requests_get_capabilities()` - Get browser monitoring capabilities
 
-**Request Modification** (Real-time):
-- `requests_add_header_rule()` - Modify request headers
-- `requests_block_pattern()` - Block requests matching patterns
-- `requests_redirect_pattern()` - Redirect requests to different URLs
+#### Phase 2: Data Retrieval APIs
 
-#### Phase 2: Analysis Session APIs
+**Data Access**:
+- `requests_get_captured_data()` - Get all captured request summaries from monitoring session
+- `requests_search()` - Search captured requests by basic criteria (URL, method, status)
+- `requests_get_content()` - Get full request/response content for specific request
 
-**Analysis Management**:
-- `requests_start_analysis()` - Begin analysis phase of captured data
-- `requests_list_analysis_sessions()` - List available analysis sessions
-- `requests_create_report()` - Generate comprehensive analysis reports
+#### Data Management APIs
 
-**Data Retrieval & Search**:
-- `requests_search()` - Search captured requests by criteria
-- `requests_get_content()` - Get full request/response content
-- `requests_query_builder()` - Flexible query interface for complex analysis
+**Session Management**:
+- `requests_delete_monitor_data()` - Delete all data from a monitoring session
+- `requests_save_monitor_data()` - Save monitoring session data to file for preservation
 
-**Deep Analysis**:
-- `requests_analyze_performance()` - Performance metrics and timing analysis
-- `requests_analyze_request_flows()` - Request flow and dependency analysis
-- `requests_analyze_error_patterns()` - Deep error pattern investigation
-- `requests_compare_timeframes()` - Compare different time periods
-- `requests_detect_anomalies()` - Anomaly detection for unusual patterns
+**Note**: All monitor sessions are lost when MCP server stops. Use `requests_save_monitor_data()` to preserve important sessions to files.
 
-**Data Export**:
-- `requests_export_data()` - Export analysis data in various formats
+## Detailed API Specifications
+
+### Monitoring Session APIs
+
+#### `requests_start_monitoring()`
+**Input**:
+```json
+{
+  "url_patterns": ["https://api.example.com/*", "*/api/*"],
+  "options": {
+    "capture_request_bodies": true,
+    "capture_response_bodies": true,
+    "max_body_size": 50000,
+    "content_types_to_capture": ["application/json", "text/plain"],
+    "sensitive_headers": ["Authorization", "Cookie"]
+  },
+  "tab_id": 123  // Optional - monitor specific tab only
+}
+```
+
+**Output**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "status": "active",
+  "started_at": "2025-01-15T10:30:00.000Z",
+  "url_patterns": ["https://api.example.com/*"],
+  "options": {...}
+}
+```
+
+#### `requests_stop_monitoring_safe()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "drain_timeout": 5  // seconds to wait for in-flight requests
+}
+```
+
+**Output**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "status": "stopped",
+  "stopped_at": "2025-01-15T10:35:00.000Z",
+  "total_requests_captured": 156,
+  "statistics": {
+    "duration_seconds": 300,
+    "requests_per_second": 0.52,
+    "total_data_size": 2048000
+  }
+}
+```
+
+#### `requests_list_monitors()`
+**Input**: None
+
+**Output**:
+```json
+{
+  "monitors": [
+    {
+      "monitor_id": "mon_abc123",
+      "status": "active",
+      "started_at": "2025-01-15T10:30:00.000Z",
+      "request_count": 45,
+      "url_patterns": ["https://api.example.com/*"]
+    }
+  ]
+}
+```
+
+#### `requests_get_status()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123"
+}
+```
+
+**Output**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "status": "active",
+  "started_at": "2025-01-15T10:30:00.000Z",
+  "statistics": {
+    "total_requests": 45,
+    "requests_per_minute": 15,
+    "total_data_captured": 1024000,
+    "last_request_at": "2025-01-15T10:32:30.000Z"
+  }
+}
+```
+
+#### `requests_get_capabilities()`
+**Input**: None
+
+**Output**:
+```json
+{
+  "supported_features": [
+    "url_pattern_filtering",
+    "content_capture",
+    "tab_filtering",
+    "file_export"
+  ],
+  "max_concurrent_monitors": 5,
+  "max_body_size": 10485760,
+  "supported_content_types": [
+    "application/json",
+    "text/plain",
+    "application/xml",
+    "text/html"
+  ]
+}
+```
+
+### Data Retrieval APIs
+
+#### `requests_get_captured_data()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123"
+}
+```
+
+**Output**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "total_requests": 156,
+  "requests": [
+    {
+      "request_id": "req_001",
+      "timestamp": "2025-01-15T10:30:15.123Z",
+      "url": "https://api.example.com/users",
+      "method": "POST",
+      "status_code": 201,
+      "duration_ms": 245,
+      "request_size": 89,
+      "response_size": 156,
+      "content_type": "application/json",
+      "tab_id": 123
+    }
+  ]
+}
+```
+
+#### `requests_search()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123",          // Required
+  "criteria": {                       // Optional - all fields optional
+    "url_pattern": "*users*",         // Optional - URL pattern to match
+    "method": "POST",                 // Optional - HTTP method filter
+    "min_status_code": 200,           // Optional - minimum status code
+    "max_status_code": 299,           // Optional - maximum status code
+    "min_duration_ms": 100,           // Optional - minimum duration filter
+    "max_duration_ms": 1000           // Optional - maximum duration filter
+  },
+  "limit": 50,                        // Optional - default: 100
+  "offset": 0                         // Optional - default: 0
+}
+```
+
+**Output**:
+```json
+{
+  "total_matches": 12,
+  "matches": [
+    {
+      "request_id": "req_001",
+      "timestamp": "2025-01-15T10:30:15.123Z",
+      "url": "https://api.example.com/users",
+      "method": "POST",
+      "status_code": 201,
+      "duration_ms": 245,
+      "request_size": 89,
+      "response_size": 156,
+      "content_type": "application/json",
+      "tab_id": 123
+    }
+  ]
+}
+```
+
+#### `requests_get_content()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "request_id": "req_001",
+  "include_binary": false,                    // Optional - default: false, when true returns all content (text as string, binary as base64)
+  "save_request_body_to": "/path/to/req.bin", // Optional - save request body to file
+  "save_response_body_to": "/path/to/res.bin" // Optional - save response body to file
+}
+```
+
+**Output (default behavior - include_binary: false)**:
+```json
+{
+  "request_id": "req_001",
+  "request_headers": {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer ***"
+  },
+  "response_headers": {
+    "Content-Type": "application/json",
+    "Content-Length": "156"
+  },
+  "request_body": {
+    "included": false,
+    "content": null,
+    "content_type": "application/json",
+    "encoding": null,
+    "size_bytes": 89,
+    "truncated": false,
+    "saved_to_file": null
+  },
+  "response_body": {
+    "included": false,
+    "content": null,
+    "content_type": "application/json",
+    "encoding": null,
+    "size_bytes": 156,
+    "truncated": false,
+    "saved_to_file": null
+  }
+}
+```
+
+**Example with content included (include_binary: true)**:
+```json
+{
+  "request_id": "req_002",
+  "request_headers": {
+    "Content-Type": "application/json"
+  },
+  "response_headers": {
+    "Content-Type": "image/png",
+    "Content-Length": "2048"
+  },
+  "request_body": {
+    "included": true,
+    "content": "{\"name\": \"John\", \"email\": \"john@example.com\"}",
+    "content_type": "application/json",
+    "encoding": "utf8",
+    "size_bytes": 89,
+    "truncated": false,
+    "saved_to_file": null
+  },
+  "response_body": {
+    "included": true,
+    "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+    "content_type": "image/png",
+    "encoding": "base64",
+    "size_bytes": 2048,
+    "truncated": false,
+    "saved_to_file": null
+  }
+}
+```
+
+**Example with file saving**:
+```json
+{
+  "request_id": "req_003",
+  "request_headers": {
+    "Content-Type": "application/octet-stream"
+  },
+  "response_headers": {
+    "Content-Type": "application/pdf",
+    "Content-Length": "1048576"
+  },
+  "request_body": {
+    "included": false,
+    "content": null,
+    "content_type": "application/octet-stream",
+    "encoding": null,
+    "size_bytes": 512000,
+    "truncated": false,
+    "saved_to_file": "/path/to/req.bin"
+  },
+  "response_body": {
+    "included": false,
+    "content": null,
+    "content_type": "application/pdf",
+    "encoding": null,
+    "size_bytes": 1048576,
+    "truncated": false,
+    "saved_to_file": "/path/to/res.bin"
+  }
+}
+```
+
+### Data Management APIs
+
+#### `requests_delete_monitor_data()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123"
+}
+```
+
+**Output**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "deleted": true,
+  "requests_deleted": 156,
+  "data_size_freed": 2048000
+}
+```
+
+#### `requests_save_monitor_data()`
+**Input**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "file_path": "/path/to/save/monitor_session.json",
+  "include_content": true  // Include full request/response bodies
+}
+```
+
+**Output**:
+```json
+{
+  "monitor_id": "mon_abc123",
+  "saved": true,
+  "file_path": "/path/to/save/monitor_session.json",
+  "file_size": 2048000,
+  "requests_saved": 156
+}
+```
 
 ## Implementation Phases
 
 ### Phase 1: Foundation (Priority: High)
 
 **Extension Updates**:
-- Add `webRequest` and `webRequestBlocking` permissions to manifest.json
+- Add `webRequest` permission to manifest.json (read-only monitoring)
 - Implement basic request interception in background.js
 - Create request buffering system with configurable limits
 - Add WebSocket communication for monitoring commands
@@ -112,7 +438,7 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 - Basic request monitoring (start/stop/list)
 - Request retrieval with filtering
 - URL pattern matching
-- Request blocking capability
+- Performance analysis capabilities
 
 ### Phase 2: Analysis and Search (Priority: Medium)
 
@@ -131,16 +457,16 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 ### Phase 3: Advanced Features (Priority: Low)
 
 **Features**:
-- Anomaly detection algorithms
-- Request modification rules
-- Header injection/modification
-- Response interception and modification
+- Advanced anomaly detection algorithms
+- Machine learning-based pattern recognition
+- Predictive performance analysis
+- Integration with external monitoring systems
 
 **Deliverables**:
 - Intelligent anomaly detection
-- Advanced request modification
-- Response content modification
-- Real-time alerting system
+- Predictive analytics
+- Advanced reporting capabilities
+- External system integration
 
 ## Technical Specifications
 
@@ -280,12 +606,13 @@ requests_stop_monitoring_safe(monitor_id, drain_timeout=5)
 {
     "permissions": [
         "webRequest",
-        "webRequestBlocking",
         "webNavigation",
         "<all_urls>"
     ]
 }
 ```
+
+**Note**: Only read-only `webRequest` permission is required for monitoring. No `webRequestBlocking` needed since we're not modifying requests.
 
 ## Usage Examples
 
@@ -311,45 +638,25 @@ result = await requests_stop_monitoring_safe(monitor["monitor_id"])
 print(f"Monitoring complete: {result['total_requests_captured']} requests captured")
 ```
 
-#### Phase 2: Collaborative Analysis
+#### Phase 2: Data Retrieval and Analysis
 ```python
-# Start analysis session
-analysis = await requests_start_analysis(
+# Get all captured data
+all_requests = await requests_get_captured_data(monitor["monitor_id"])
+print(f"Retrieved {len(all_requests)} captured requests")
+
+# Search for slow requests
+slow_requests = await requests_search(
     monitor_id=monitor["monitor_id"],
-    analysis_name="API Performance Investigation"
+    criteria={"min_duration_ms": 1000}
 )
 
-# Deep performance analysis
-perf = await requests_analyze_performance(analysis["analysis_id"])
-print(f"Average response time: {perf['avg_response_time_ms']}ms")
-
-# Search for specific patterns
-slow_requests = await requests_query_builder(
-    analysis_id=analysis["analysis_id"],
-    query={
-        "where": {"duration_ms": {"gt": 1000}},
-        "order_by": "duration_ms",
-        "limit": 5
-    }
-)
-
-# Analyze request flows
-flows = await requests_analyze_request_flows(analysis["analysis_id"])
-print("Detected user flows:", flows["flows_detected"])
-
-# Compare different time periods
-comparison = await requests_compare_timeframes(
-    analysis_id=analysis["analysis_id"],
-    timeframe1={"start": "10:30:00", "end": "10:32:00", "label": "Initial load"},
-    timeframe2={"start": "10:33:00", "end": "10:35:00", "label": "After changes"}
-)
-
-# Generate comprehensive report
-report = await requests_create_report(
-    analysis_id=analysis["analysis_id"],
-    report_type="performance",
-    sections=["summary", "timeline", "patterns", "recommendations"]
-)
+# Get detailed content for specific requests
+for request in slow_requests["matches"]:
+    content = await requests_get_content(
+        monitor_id=monitor["monitor_id"],
+        request_id=request["request_id"]
+    )
+    # MCP client (Claude) analyzes the data and provides insights
 ```
 
 ### Real-World Analysis Scenarios
@@ -363,55 +670,44 @@ monitor = await requests_start_monitoring(tab_id=123, patterns=["*"])
 # User clicks around, navigates pages...
 await requests_stop_monitoring_safe(monitor["monitor_id"])
 
-# Phase 2: Analyze captured data
-analysis = await requests_start_analysis(monitor["monitor_id"])
+# Phase 2: Retrieve and analyze captured data
+all_requests = await requests_get_captured_data(monitor["monitor_id"])
 
-# Find performance bottlenecks
-slow_requests = await requests_query_builder(analysis["analysis_id"], {
-    "where": {"duration_ms": {"gt": 500}},
-    "select": ["url", "duration_ms", "method"]
+# Find slow requests
+slow_requests = await requests_search(monitor["monitor_id"], {
+    "min_duration_ms": 500
 })
 
-# Analyze request dependencies
-flows = await requests_analyze_request_flows(analysis["analysis_id"])
-
-# Results: "The /api/dashboard/data endpoint is taking 800ms and blocking the UI"
+# Claude analyzes the data and provides insights:
+# "I found the /api/dashboard/data endpoint averaging 800ms - that's your bottleneck"
 ```
 
 #### Scenario 2: Error Investigation
 ```python
 # User: "I noticed some errors, let's see what's failing"
 
-# Phase 2: Analyze errors in captured data
-error_analysis = await requests_analyze_error_patterns(analysis["analysis_id"])
-
-# Search for specific error patterns
-failed_requests = await requests_search(analysis["analysis_id"], {
-    "status_code_range": [400, 599]
+# Phase 2: Search for errors in captured data
+failed_requests = await requests_search(monitor["monitor_id"], {
+    "min_status_code": 400,
+    "max_status_code": 599
 })
 
 # Get full content of failed requests
 for request in failed_requests["matches"]:
     content = await requests_get_content(
-        analysis["analysis_id"],
+        monitor["monitor_id"],
         request["request_id"]
     )
-    print(f"Failed request: {content['response_content']['body']}")
-
-# Results: "4 requests failed with 404 - invalid user IDs from stale UI data"
+    # Claude analyzes: "4 requests failed with 404 - invalid user IDs from stale UI data"
 ```
 
 #### Scenario 3: Before/After Optimization
 ```python
 # User makes code changes during monitoring, then analyzes impact
+all_requests = await requests_get_captured_data(monitor["monitor_id"])
 
-comparison = await requests_compare_timeframes(
-    analysis_id=analysis["analysis_id"],
-    timeframe1={"start": "10:30:00", "end": "10:32:00", "label": "Before fix"},
-    timeframe2={"start": "10:33:00", "end": "10:35:00", "label": "After fix"}
-)
-
-# Results: "Response time improved 33%, error rate reduced 78%"
+# Claude analyzes timestamps and performance differences:
+# "Comparing before/after your change: response time improved 33%, error rate reduced 78%"
 ```
 
 ## Claude Code Integration
@@ -423,6 +719,7 @@ comparison = await requests_compare_timeframes(
 - "Start capturing network traffic for this tab"
 - "Watch for any failed requests while I navigate"
 - "Track requests for 2 minutes while I use the app"
+- "Record all network activity while I reproduce this bug"
 
 #### Phase 2: Analysis Phase Natural Language
 - "What were the slowest requests we captured?"
@@ -430,20 +727,19 @@ comparison = await requests_compare_timeframes(
 - "Show me what happened when I clicked the submit button"
 - "Compare performance before and after I made that change"
 - "Which endpoints are causing the most delays?"
-- "Generate a report of all the API issues we found"
 
 ### Collaborative Analysis Workflow
 
 **Data Capture Phase**:
 - Minimal interruption to user workflow
 - Silent background monitoring with optional status updates
-- Real-time request modification (blocking, headers) if needed
+- Pure observation mode - no request modification
 
 **Analysis Phase**:
 - Interactive investigation with user-AI collaboration
-- Deep dive into captured data with complex queries
+- AI analyzes retrieved data using reasoning capabilities
 - Multiple analysis sessions on same dataset
-- Comprehensive reporting and insights
+- AI-generated insights and recommendations
 
 ### Enhanced User Experience Examples
 
@@ -491,20 +787,20 @@ AI: [shows full request content] "Here's the request body that failed:
 ### Unit Tests
 - Request filtering and pattern matching
 - Content capture and size limiting
-- Header modification and blocking rules
+- Data structure validation
 - Performance calculation accuracy
 
 ### Integration Tests
 - Extension ↔ MCP server communication
 - Multi-tab monitoring scenarios
-- Request modification verification
+- Data capture accuracy verification
 - Data persistence and retrieval
 
 ### Performance Tests
 - High-volume request monitoring
 - Memory usage with large request histories
 - Concurrent monitoring session handling
-- Request modification latency impact
+- Data storage and retrieval performance
 
 ## Future Enhancements
 
