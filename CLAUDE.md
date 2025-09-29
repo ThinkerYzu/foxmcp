@@ -56,13 +56,30 @@ ALWAYS use the consolidated method `setup_and_start_firefox()` for Firefox test 
 - This ensures consistent setup, error handling, and reduces code duplication across tests
 - Internal methods (`_create_test_profile()`, `_get_extension_xpi_path()`, etc.) are implementation details and should not be called directly
 
+# Debugging Configuration
+
+## ENABLE_DEBUG_LOGGING_TO_SERVER Setting
+
+Controls whether the Firefox extension sends debug messages to the server. Located in `extension/background.js` line ~97.
+
+```javascript
+const ENABLE_DEBUG_LOGGING_TO_SERVER = false;  // Set to true for debugging
+```
+
+**Usage:**
+- Enable (`true`) for debugging extension connection issues or test failures
+- Disable (`false`) for production and before committing
+- After changing, run `make clean && make package` and clear profile cache: `rm -rf dist/profile-cache/*`
+
+**IMPORTANT: Always set back to `false` before committing.**
+
 # Documentation Files Reference
 
 ## docs/PLAN.md
 - Development plan with 4 phases (3 complete, 1 partial)
 - Current implementation status and next priority tasks
-- 14 total tasks: 12 completed, 5 pending
-- Comprehensive test suite with 77 tests passing (39 unit + 38 integration), 74% coverage, all tests enabled
+- 18 total tasks: 17 completed, 1 pending
+- Comprehensive test suite with 211 tests passing (59 unit + 134 integration), all tests enabled
 
 ## docs/protocol.md
 - WebSocket message protocol specification
