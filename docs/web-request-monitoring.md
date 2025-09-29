@@ -56,7 +56,7 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 
 **Session Management**:
 - `requests_start_monitoring()` - Begin data capture session
-- `requests_stop_monitoring_safe()` - Graceful stop with request drainage
+- `requests_stop_monitoring()` - Graceful stop with request drainage
 - `requests_list_monitors()` - List active monitoring sessions
 
 **Live Monitoring** (Optional real-time feedback):
@@ -109,7 +109,7 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 }
 ```
 
-#### `requests_stop_monitoring_safe()`
+#### `requests_stop_monitoring()`
 **Input**:
 ```json
 {
@@ -568,7 +568,7 @@ MONITOR_STATES = {
 
 #### 1. Graceful Stop with Drainage
 ```python
-requests_stop_monitoring_safe(monitor_id, drain_timeout=5)
+requests_stop_monitoring(monitor_id, drain_timeout=5)
 ```
 - Signals extension to prepare for stop
 - Performs multiple final polls with delays
@@ -634,7 +634,7 @@ print(f"Captured {status['statistics']['total_requests']} requests so far")
 # User interacts with browser while monitoring runs silently...
 
 # End monitoring and prepare for analysis
-result = await requests_stop_monitoring_safe(monitor["monitor_id"])
+result = await requests_stop_monitoring(monitor["monitor_id"])
 print(f"Monitoring complete: {result['total_requests_captured']} requests captured")
 ```
 
@@ -668,7 +668,7 @@ for request in slow_requests["matches"]:
 # Phase 1: Monitor while user navigates
 monitor = await requests_start_monitoring(tab_id=123, patterns=["*"])
 # User clicks around, navigates pages...
-await requests_stop_monitoring_safe(monitor["monitor_id"])
+await requests_stop_monitoring(monitor["monitor_id"])
 
 # Phase 2: Retrieve and analyze captured data
 all_requests = await requests_get_captured_data(monitor["monitor_id"])
