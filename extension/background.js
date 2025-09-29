@@ -9,6 +9,92 @@ let websocket = null;
 let isConnected = false;
 
 
+// Debug logging configuration - set to true to send extension logs to server
+const ENABLE_DEBUG_LOGGING_TO_SERVER = false;
+
+// Enhanced console logging that sends to server when available
+if (ENABLE_DEBUG_LOGGING_TO_SERVER) {
+  const originalConsoleLog = console.log;
+  const originalConsoleError = console.error;
+
+  // Buffer to store logs before WebSocket connection is established
+  let logBuffer = [];
+
+  function createLogMessage(level, args) {
+    return {
+      id: `debug_${Date.now()}`,
+      type: "debug_log",
+      action: "extension.debug",
+      data: {
+        level: level,
+        message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '),
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  function sendLogMessage(logMessage) {
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+      try {
+        websocket.send(JSON.stringify(logMessage));
+        return true;
+      } catch (e) {
+        // Ignore errors sending debug logs
+      }
+    }
+    return false;
+  }
+
+  function flushLogBuffer() {
+    if (logBuffer.length > 0 && websocket && websocket.readyState === WebSocket.OPEN) {
+      const bufferedLogs = [...logBuffer];
+      logBuffer = [];
+      bufferedLogs.forEach(logMessage => {
+        sendLogMessage(logMessage);
+      });
+    }
+  }
+
+  function enhancedLog(...args) {
+    // Always log to console
+    originalConsoleLog(...args);
+
+    const logMessage = createLogMessage("log", args);
+
+    // Try to send immediately, otherwise buffer it
+    if (!sendLogMessage(logMessage)) {
+      logBuffer.push(logMessage);
+      // Keep buffer size reasonable
+      if (logBuffer.length > 100) {
+        logBuffer = logBuffer.slice(-50);
+      }
+    }
+  }
+
+  function enhancedError(...args) {
+    // Always log to console
+    originalConsoleError(...args);
+
+    const logMessage = createLogMessage("error", args);
+
+    // Try to send immediately, otherwise buffer it
+    if (!sendLogMessage(logMessage)) {
+      logBuffer.push(logMessage);
+      // Keep buffer size reasonable
+      if (logBuffer.length > 100) {
+        logBuffer = logBuffer.slice(-50);
+      }
+    }
+  }
+
+  // Replace console methods with enhanced versions
+  console.log = enhancedLog;
+  console.error = enhancedError;
+
+  // Export flush function to be called when WebSocket connects
+  window.flushDebugLogBuffer = flushLogBuffer;
+}
+
 // Default configuration - will be loaded from storage
 let CONFIG = {
   hostname: 'localhost',
@@ -46,6 +132,11 @@ function connectToMCPServer() {
       retryAttempts = 0; // Reset retry counter on successful connection
       connectionRetryAttempts = 0; // Reset connection retry counter
 
+      // Send an immediate debug message to test after a small delay
+      setTimeout(() => {
+        console.log('🔌 WebSocket connection established and ready');
+      }, 200);
+
       // Flush any buffered debug logs
       if (typeof window.flushDebugLogBuffer === 'function') {
         setTimeout(() => {
@@ -55,6 +146,8 @@ function connectToMCPServer() {
     };
 
     websocket.onmessage = async (event) => {
+      // Test debug message right when we receive a message
+      console.log('📨 Extension received message from server');
       await handleMessage(JSON.parse(event.data));
     };
 
@@ -137,9 +230,10 @@ async function loadConfig() {
   const isTestEnvironment = result.testPort !== null || result.testHostname !== null;
   const hasValidTestConfig = result.testPort && result.testPort !== 8765;
 
+  // In test environment, wait longer for configuration to be ready
   if (isTestEnvironment && !hasValidTestConfig) {
     console.log('🧪 Test environment detected but no valid test config yet');
-    console.log('📋 Current storage values:', result);
+    console.log('📋 Will retry in test environment...');
     throw new Error('Test environment detected but configuration not ready');
   }
 
@@ -244,8 +338,27 @@ function sendError(id, code, message, details = {}) {
   websocket.send(JSON.stringify(errorMessage));
 }
 
+function sendDebugLog(message, level = 'log') {
+  // Check WebSocket state directly instead of relying on isConnected flag
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) return;
+
+  const debugMessage = {
+    id: `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    type: 'debug_log',
+    action: 'debug',
+    data: {
+      level: level,
+      message: message,
+      timestamp: new Date().toISOString()
+    }
+  };
+
+  websocket.send(JSON.stringify(debugMessage));
+}
+
 // Handle popup requests for connection status
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+
   if (request.action === 'getConnectionStatus') {
     sendResponse({
       connected: isConnected,
@@ -290,6 +403,24 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     retryAttempts = 0;
     connectToMCPServer();
     sendResponse({ success: true });
+    return true;
+  }
+
+  // Handle response body capture events from content scripts
+  if (request.type === 'response_body_captured') {
+    const responseData = request.data;
+    console.log(`📥 Response body captured: ${responseData.method} ${responseData.url} (${responseData.response_body.length} chars)`);
+
+    // Store captured response body data
+    capturedResponseBodies.set(responseData.request_id, responseData);
+
+    return true;
+  }
+
+  if (request.type === 'response_body_error') {
+    const errorData = request.data;
+    console.error(`❌ Response capture error: ${errorData.method} ${errorData.url} - ${errorData.error}`);
+
     return true;
   }
 });
@@ -728,70 +859,450 @@ async function handleWindowsAction(id, action, data) {
 // REMOVED: onStartup listener to prevent race conditions during testing
 // Extension will only connect on explicit user actions or valid storage events
 
+// Request monitoring state
+const activeMonitors = new Map(); // monitor_id -> monitor config
+const capturedRequests = new Map(); // monitor_id -> array of requests
+const requestDetails = new Map(); // request_id -> full request details
+const capturedResponseBodies = new Map(); // request_id -> response body data
+
+// WebRequest listener functions
+let onBeforeRequestListener = null;
+let onBeforeSendHeadersListener = null;
+let onSendHeadersListener = null;
+let onHeadersReceivedListener = null;
+let onResponseStartedListener = null;
+let onCompletedListener = null;
+let onErrorOccurredListener = null;
+
+
+function startWebRequestMonitoring(monitor) {
+  console.log(`🔍 Starting WebRequest monitoring for monitor ${monitor.id}`);
+
+  if (activeMonitors.size === 0) {
+    // First monitor - set up listeners
+    setupWebRequestListeners();
+  }
+}
+
+function setupWebRequestListeners() {
+  if (onBeforeRequestListener) {
+    // Already set up
+    return;
+  }
+
+  console.log('🔧 Setting up WebRequest API listeners');
+
+  // Before request - captures initial request data
+  onBeforeRequestListener = function(details) {
+    handleWebRequestEvent('onBeforeRequest', details);
+  };
+
+  // Headers received - captures response headers and status
+  onHeadersReceivedListener = function(details) {
+    handleWebRequestEvent('onHeadersReceived', details);
+  };
+
+  // Completed - captures final timing and status
+  onCompletedListener = function(details) {
+    handleWebRequestEvent('onCompleted', details);
+  };
+
+  // Error - captures failed requests
+  onErrorOccurredListener = function(details) {
+    handleWebRequestEvent('onErrorOccurred', details);
+  };
+
+  // Register listeners with browser
+  browser.webRequest.onBeforeRequest.addListener(
+    onBeforeRequestListener,
+    { urls: ["<all_urls>"] },
+    ["requestBody"]
+  );
+
+  browser.webRequest.onHeadersReceived.addListener(
+    onHeadersReceivedListener,
+    { urls: ["<all_urls>"] },
+    ["responseHeaders"]
+  );
+
+  browser.webRequest.onCompleted.addListener(
+    onCompletedListener,
+    { urls: ["<all_urls>"] }
+  );
+
+  browser.webRequest.onErrorOccurred.addListener(
+    onErrorOccurredListener,
+    { urls: ["<all_urls>"] }
+  );
+
+  console.log('✅ WebRequest listeners registered');
+}
+
+function stopWebRequestMonitoring() {
+  if (activeMonitors.size > 0) {
+    // Still have active monitors
+    return;
+  }
+
+  console.log('🛑 Stopping WebRequest monitoring - removing listeners');
+
+  if (onBeforeRequestListener) {
+    browser.webRequest.onBeforeRequest.removeListener(onBeforeRequestListener);
+    onBeforeRequestListener = null;
+  }
+
+  if (onHeadersReceivedListener) {
+    browser.webRequest.onHeadersReceived.removeListener(onHeadersReceivedListener);
+    onHeadersReceivedListener = null;
+  }
+
+  if (onCompletedListener) {
+    browser.webRequest.onCompleted.removeListener(onCompletedListener);
+    onCompletedListener = null;
+  }
+
+  if (onErrorOccurredListener) {
+    browser.webRequest.onErrorOccurred.removeListener(onErrorOccurredListener);
+    onErrorOccurredListener = null;
+  }
+
+  console.log('✅ WebRequest listeners removed');
+}
+
+function handleWebRequestEvent(eventType, details) {
+  // Check if any monitor should capture this request
+  for (const [monitorId, monitor] of activeMonitors) {
+    if (shouldCaptureRequest(monitor, details)) {
+      captureRequestEvent(monitorId, eventType, details);
+    }
+  }
+}
+
+function shouldCaptureRequest(monitor, details) {
+  // Check tab filter
+  if (monitor.tab_id && details.tabId !== monitor.tab_id) {
+    return false;
+  }
+
+  // Check URL patterns
+  if (monitor.url_patterns && monitor.url_patterns.length > 0) {
+    const url = details.url;
+    return monitor.url_patterns.some(pattern => {
+      if (pattern === '*') return true;
+
+      // Convert glob pattern to regex
+      const regexPattern = pattern
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.');
+
+      try {
+        return new RegExp(regexPattern).test(url);
+      } catch (e) {
+        console.warn(`Invalid URL pattern: ${pattern}`, e);
+        return false;
+      }
+    });
+  }
+
+  return true; // No filters, capture all
+}
+
+function captureRequestEvent(monitorId, eventType, details) {
+  const requestId = details.requestId;
+  const timestamp = new Date().toISOString();
+
+  // Get or create request record
+  let request = requestDetails.get(requestId);
+  if (!request) {
+    request = {
+      request_id: requestId,
+      monitor_id: monitorId,
+      url: details.url,
+      method: details.method || 'GET',
+      tab_id: details.tabId,
+      frame_id: details.frameId,
+      type: details.type,
+      timestamp: timestamp,
+      events: []
+    };
+    requestDetails.set(requestId, request);
+  }
+
+  // Add event data
+  const event = {
+    type: eventType,
+    timestamp: timestamp,
+    timeStamp: details.timeStamp
+  };
+
+  switch (eventType) {
+    case 'onBeforeRequest':
+      event.url = details.url;
+      event.method = details.method;
+      event.requestBody = details.requestBody;
+      break;
+
+    case 'onHeadersReceived':
+      event.responseHeaders = details.responseHeaders;
+      event.statusCode = details.statusCode;
+      event.statusLine = details.statusLine;
+      request.status_code = details.statusCode;
+      request.response_headers = details.responseHeaders;
+
+      // Extract content length and type from headers
+      if (details.responseHeaders) {
+        for (const header of details.responseHeaders) {
+          if (header.name.toLowerCase() === 'content-length') {
+            request.response_content_length = parseInt(header.value) || 0;
+          }
+          if (header.name.toLowerCase() === 'content-type') {
+            request.response_content_type = header.value;
+          }
+        }
+      }
+      break;
+
+    case 'onCompleted':
+      event.statusCode = details.statusCode;
+      request.status_code = details.statusCode;
+      request.completed = true;
+      request.duration_ms = details.timeStamp - (request.events[0]?.timeStamp || details.timeStamp);
+      break;
+
+    case 'onErrorOccurred':
+      event.error = details.error;
+      request.error = details.error;
+      request.completed = true;
+      break;
+  }
+
+  request.events.push(event);
+
+  // If request is complete, add to captured list
+  if (request.completed && !request.added_to_list) {
+    const captured = capturedRequests.get(monitorId) || [];
+    captured.push({
+      request_id: requestId,
+      url: request.url,
+      method: request.method,
+      status_code: request.status_code,
+      duration_ms: request.duration_ms || 0,
+      timestamp: request.timestamp,
+      tab_id: request.tab_id,
+      type: request.type,
+      error: request.error,
+      response_size_bytes: request.response_content_length || 0,
+      response_content_type: request.response_content_type || null
+    });
+    capturedRequests.set(monitorId, captured);
+    request.added_to_list = true;
+
+    const sizeInfo = request.response_content_length ? ` (${request.response_content_length} bytes)` : '';
+    console.log(`📋 Captured request: ${request.method} ${request.url} -> ${request.status_code || 'ERROR'}${sizeInfo}`);
+  }
+}
+
 // Request monitoring handlers
 async function handleRequestsAction(id, action, data) {
   try {
     switch (action) {
       case 'requests.start_monitoring':
-        // For now, return a mock response to make the test pass
-        // TODO: Implement actual request monitoring
-        sendResponse(id, action, {
-          monitor_id: `mon_${Date.now()}`,
-          status: 'active',
-          started_at: new Date().toISOString(),
+        // Always send debug message to test if WebSocket works
+        console.log('📡 ALWAYS: requests.start_monitoring called');
+
+        const monitor_id = `mon_${Date.now()}`;
+        const monitor = {
+          id: monitor_id,
           url_patterns: data.url_patterns || [],
-          options: data.options || {}
+          options: data.options || {},
+          tab_id: data.tab_id || null,
+          started_at: new Date().toISOString(),
+          status: 'active'
+        };
+
+        // Debug: Check what options we received
+        console.log(`📡 DEBUG: Monitor options received: ${JSON.stringify(monitor.options)}`);
+
+        // Enable response body capture if requested
+        if (monitor.options.capture_response_bodies) {
+          console.log(`📡 Response body capture enabled for monitoring session: ${monitor_id}`);
+          console.log(`📡 Monitor config for capture: ${JSON.stringify(monitor)}`);
+          console.log(`📡 About to enable response body capture for ${monitor_id}`);
+
+          try {
+            console.log('📡 About to await enableResponseBodyCapture()');
+            await enableResponseBodyCapture(monitor);
+            console.log('📡 enableResponseBodyCapture() call completed successfully');
+          } catch (error) {
+            console.error('📡 ERROR in enableResponseBodyCapture():', error);
+            console.error('📡 Error stack:', error.stack);
+          }
+        } else {
+          console.log('📡 Response body capture NOT enabled - flag not set');
+        }
+
+        // Start actual monitoring
+        startWebRequestMonitoring(monitor);
+
+        // Store monitor
+        activeMonitors.set(monitor_id, monitor);
+        capturedRequests.set(monitor_id, []);
+
+        sendResponse(id, action, {
+          monitor_id: monitor_id,
+          status: 'active',
+          started_at: monitor.started_at,
+          url_patterns: monitor.url_patterns,
+          options: monitor.options
         });
         break;
 
       case 'requests.stop_monitoring':
-        // Mock response
+        const monitorToStop = activeMonitors.get(data.monitor_id);
+        if (!monitorToStop) {
+          sendError(id, 'MONITOR_NOT_FOUND', `Monitor ${data.monitor_id} not found`);
+          break;
+        }
+
+        // Calculate statistics
+        const captured = capturedRequests.get(data.monitor_id) || [];
+        const startTime = new Date(monitorToStop.started_at).getTime();
+        const stopTime = Date.now();
+        const durationSeconds = (stopTime - startTime) / 1000;
+
+        // Remove monitor
+        activeMonitors.delete(data.monitor_id);
+
+        // Disable response body capture if it was enabled for this monitor
+        if (monitorToStop.options.capture_response_bodies) {
+          console.log('🔄 Disabling response body capture for stopped monitoring session:', data.monitor_id);
+          disableResponseBodyCapture();
+        }
+
+        // Stop listeners if no more monitors
+        if (activeMonitors.size === 0) {
+          stopWebRequestMonitoring();
+        }
+
         sendResponse(id, action, {
           monitor_id: data.monitor_id,
           status: 'stopped',
           stopped_at: new Date().toISOString(),
-          total_requests_captured: 0,
+          total_requests_captured: captured.length,
           statistics: {
-            duration_seconds: 0,
-            requests_per_second: 0,
-            total_data_size: 0
+            duration_seconds: durationSeconds,
+            requests_per_second: captured.length / Math.max(durationSeconds, 1),
+            total_data_size: captured.reduce((sum, req) => sum + (req.response_size_bytes || 0), 0)
           }
         });
         break;
 
       case 'requests.list_captured':
-        // Mock response
+        const monitorRequests = capturedRequests.get(data.monitor_id) || [];
+
         sendResponse(id, action, {
           monitor_id: data.monitor_id,
-          total_requests: 0,
-          requests: []
+          total_requests: monitorRequests.length,
+          requests: monitorRequests.map(req => ({
+            request_id: req.request_id,
+            url: req.url,
+            method: req.method,
+            status_code: req.status_code,
+            duration_ms: req.duration_ms,
+            timestamp: req.timestamp,
+            tab_id: req.tab_id,
+            type: req.type,
+            error: req.error
+          }))
         });
         break;
 
       case 'requests.get_content':
-        // Mock response
+        const requestDetail = requestDetails.get(data.request_id);
+        if (!requestDetail) {
+          sendError(id, 'REQUEST_NOT_FOUND', `Request ${data.request_id} not found`);
+          break;
+        }
+
+        // Extract headers from events
+        let requestHeaders = {};
+        let responseHeaders = {};
+        let requestBody = null;
+
+        for (const event of requestDetail.events) {
+          if (event.type === 'onBeforeRequest' && event.requestBody) {
+            requestBody = event.requestBody;
+          }
+          if (event.type === 'onHeadersReceived' && event.responseHeaders) {
+            responseHeaders = event.responseHeaders.reduce((acc, header) => {
+              acc[header.name] = header.value;
+              return acc;
+            }, {});
+          }
+        }
+
+
         sendResponse(id, action, {
           request_id: data.request_id,
-          request_headers: {},
-          response_headers: {},
+          request_headers: requestHeaders,
+          response_headers: responseHeaders,
           request_body: {
-            included: false,
-            content: null,
-            content_type: null,
-            encoding: null,
-            size_bytes: 0,
+            included: !!requestBody,
+            content: requestBody ? JSON.stringify(requestBody) : null,
+            content_type: requestHeaders['content-type'] || null,
+            encoding: 'utf-8',
+            size_bytes: requestBody ? JSON.stringify(requestBody).length : 0,
             truncated: false,
             saved_to_file: null
           },
-          response_body: {
-            included: false,
-            content: null,
-            content_type: null,
-            encoding: null,
-            size_bytes: 0,
-            truncated: false,
-            saved_to_file: null
-          }
+          response_body: (() => {
+            // First check direct match by request_id
+            let capturedResponseData = capturedResponseBodies.get(data.request_id);
+
+            // If no direct match, try to correlate by URL, method, status, and timing
+            if (!capturedResponseData) {
+              const requestUrl = requestDetail.url;
+              const requestMethod = requestDetail.method || 'GET';
+              const responseStatus = requestDetail.response_status_code;
+
+              // Find matching response by correlation
+              for (const [contentRequestId, responseData] of capturedResponseBodies.entries()) {
+                if (responseData.url === requestUrl &&
+                    responseData.method === requestMethod &&
+                    responseData.status_code === responseStatus) {
+                  console.log(`📎 Correlating response body: WebRequest ${data.request_id} -> Content ${contentRequestId}`);
+                  capturedResponseData = responseData;
+                  // Also store this correlation for future direct lookups
+                  capturedResponseBodies.set(data.request_id, responseData);
+                  break;
+                }
+              }
+            }
+
+            if (capturedResponseData) {
+              return {
+                included: true,
+                content: capturedResponseData.response_body,
+                content_type: capturedResponseData.content_type || null,
+                encoding: 'utf-8',
+                size_bytes: capturedResponseData.response_body.length,
+                truncated: capturedResponseData.truncated || false,
+                saved_to_file: null,
+                note: "Response body captured via content script fetch/XHR interception"
+              };
+            } else {
+              return {
+                included: false,
+                content: null,
+                content_type: responseHeaders['content-type'] || requestDetail.response_content_type || null,
+                encoding: null,
+                size_bytes: requestDetail.response_content_length || 0,
+                truncated: false,
+                saved_to_file: null,
+                note: "Response body content not available via WebRequest API"
+              };
+            }
+          })()
         });
         break;
 
@@ -1365,90 +1876,129 @@ async function initializeExtension() {
   }
 }
 
-// Debug logging configuration - set to true to send extension logs to server
-const ENABLE_DEBUG_LOGGING_TO_SERVER = false;
+// Store current monitoring config for new tabs
+let currentMonitoringConfig = null;
+let tabPollingInterval = null;
+let enabledTabs = new Set(); // Track tabs that already have capture enabled
 
-// Enhanced console logging that sends to server when available
-if (ENABLE_DEBUG_LOGGING_TO_SERVER) {
-  const originalConsoleLog = console.log;
-  const originalConsoleError = console.error;
+// Response body capture management
+async function enableResponseBodyCapture(monitorConfig) {
+  console.log(`📡 Enabling response body capture for all tabs with config: ${JSON.stringify(monitorConfig)}`);
 
-  // Buffer to store logs before WebSocket connection is established
-  let logBuffer = [];
+  // Store config for new tabs
+  currentMonitoringConfig = monitorConfig;
 
-  function createLogMessage(level, args) {
-    return {
-      id: `debug_${Date.now()}`,
-      type: "debug_log",
-      action: "extension.debug",
-      data: {
-        level: level,
-        message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '),
-        timestamp: new Date().toISOString()
-      }
-    };
-  }
-
-  function sendLogMessage(logMessage) {
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
-      try {
-        websocket.send(JSON.stringify(logMessage));
-        return true;
-      } catch (e) {
-        // Ignore errors sending debug logs
+  // Send message to all existing content scripts to enable response capture
+  try {
+    const tabs = await browser.tabs.query({});
+    console.log(`📡 Found ${tabs.length} tabs to enable capture on`);
+    for (const tab of tabs) {
+      console.log(`📡 Tab ${tab.id}: ${tab.url}`);
+      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        enableCaptureOnTab(tab.id, monitorConfig);
+      } else {
+        console.log(`📡 Skipping tab ${tab.id} - not http/https: ${tab.url}`);
       }
     }
-    return false;
+  } catch (err) {
+    console.error(`📡 ERROR querying tabs: ${err.message}`);
   }
 
-  function flushLogBuffer() {
-    if (logBuffer.length > 0 && websocket && websocket.readyState === WebSocket.OPEN) {
-      const bufferedLogs = [...logBuffer];
-      logBuffer = [];
-      bufferedLogs.forEach(logMessage => {
-        sendLogMessage(logMessage);
-      });
+  // Set up polling for new tabs instead of event listeners (events weren't firing)
+  // Set up polling for new tabs
+  startTabPolling();
+}
+
+function enableCaptureOnTab(tabId, monitorConfig) {
+  console.log(`📡 Sending enable_response_capture to tab ${tabId}`);
+  browser.tabs.sendMessage(tabId, {
+    action: 'enable_response_capture',
+    data: {
+      monitor_config: monitorConfig
     }
+  }).then(response => {
+    console.log(`📡 Tab ${tabId} response: ${JSON.stringify(response)}`);
+  }).catch(err => {
+    // Some tabs might not have content scripts loaded, that's OK
+    console.log(`Could not enable capture on tab ${tabId}: ${err.message}`);
+  });
+}
+
+function startTabPolling() {
+  // Clear any existing polling interval
+  if (tabPollingInterval) {
+    clearInterval(tabPollingInterval);
   }
 
-  function enhancedLog(...args) {
-    // Always log to console
-    originalConsoleLog(...args);
+  // Check for new tabs every 1 second
+  tabPollingInterval = setInterval(async () => {
+    if (!currentMonitoringConfig) {
+      return; // No monitoring active
+    }
 
-    const logMessage = createLogMessage("log", args);
+    try {
+      const tabs = await browser.tabs.query({});
+      for (const tab of tabs) {
+        // Skip if already enabled for this tab
+        if (enabledTabs.has(tab.id)) {
+          continue;
+        }
 
-    // Try to send immediately, otherwise buffer it
-    if (!sendLogMessage(logMessage)) {
-      logBuffer.push(logMessage);
-      // Keep buffer size reasonable
-      if (logBuffer.length > 100) {
-        logBuffer = logBuffer.slice(-50);
+        // Check if tab URL matches our monitoring patterns
+        if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+          const urlPatterns = currentMonitoringConfig.url_patterns || [];
+          const matchesPattern = urlPatterns.some(pattern => {
+            // Convert glob pattern to regex
+            const regexPattern = pattern.replace(/\*/g, '.*');
+            const regex = new RegExp(`^${regexPattern}$`);
+            return regex.test(tab.url);
+          });
+
+          if (matchesPattern) {
+            console.log(`📡 Found new tab ${tab.id} that matches monitoring pattern: ${tab.url}`);
+            enableCaptureOnTab(tab.id, currentMonitoringConfig);
+            enabledTabs.add(tab.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`📡 ERROR in tab polling: ${err.message}`);
+    }
+  }, 1000); // Poll every second
+}
+
+function stopTabPolling() {
+  if (tabPollingInterval) {
+    clearInterval(tabPollingInterval);
+    tabPollingInterval = null;
+  }
+  enabledTabs.clear();
+}
+
+
+function disableResponseBodyCapture() {
+  console.log('🔄 Disabling response body capture for all tabs');
+
+  // Clear the monitoring config
+  currentMonitoringConfig = null;
+
+  // Stop tab polling
+  stopTabPolling();
+
+
+  // Send message to all content scripts to disable response capture
+  browser.tabs.query({}).then(tabs => {
+    for (const tab of tabs) {
+      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        browser.tabs.sendMessage(tab.id, {
+          action: 'disable_response_capture'
+        }).catch(err => {
+          // Some tabs might not have content scripts loaded, that's OK
+          console.log(`Could not disable capture on tab ${tab.id}: ${err.message}`);
+        });
       }
     }
-  }
-
-  function enhancedError(...args) {
-    // Always log to console
-    originalConsoleError(...args);
-
-    const logMessage = createLogMessage("error", args);
-
-    // Try to send immediately, otherwise buffer it
-    if (!sendLogMessage(logMessage)) {
-      logBuffer.push(logMessage);
-      // Keep buffer size reasonable
-      if (logBuffer.length > 100) {
-        logBuffer = logBuffer.slice(-50);
-      }
-    }
-  }
-
-  // Replace console methods with enhanced versions
-  console.log = enhancedLog;
-  console.error = enhancedError;
-
-  // Export flush function to be called when WebSocket connects
-  window.flushDebugLogBuffer = flushLogBuffer;
+  });
 }
 
 // Start initialization

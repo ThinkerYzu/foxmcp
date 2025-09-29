@@ -153,10 +153,11 @@ class FoxMCPServer:
                 log_message = data.get('data', {}).get('message', '')
                 timestamp = data.get('data', {}).get('timestamp', '')
 
+                logger.info("----- EXTENSION DEBUG LOG -----")
                 if level == 'error':
-                    print(f"🔴 EXTENSION ERROR [{timestamp}]: {log_message}")
+                    logger.info(f"🔴 EXTENSION ERROR [{timestamp}]: {log_message}")
                 else:
-                    print(f"🔵 EXTENSION LOG [{timestamp}]: {log_message}")
+                    logger.info(f"🔵 EXTENSION LOG [{timestamp}]: {log_message}")
                 return
 
             logger.info(f"Received from extension: {message_type} - {action} (ID: {message_id})")

@@ -13,6 +13,7 @@
     "bookmarks",
     "activeTab",
     "storage",
+    "webRequest",
     "<all_urls>"
   ],
   "background": {

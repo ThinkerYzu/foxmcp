@@ -382,6 +382,9 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 #### Session Data Management
 
 **`requests_delete_monitor_data()`** - Delete all data from a monitoring session
+- **Purpose**: Clean up all request data from a specific monitoring session
+- **Use Case**: Free storage after analysis is complete
+
 **Input**:
 ```json
 {
@@ -400,6 +403,9 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 ```
 
 **`requests_delete_analysis_session()`** - Delete analysis session data
+- **Purpose**: Remove persistent analysis data and cached results
+- **Use Case**: Clean up after completing investigation work
+
 **Input**:
 ```json
 {
@@ -417,11 +423,14 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 ```
 
 **`requests_cleanup_expired_sessions()`** - Clean up expired sessions
+- **Purpose**: Bulk cleanup of old monitoring and analysis sessions
+- **Use Case**: Regular maintenance to free storage space
+
 **Input**:
 ```json
 {
   "max_age_hours": 48,  // Optional - default: 48
-  "dry_run": false      // Optional - default: false
+  "dry_run": false      // Optional - default: false, if true only reports what would be deleted
 }
 ```
 
@@ -437,6 +446,9 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 #### Storage Management
 
 **`requests_get_storage_usage()`** - Get storage usage information
+- **Purpose**: Monitor storage consumption across all monitoring sessions
+- **Use Case**: Understand storage patterns and plan cleanup
+
 **Input**: None
 
 **Output**:
@@ -450,18 +462,25 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
     "analysis_data": 6291456,
     "expired_data": 2146304
   },
-  "oldest_session": "2025-01-14T10:30:00.000Z"
+  "oldest_session": "2025-01-14T10:30:00.000Z",
+  "recommended_cleanup": {
+    "expired_sessions_count": 1,
+    "potential_freed_bytes": 2146304
+  }
 }
 ```
 
 #### Selective Data Deletion
 
 **`requests_delete_by_pattern()`** - Delete requests matching URL patterns
+- **Purpose**: Remove specific types of requests (e.g., debug, logs, tracking)
+- **Use Case**: Clean sensitive or irrelevant data while preserving important requests
+
 **Input**:
 ```json
 {
   "monitor_id": "mon_abc123",
-  "url_patterns": ["*/api/logs*", "*/debug/*"],
+  "url_patterns": ["*/api/logs*", "*/debug/*", "*analytics*"],
   "delete_content_only": false  // If true, keeps metadata but removes bodies
 }
 ```
@@ -472,11 +491,19 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
   "monitor_id": "mon_abc123",
   "requests_deleted": 23,
   "data_size_freed": 512000,
-  "patterns_matched": ["*/api/logs*", "*/debug/*"]
+  "patterns_matched": ["*/api/logs*", "*/debug/*"],
+  "summary": {
+    "total_matching_requests": 23,
+    "deleted_requests": 23,
+    "preserved_metadata": 0
+  }
 }
 ```
 
 **`requests_delete_by_timeframe()`** - Delete requests from specific time range
+- **Purpose**: Remove data from specific time periods (e.g., before optimization)
+- **Use Case**: Focus analysis on specific time periods
+
 **Input**:
 ```json
 {
@@ -500,13 +527,17 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 ```
 
 **`requests_delete_content_only()`** - Delete request/response bodies but keep metadata
+- **Purpose**: Free storage while preserving request timing and status information
+- **Use Case**: Keep performance data but remove large content bodies
+
 **Input**:
 ```json
 {
   "monitor_id": "mon_abc123",
   "criteria": {
     "min_body_size": 50000,     // Only delete large content
-    "content_types": ["image/*", "video/*", "application/octet-stream"]
+    "content_types": ["image/*", "video/*", "application/octet-stream"],
+    "exclude_patterns": ["*/api/critical*"]  // Don't delete content from critical APIs
   }
 }
 ```
@@ -517,13 +548,21 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
   "monitor_id": "mon_abc123",
   "requests_modified": 12,
   "content_deleted": 3145728,
-  "metadata_preserved": true
+  "metadata_preserved": true,
+  "summary": {
+    "large_content_removed": 8,
+    "binary_content_removed": 4,
+    "critical_apis_preserved": 3
+  }
 }
 ```
 
 #### Data Retention Policies
 
 **`requests_set_retention_policy()`** - Configure automatic data cleanup
+- **Purpose**: Set up automated data lifecycle management
+- **Use Case**: Maintain storage limits and comply with data retention requirements
+
 **Input**:
 ```json
 {
@@ -532,7 +571,9 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
     "max_total_storage_mb": 100,
     "auto_cleanup_enabled": true,
     "cleanup_interval_hours": 6,
-    "preserve_analysis_sessions": true
+    "preserve_analysis_sessions": true,
+    "large_content_threshold_mb": 5,
+    "critical_url_patterns": ["*/api/auth*", "*/api/payment*"]
   }
 }
 ```
@@ -546,11 +587,21 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
     "max_total_storage_mb": 50,
     "auto_cleanup_enabled": false
   },
+  "new_policy": {
+    "max_session_age_hours": 48,
+    "max_total_storage_mb": 100,
+    "auto_cleanup_enabled": true,
+    "cleanup_interval_hours": 6,
+    "preserve_analysis_sessions": true
+  },
   "next_cleanup": "2025-01-15T16:30:00.000Z"
 }
 ```
 
 **`requests_get_retention_policy()`** - Get current retention policy
+- **Purpose**: Review current data lifecycle configuration
+- **Use Case**: Understand how data is being managed automatically
+
 **Input**: None
 
 **Output**:
@@ -561,16 +612,29 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
     "max_total_storage_mb": 100,
     "auto_cleanup_enabled": true,
     "cleanup_interval_hours": 6,
-    "preserve_analysis_sessions": true
+    "preserve_analysis_sessions": true,
+    "large_content_threshold_mb": 5,
+    "critical_url_patterns": ["*/api/auth*", "*/api/payment*"]
   },
-  "last_cleanup": "2025-01-15T10:30:00.000Z",
-  "next_cleanup": "2025-01-15T16:30:00.000Z"
+  "status": {
+    "last_cleanup": "2025-01-15T10:30:00.000Z",
+    "next_cleanup": "2025-01-15T16:30:00.000Z",
+    "cleanup_enabled": true
+  },
+  "current_usage": {
+    "total_storage_mb": 45,
+    "sessions_count": 3,
+    "oldest_session_age_hours": 18
+  }
 }
 ```
 
 #### Data Export and Preservation
 
-**`requests_save_monitor_data()`** - Save monitoring session data to file
+**`requests_save_monitor_data()`** - Save monitoring session data to file for preservation
+- **Purpose**: Export session data to persistent file storage
+- **Use Case**: Archive important monitoring sessions beyond server session lifecycle
+
 **Input**:
 ```json
 {
@@ -578,7 +642,12 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
   "file_path": "/path/to/save/monitor_session.json",
   "include_content": true,  // Include full request/response bodies
   "format": "json",         // Optional: "json", "har", "csv"
-  "compression": "gzip"     // Optional: "none", "gzip", "zip"
+  "compression": "gzip",    // Optional: "none", "gzip", "zip"
+  "export_options": {
+    "include_sensitive_headers": false,
+    "max_body_size": 50000,
+    "exclude_patterns": ["*/api/logs*"]
+  }
 }
 ```
 
@@ -591,16 +660,26 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
   "file_size": 2048000,
   "requests_saved": 156,
   "format": "json",
-  "compression": "gzip"
+  "compression": "gzip",
+  "export_summary": {
+    "total_requests": 156,
+    "requests_with_content": 143,
+    "sensitive_headers_masked": 156,
+    "excluded_by_pattern": 13
+  }
 }
 ```
 
 **`requests_load_monitor_data()`** - Load previously saved monitoring data
+- **Purpose**: Import archived session data back into analysis system
+- **Use Case**: Analyze historical monitoring sessions or share data between systems
+
 **Input**:
 ```json
 {
   "file_path": "/path/to/save/monitor_session.json.gz",
-  "create_analysis_session": true  // Create new analysis session from loaded data
+  "create_analysis_session": true,  // Create new analysis session from loaded data
+  "session_name": "Production Issue Analysis"  // Optional friendly name
 }
 ```
 
@@ -611,9 +690,64 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
   "analysis_session_id": "ana_loaded123",
   "requests_loaded": 156,
   "original_monitor_id": "mon_abc123",
-  "session_date": "2025-01-15T10:30:00.000Z"
+  "session_date": "2025-01-15T10:30:00.000Z",
+  "load_summary": {
+    "file_format": "json",
+    "compression": "gzip",
+    "data_integrity_verified": true,
+    "session_name": "Production Issue Analysis"
+  }
 }
 ```
+
+#### Data Lifecycle Management
+
+**`requests_list_all_sessions()`** - List all monitoring and analysis sessions
+- **Purpose**: Get overview of all stored data across sessions
+- **Use Case**: Data governance and cleanup planning
+
+**Input**:
+```json
+{
+  "include_expired": false,  // Optional - default: false
+  "sort_by": "creation_date", // Optional: "creation_date", "size", "last_access"
+  "sort_order": "desc"       // Optional: "asc", "desc"
+}
+```
+
+**Output**:
+```json
+{
+  "total_sessions": 5,
+  "active_monitoring_sessions": 1,
+  "analysis_sessions": 3,
+  "expired_sessions": 1,
+  "sessions": [
+    {
+      "session_id": "mon_abc123",
+      "type": "monitoring",
+      "status": "active",
+      "created_at": "2025-01-15T10:30:00.000Z",
+      "last_accessed": "2025-01-15T10:35:00.000Z",
+      "request_count": 156,
+      "data_size": 2048000,
+      "age_hours": 2
+    },
+    {
+      "session_id": "ana_xyz789",
+      "type": "analysis",
+      "status": "available",
+      "created_at": "2025-01-14T15:20:00.000Z",
+      "last_accessed": "2025-01-15T09:15:00.000Z",
+      "source_monitor_id": "mon_def456",
+      "data_size": 1536000,
+      "age_hours": 19
+    }
+  ]
+}
+```
+
+**Note**: All monitor sessions are lost when MCP server stops. Use `requests_save_monitor_data()` to preserve important sessions to files.
 
 ## Implementation Phases
 
