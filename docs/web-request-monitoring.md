@@ -66,7 +66,7 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 #### Phase 2: Data Retrieval APIs
 
 **Data Access**:
-- `requests_get_captured_data()` - Get all captured request summaries from monitoring session
+- `requests_list_captured()` - List all captured request summaries from monitoring session
 - `requests_search()` - Search captured requests by basic criteria (URL, method, status)
 - `requests_get_content()` - Get full request/response content for specific request
 
@@ -199,7 +199,7 @@ Browser Requests → Extension Interception → Request Buffer → MCP Server
 
 ### Data Retrieval APIs
 
-#### `requests_get_captured_data()`
+#### `requests_list_captured()`
 **Input**:
 ```json
 {
@@ -641,7 +641,7 @@ print(f"Monitoring complete: {result['total_requests_captured']} requests captur
 #### Phase 2: Data Retrieval and Analysis
 ```python
 # Get all captured data
-all_requests = await requests_get_captured_data(monitor["monitor_id"])
+all_requests = await requests_list_captured(monitor["monitor_id"])
 print(f"Retrieved {len(all_requests)} captured requests")
 
 # Search for slow requests
@@ -671,7 +671,7 @@ monitor = await requests_start_monitoring(tab_id=123, patterns=["*"])
 await requests_stop_monitoring(monitor["monitor_id"])
 
 # Phase 2: Retrieve and analyze captured data
-all_requests = await requests_get_captured_data(monitor["monitor_id"])
+all_requests = await requests_list_captured(monitor["monitor_id"])
 
 # Find slow requests
 slow_requests = await requests_search(monitor["monitor_id"], {
@@ -704,7 +704,7 @@ for request in failed_requests["matches"]:
 #### Scenario 3: Before/After Optimization
 ```python
 # User makes code changes during monitoring, then analyzes impact
-all_requests = await requests_get_captured_data(monitor["monitor_id"])
+all_requests = await requests_list_captured(monitor["monitor_id"])
 
 # Claude analyzes timestamps and performance differences:
 # "Comparing before/after your change: response time improved 33%, error rate reduced 78%"
