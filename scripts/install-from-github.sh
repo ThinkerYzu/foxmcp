@@ -98,7 +98,7 @@ download_release() {
     mkdir -p predefined-scripts-download
 
     # List of predefined scripts to download
-    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh")
+    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh" "dom-summarize.sh")
 
     for script in "${scripts[@]}"; do
         if curl -L -o "predefined-scripts-download/$script" "https://raw.githubusercontent.com/$GITHUB_REPO/$VERSION/predefined-ex/$script"; then
@@ -184,6 +184,16 @@ Add your personal information and work context here.
 A predefined external script is defined at the server side of foxmcp.
 To call a script, use `content_execute_predefined(tab_id, "script_name", "[\"arg1\", \"arg2\"]")`.
 The last argument is a stringified JSON array of strings.
+
+### Available Predefined Scripts
+
+**dom-summarize.sh** - Simplify DOM tree for AI agent understanding
+- Usage: `content_execute_predefined(tab_id, "dom-summarize.sh", "[]")` (all visible elements)
+- Usage: `content_execute_predefined(tab_id, "dom-summarize.sh", "[\"onscreen\"]")` (viewport only)
+- Usage: `content_execute_predefined(tab_id, "dom-summarize.sh", "[\"onscreen\", \"withpos\"]")` (with positions)
+- Returns: Hierarchical structure of visible interactive elements (input, textarea, select, button, a, option)
+- Features: Assigns persistent dsid attributes for element reference, flattens non-interesting containers
+- Use case: Helps AI agents understand page components without parsing full HTML
 
 ### Available Google Calendar Scripts
 
