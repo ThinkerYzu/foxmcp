@@ -203,6 +203,29 @@ echo "(function() { document.body.style.backgroundColor = 'lightblue'; return 'B
 
 Create a collection of useful scripts:
 
+**`dom-summarize.sh`** - Simplify DOM tree for AI agent understanding:
+```bash
+#!/bin/bash
+# Simplifies complex DOM trees into a readable hierarchical structure showing
+# only interactive elements that users see and interact with. This allows AI
+# agents to easily understand page components without parsing full HTML.
+#
+# Features:
+# - Extracts visible interactive elements (input, textarea, select, button, a, option)
+# - Assigns persistent dsid attributes for future reference and interaction
+# - Shows hierarchical nesting with indentation
+# - Flattens non-interesting containers for clarity
+#
+# Arguments:
+#   $1 - Optional: "onscreen" to filter only elements visible in viewport
+#   $2 - Optional: "withpos" to include position/size (only with "onscreen")
+# Usage:
+#   dom-summarize.sh                    # All visible elements
+#   dom-summarize.sh onscreen           # Only viewport-visible elements
+#   dom-summarize.sh onscreen withpos   # With position info (x,y,width,height)
+```
+See `predefined-ex/dom-summarize.sh` for full implementation.
+
 **`extract_links.sh`** - Extract all links from page:
 ```bash
 #!/bin/bash
