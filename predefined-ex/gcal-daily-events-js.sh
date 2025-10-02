@@ -8,15 +8,15 @@
 if [ $# -lt 1 ] || [ $# -gt 3 ]; then
     echo "Usage: $0 day [month] [year]"
     echo "Examples:"
-    echo "  $0 8                    # September 8, 2025 (current month/year)"
-    echo "  $0 15 10               # October 15, 2025 (current year)"
+    echo "  $0 8                    # 8th day of current month/year"
+    echo "  $0 15 10               # October 15 of current year"
     echo "  $0 25 12 2024          # December 25, 2024"
     exit 1
 fi
 
 DAY="$1"
-MONTH="${2:-9}"    # Default to September (9)
-YEAR="${3:-2025}"  # Default to 2025
+MONTH="${2:-$(date +%-m)}"    # Default to current month
+YEAR="${3:-$(date +%Y)}"      # Default to current year
 
 cat << EOF
 (function() {
