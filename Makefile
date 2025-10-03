@@ -103,6 +103,11 @@ package: build
 	@cp README.md dist/server-package/ 2>/dev/null || echo "README.md not found, skipping..."
 	cd dist && zip -r packages/foxmcp-server.zip server-package/
 
+	# Clear profile cache since extension has changed
+	@echo "Clearing profile cache..."
+	@rm -rf dist/profile-cache/*
+	@echo "✓ Profile cache cleared"
+
 	@echo "📦 Packages created:"
 	@echo "  - dist/packages/foxmcp@codemud.org.xpi"
 	@echo "  - dist/packages/foxmcp-server.zip"
