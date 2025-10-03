@@ -41,7 +41,7 @@
 - **Firefox Extension**: Complete Firefox extension with all WebExtensions APIs implemented
 - **Message Protocol**: Complete protocol specification with JSON message formats  
 - **Browser API Integration**: All browser functions implemented (tabs, history, bookmarks, navigation, content, windows)
-- **Bookmark Management**: Complete bookmark operations with folder filtering, parent ID tracking, comprehensive MCP schema documentation, consistent ID/parent ID formatting across all bookmark functions, and all integration tests passing
+- **Bookmark Management**: Complete bookmark operations with folder creation, folder filtering, parent ID tracking, comprehensive MCP schema documentation, consistent ID/parent ID formatting across all bookmark functions, and all integration tests passing
 - **Test Infrastructure**: Production-ready testing with 211 tests (59 unit + 134 integration), enhanced coverage including window management and navigation reload, with robust server lifecycle management and comprehensive integration test modernization
 - **Test Import System**: Robust import infrastructure using symbolic links and automatic path detection, eliminating manual PYTHONPATH configuration with zero-configuration setup across all test execution contexts
 - **Test Helper Protocol**: Automated UI validation system via WebSocket messages for storage synchronization testing
@@ -114,7 +114,7 @@ The FoxMCP project has successfully achieved its primary goal:
 **✅ Available MCP Tool Categories:**
 - **Tab Management**: 4 tools (list, create, close, switch)
 - **History Operations**: 3 tools (query, recent, delete) + debugging tools
-- **Bookmark Management**: 4 tools (list, search, create, delete)
+- **Bookmark Management**: 5 tools (list, search, create, create_folder, delete)
 - **Navigation Control**: 4 tools (back, forward, reload, go_to_url)
 - **Content Access**: 3 tools (get_text, get_html, execute_script) - ✅ All working with comprehensive tests
 - **Debugging Tools**: WebSocket connection status and diagnostics

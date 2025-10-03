@@ -487,3 +487,102 @@ class TestBookmarkManagementEndToEnd:
             print("⚠️ Newly created bookmark not found in folder listing")
 
         print("✅ Folder filtering test completed successfully")
+
+    @pytest.mark.asyncio
+    async def test_bookmark_folder_creation(self, full_bookmark_system):
+        """Test creating bookmark folders"""
+        system = full_bookmark_system
+        mcp_client = system['mcp_client']
+
+        await mcp_client.connect()
+
+        # Test 1: Create a basic folder
+        print("\n📁 Creating a basic bookmark folder...")
+        folder_title = f"Test Folder {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        create_result = await mcp_client.call_tool("bookmarks_create_folder", {
+            "title": folder_title
+        })
+        print(f"Folder creation result: {create_result}")
+
+        # Verify creation was successful
+        create_content = create_result.get('content', '')
+        assert "Created folder:" in create_content, f"Expected success message not found: {create_result}"
+        assert folder_title in create_content, f"Folder title not in result: {create_result}"
+
+        # Extract folder ID from result
+        folder_id = None
+        if "ID:" in create_content:
+            folder_id = create_content.split("ID: ")[1].rstrip(")")
+            print(f"Created folder with ID: {folder_id}")
+
+        assert folder_id, f"Could not extract folder ID from: {create_result}"
+
+        # Wait for folder to be created
+        await asyncio.sleep(1.0)
+
+        # Test 2: Verify folder appears in bookmarks list
+        print("\n📋 Verifying folder appears in bookmarks list...")
+        list_result = await mcp_client.call_tool("bookmarks_list", {})
+        list_content = list_result.get('content', '')
+
+        assert folder_title in list_content, f"Folder '{folder_title}' not found in bookmarks list"
+        assert '📁' in list_content, "Folder icon not found in bookmarks list"
+        print("✅ Folder appears in bookmarks list")
+
+        # Test 3: Create a bookmark inside the folder
+        print(f"\n🔖 Creating bookmark inside folder {folder_id}...")
+        bookmark_title = f"Bookmark in Folder {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        bookmark_result = await mcp_client.call_tool("bookmarks_create", {
+            "title": bookmark_title,
+            "url": "https://example.com/in-folder",
+            "parent_id": folder_id
+        })
+        print(f"Bookmark creation result: {bookmark_result}")
+
+        assert "Created bookmark:" in bookmark_result.get('content', ''), "Failed to create bookmark in folder"
+
+        # Wait for bookmark to be created
+        await asyncio.sleep(1.0)
+
+        # Test 4: Verify bookmark is in the folder
+        print(f"\n🔍 Listing bookmarks in folder {folder_id}...")
+        folder_list_result = await mcp_client.call_tool("bookmarks_list", {
+            "folder_id": folder_id
+        })
+        folder_list_content = folder_list_result.get('content', '')
+
+        assert bookmark_title in folder_list_content, f"Bookmark '{bookmark_title}' not found in folder listing"
+        print("✅ Bookmark successfully created inside folder")
+
+        # Test 5: Create nested folder
+        print(f"\n📁 Creating nested folder inside {folder_id}...")
+        nested_folder_title = f"Nested Folder {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        nested_result = await mcp_client.call_tool("bookmarks_create_folder", {
+            "title": nested_folder_title,
+            "parent_id": folder_id
+        })
+        print(f"Nested folder creation result: {nested_result}")
+
+        nested_content = nested_result.get('content', '')
+        assert "Created folder:" in nested_content, "Failed to create nested folder"
+        assert nested_folder_title in nested_content, "Nested folder title not in result"
+
+        # Extract nested folder ID
+        nested_folder_id = None
+        if "ID:" in nested_content:
+            nested_folder_id = nested_content.split("ID: ")[1].rstrip(")")
+            print(f"Created nested folder with ID: {nested_folder_id}")
+
+        await asyncio.sleep(1.0)
+
+        # Test 6: Verify nested folder appears in parent folder
+        print(f"\n🔍 Verifying nested folder in parent folder {folder_id}...")
+        updated_folder_list = await mcp_client.call_tool("bookmarks_list", {
+            "folder_id": folder_id
+        })
+        updated_folder_content = updated_folder_list.get('content', '')
+
+        assert nested_folder_title in updated_folder_content, f"Nested folder '{nested_folder_title}' not found in parent folder"
+        print("✅ Nested folder successfully created")
+
+        print("✅ All bookmark folder creation tests passed")

@@ -913,6 +913,43 @@ class FoxMCPTools:
 
             return f"Unable to create bookmark: {title}"
 
+        # Create Bookmark Folder Tool
+        @self.mcp.tool()
+        async def bookmarks_create_folder(
+            title: str,
+            parent_id: Optional[str] = None
+        ) -> str:
+            """Create a new bookmark folder
+
+            Args:
+                title: Title of the folder
+                parent_id: Optional parent folder ID
+            """
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "bookmarks.createFolder",
+                "data": {
+                    "title": title,
+                    **({"parentId": parent_id} if parent_id else {})
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error creating folder: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                folder = response["data"].get("folder", {})
+                return f"Created folder: {folder.get('title', title)} (ID: {folder.get('id')})"
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return f"Failed to create folder: {error_msg}"
+
+            return f"Unable to create folder: {title}"
+
         # Delete Bookmark Tool
         @self.mcp.tool()
         async def bookmarks_delete(bookmark_id: str) -> str:

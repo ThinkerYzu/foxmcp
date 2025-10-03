@@ -737,6 +737,15 @@ async function handleBookmarksAction(id, action, data) {
         sendResponse(id, action, { bookmark: newBookmark });
         break;
 
+      case 'bookmarks.createFolder':
+        const newFolder = await browser.bookmarks.create({
+          parentId: data.parentId,
+          title: data.title
+          // No URL - creates a folder
+        });
+        sendResponse(id, action, { folder: newFolder });
+        break;
+
       case 'bookmarks.remove':
       case 'bookmarks.delete':
         await browser.bookmarks.remove(data.bookmarkId);

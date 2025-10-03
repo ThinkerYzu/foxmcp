@@ -688,7 +688,7 @@ All messages follow this JSON structure:
 {
   "id": "req_017",
   "type": "request",
-  "action": "bookmarks.create", 
+  "action": "bookmarks.create",
   "data": {
     "title": "New Site",
     "url": "https://newsite.com",
@@ -707,11 +707,45 @@ All messages follow this JSON structure:
   "data": {
     "bookmark": {
       "id": "bm_003",
-      "parentId": "1", 
+      "parentId": "1",
       "title": "New Site",
       "url": "https://newsite.com",
       "dateAdded": "2025-09-03T12:00:00.000Z",
       "isFolder": false
+    }
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Create Bookmark Folder
+**Request:**
+```json
+{
+  "id": "req_017a",
+  "type": "request",
+  "action": "bookmarks.createFolder",
+  "data": {
+    "title": "My Projects",
+    "parentId": "1"
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_017a",
+  "type": "response",
+  "action": "bookmarks.createFolder",
+  "data": {
+    "folder": {
+      "id": "bm_004",
+      "parentId": "1",
+      "title": "My Projects",
+      "dateAdded": "2025-09-03T12:00:00.000Z",
+      "type": "folder"
     }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
