@@ -79,7 +79,8 @@ class TestProtocolMessages:
             "navigation.forward",
             "bookmarks.list",
             "bookmarks.create",
-            "bookmarks.createFolder"
+            "bookmarks.createFolder",
+            "bookmarks.update"
         ]
         
         for action in valid_actions:

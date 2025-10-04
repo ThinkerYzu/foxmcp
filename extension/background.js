@@ -746,6 +746,18 @@ async function handleBookmarksAction(id, action, data) {
         sendResponse(id, action, { folder: newFolder });
         break;
 
+      case 'bookmarks.update':
+        const updateData = {};
+        if (data.title !== undefined) {
+          updateData.title = data.title;
+        }
+        if (data.url !== undefined) {
+          updateData.url = data.url;
+        }
+        const updatedBookmark = await browser.bookmarks.update(data.bookmarkId, updateData);
+        sendResponse(id, action, { bookmark: updatedBookmark });
+        break;
+
       case 'bookmarks.remove':
       case 'bookmarks.delete':
         await browser.bookmarks.remove(data.bookmarkId);

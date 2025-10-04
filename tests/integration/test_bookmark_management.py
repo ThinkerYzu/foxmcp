@@ -586,3 +586,136 @@ class TestBookmarkManagementEndToEnd:
         print("✅ Nested folder successfully created")
 
         print("✅ All bookmark folder creation tests passed")
+
+    @pytest.mark.asyncio
+    async def test_bookmark_update(self, full_bookmark_system):
+        """Test updating bookmarks and folders"""
+        system = full_bookmark_system
+        mcp_client = system['mcp_client']
+
+        await mcp_client.connect()
+
+        # Test 1: Create a bookmark and update its title
+        print("\n🔖 Creating a bookmark to update...")
+        bookmark_title = f"Original Title {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        create_result = await mcp_client.call_tool("bookmarks_create", {
+            "title": bookmark_title,
+            "url": "https://example.com/original"
+        })
+        print(f"Bookmark creation result: {create_result}")
+
+        # Extract bookmark ID
+        bookmark_id = None
+        create_content = create_result.get('content', '')
+        if "ID:" in create_content:
+            bookmark_id = create_content.split("ID: ")[1].rstrip(")")
+            print(f"Created bookmark with ID: {bookmark_id}")
+
+        assert bookmark_id, f"Could not extract bookmark ID from: {create_result}"
+        await asyncio.sleep(0.5)
+
+        # Update bookmark title
+        print(f"\n✏️ Updating bookmark title...")
+        new_title = f"Updated Title {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        update_result = await mcp_client.call_tool("bookmarks_update", {
+            "bookmark_id": bookmark_id,
+            "title": new_title
+        })
+        print(f"Update result: {update_result}")
+
+        update_content = update_result.get('content', '')
+        assert "Updated bookmark:" in update_content, f"Expected success message: {update_result}"
+        assert new_title in update_content, f"New title not in result: {update_result}"
+        print("✅ Bookmark title updated successfully")
+
+        # Test 2: Update bookmark URL
+        print(f"\n🔗 Updating bookmark URL...")
+        new_url = "https://example.com/updated"
+        update_url_result = await mcp_client.call_tool("bookmarks_update", {
+            "bookmark_id": bookmark_id,
+            "url": new_url
+        })
+        print(f"URL update result: {update_url_result}")
+
+        assert "Updated bookmark:" in update_url_result.get('content', ''), "Failed to update URL"
+        print("✅ Bookmark URL updated successfully")
+
+        # Test 3: Update both title and URL
+        print(f"\n✏️🔗 Updating both title and URL...")
+        final_title = f"Final Title {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        final_url = "https://example.com/final"
+        update_both_result = await mcp_client.call_tool("bookmarks_update", {
+            "bookmark_id": bookmark_id,
+            "title": final_title,
+            "url": final_url
+        })
+        print(f"Update both result: {update_both_result}")
+
+        both_content = update_both_result.get('content', '')
+        assert "Updated bookmark:" in both_content, "Failed to update both"
+        assert final_title in both_content, "Final title not in result"
+        print("✅ Both title and URL updated successfully")
+
+        await asyncio.sleep(0.5)
+
+        # Test 4: Verify updates in bookmarks list
+        print(f"\n📋 Verifying updates in bookmarks list...")
+        list_result = await mcp_client.call_tool("bookmarks_list", {})
+        list_content = list_result.get('content', '')
+
+        assert final_title in list_content, f"Updated title '{final_title}' not found in list"
+        assert final_url in list_content, f"Updated URL '{final_url}' not found in list"
+        print("✅ Updates verified in bookmarks list")
+
+        # Test 5: Create and update a folder
+        print("\n📁 Creating a folder to update...")
+        folder_title = f"Original Folder {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        folder_result = await mcp_client.call_tool("bookmarks_create_folder", {
+            "title": folder_title
+        })
+        print(f"Folder creation result: {folder_result}")
+
+        folder_id = None
+        folder_content = folder_result.get('content', '')
+        if "ID:" in folder_content:
+            folder_id = folder_content.split("ID: ")[1].rstrip(")")
+            print(f"Created folder with ID: {folder_id}")
+
+        assert folder_id, f"Could not extract folder ID from: {folder_result}"
+        await asyncio.sleep(0.5)
+
+        # Update folder title
+        print(f"\n✏️ Updating folder title...")
+        new_folder_title = f"Updated Folder {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        update_folder_result = await mcp_client.call_tool("bookmarks_update", {
+            "bookmark_id": folder_id,
+            "title": new_folder_title
+        })
+        print(f"Folder update result: {update_folder_result}")
+
+        folder_update_content = update_folder_result.get('content', '')
+        assert "Updated bookmark:" in folder_update_content, f"Failed to update folder: {update_folder_result}"
+        assert new_folder_title in folder_update_content, f"New folder title not in result: {update_folder_result}"
+        print("✅ Folder title updated successfully")
+
+        await asyncio.sleep(0.5)
+
+        # Verify folder update in list
+        print(f"\n📋 Verifying folder update in list...")
+        final_list = await mcp_client.call_tool("bookmarks_list", {})
+        final_list_content = final_list.get('content', '')
+
+        assert new_folder_title in final_list_content, f"Updated folder title '{new_folder_title}' not found in list"
+        print("✅ Folder update verified in list")
+
+        # Test 6: Error handling - update with no parameters
+        print("\n❌ Testing error handling - no parameters...")
+        error_result = await mcp_client.call_tool("bookmarks_update", {
+            "bookmark_id": bookmark_id
+        })
+        error_content = error_result.get('content', '')
+        assert "Error" in error_content or "at least one" in error_content.lower(), \
+            "Should error when no title or url provided"
+        print("✅ Correctly handled missing parameters")
+
+        print("✅ All bookmark update tests passed")

@@ -94,7 +94,7 @@ foxmcp/
     - **Window management**: List, get, create, close, focus, update windows via browser.windows
     - **Content extraction**: Text and HTML extraction from pages via browser.tabs.sendMessage
     - **Navigation control**: URL navigation, back/forward, reload via browser.tabs
-    - **Bookmark management**: List, search, create bookmarks and folders, remove bookmarks via browser.bookmarks
+    - **Bookmark management**: List, search, create bookmarks and folders, update titles/URLs, remove bookmarks via browser.bookmarks
   - **Test Helper Protocol** - WebSocket messages for automated UI testing:
     - **test.get_popup_state**: Get current popup display values and test override status
     - **test.get_options_state**: Get options page display values and configuration state
@@ -200,7 +200,7 @@ foxmcp/
     - **Tabs**: list all tabs, create new tabs, close tabs, update tabs
     - **Content**: text extraction, HTML extraction, direct script execution, predefined script execution
     - **Navigation**: URL navigation, back/forward, reload with cache options
-    - **Bookmarks**: list bookmarks tree, search bookmarks, create bookmarks and folders, remove bookmarks
+    - **Bookmarks**: list bookmarks tree, search bookmarks, create bookmarks and folders, update titles/URLs, remove bookmarks
   - **Comprehensive tool parameter definitions** with types and validation
   - **UUID-based request ID generation** for correlation tracking
   - **Complete action mapping** between MCP tools and WebSocket actions

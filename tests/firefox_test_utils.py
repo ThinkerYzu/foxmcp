@@ -175,11 +175,21 @@ class FirefoxTestManager:
             else:
                 return False  # user.js should exist
 
-            # Check extension is installed
+            # Check extension is installed and up-to-date
             extensions_dir = os.path.join(profile_path, 'extensions')
             extension_file = os.path.join(extensions_dir, 'foxmcp@codemud.org.xpi')
             if not os.path.exists(extension_file):
                 return False  # Extension should be installed
+
+            # Validate extension is current version (compare modification times)
+            source_xpi = _get_extension_xpi_path()
+            if source_xpi and os.path.exists(source_xpi):
+                # If source XPI is newer than cached extension, invalidate cache
+                source_mtime = os.path.getmtime(source_xpi)
+                cached_mtime = os.path.getmtime(extension_file)
+                if source_mtime > cached_mtime:
+                    print(f"⚠ Cached extension is outdated (source: {source_mtime}, cached: {cached_mtime})")
+                    return False  # Extension needs update
 
             # Check extensions.json exists and has the extension enabled
             extensions_json_path = os.path.join(profile_path, 'extensions.json')
@@ -790,7 +800,7 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
             entry = self._profile_cache[self.test_port]
             entry.is_locked = False
             entry.last_used = time.time()
-            print(f"✓ Compressed profile for port {self.test_port} returned to cache")
+            print(f"✓ Cached profile for port {self.test_port} unlocked (available for reuse)")
 
         self.profile_dir = None
 

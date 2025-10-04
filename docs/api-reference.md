@@ -28,6 +28,7 @@ Complete reference for all MCP tools and browser functions available through Fox
   - Returns formatted text with matching bookmark entries including ID and parent folder ID
 - `bookmarks_create(title, url, parent_id=None)` - Create bookmark
 - `bookmarks_create_folder(title, parent_id=None)` - Create bookmark folder
+- `bookmarks_update(bookmark_id, title=None, url=None)` - Update bookmark or folder title/URL
 - `bookmarks_delete(bookmark_id)` - Delete bookmark
 
 ### Navigation Control
@@ -111,6 +112,24 @@ bookmark = await client.call_tool("bookmarks_create", {
     "title": "Project Repository",
     "url": "https://github.com/example/project",
     "parent_id": "folder_id_here"
+})
+
+# Update bookmark title
+await client.call_tool("bookmarks_update", {
+    "bookmark_id": "bookmark_id_here",
+    "title": "New Title"
+})
+
+# Update bookmark URL
+await client.call_tool("bookmarks_update", {
+    "bookmark_id": "bookmark_id_here",
+    "url": "https://newsite.com"
+})
+
+# Rename a folder
+await client.call_tool("bookmarks_update", {
+    "bookmark_id": "folder_id_here",
+    "title": "Renamed Folder"
 })
 ```
 

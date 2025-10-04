@@ -752,6 +752,44 @@ All messages follow this JSON structure:
 }
 ```
 
+#### Update Bookmark or Folder
+**Request:**
+```json
+{
+  "id": "req_017b",
+  "type": "request",
+  "action": "bookmarks.update",
+  "data": {
+    "bookmarkId": "bm_003",
+    "title": "Updated Title",
+    "url": "https://updated-site.com"
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_017b",
+  "type": "response",
+  "action": "bookmarks.update",
+  "data": {
+    "bookmark": {
+      "id": "bm_003",
+      "parentId": "1",
+      "title": "Updated Title",
+      "url": "https://updated-site.com",
+      "dateAdded": "2025-09-03T12:00:00.000Z",
+      "dateGroupModified": "2025-09-03T12:05:00.000Z"
+    }
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+**Note:** For folders, omit the `url` parameter. Either `title` or `url` (or both) must be provided.
+
 #### Delete Bookmark
 **Request:**
 ```json

@@ -950,6 +950,49 @@ class FoxMCPTools:
 
             return f"Unable to create folder: {title}"
 
+        # Update Bookmark Tool
+        @self.mcp.tool()
+        async def bookmarks_update(
+            bookmark_id: str,
+            title: Optional[str] = None,
+            url: Optional[str] = None
+        ) -> str:
+            """Update a bookmark or folder's title and/or URL
+
+            Args:
+                bookmark_id: ID of the bookmark or folder to update
+                title: New title (optional)
+                url: New URL (optional, only for bookmarks not folders)
+            """
+            if title is None and url is None:
+                return "Error: At least one of title or url must be provided"
+
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "bookmarks.update",
+                "data": {
+                    "bookmarkId": bookmark_id,
+                    **({"title": title} if title is not None else {}),
+                    **({"url": url} if url is not None else {})
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error updating bookmark: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                bookmark = response["data"].get("bookmark", {})
+                return f"Updated bookmark: {bookmark.get('title', '')} (ID: {bookmark.get('id')})"
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return f"Failed to update bookmark: {error_msg}"
+
+            return f"Unable to update bookmark: {bookmark_id}"
+
         # Delete Bookmark Tool
         @self.mcp.tool()
         async def bookmarks_delete(bookmark_id: str) -> str:

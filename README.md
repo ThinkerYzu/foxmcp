@@ -154,6 +154,7 @@ Once connected, you can control Firefox through natural language:
 - List and search bookmarks
 - Create and delete bookmarks
 - Create bookmark folders and organize bookmarks hierarchically
+- Update bookmark and folder titles and URLs
 
 ### Web Request Monitoring
 - Monitor HTTP requests with URL pattern filtering

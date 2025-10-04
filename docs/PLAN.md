@@ -114,7 +114,7 @@ The FoxMCP project has successfully achieved its primary goal:
 **✅ Available MCP Tool Categories:**
 - **Tab Management**: 4 tools (list, create, close, switch)
 - **History Operations**: 3 tools (query, recent, delete) + debugging tools
-- **Bookmark Management**: 5 tools (list, search, create, create_folder, delete)
+- **Bookmark Management**: 6 tools (list, search, create, create_folder, update, delete)
 - **Navigation Control**: 4 tools (back, forward, reload, go_to_url)
 - **Content Access**: 3 tools (get_text, get_html, execute_script) - ✅ All working with comprehensive tests
 - **Debugging Tools**: WebSocket connection status and diagnostics
