@@ -350,8 +350,8 @@ class TestBrowserFunctionality:
         test_tab_id = int(tab_id_match.group(1))
         print(f"   ✅ Found test tab ID: {test_tab_id}")
 
-        # Step 3: Test content_get_text functionality
-        print("\n3️⃣  Testing content_get_text...")
+        # Step 3: Test content_get_text functionality (unlimited)
+        print("\n3️⃣  Testing content_get_text (unlimited)...")
         text_result = await mcp_client.call_tool("content_get_text", {
             "tab_id": test_tab_id
         })
@@ -362,7 +362,7 @@ class TestBrowserFunctionality:
         assert not text_result.get('isError', False), f"content_get_text should not error: {text_result}"
 
         text_content = text_result.get('content', '')
-        print(f"   Text content received: {text_content[:200]}...")
+        print(f"   Text content received (full): {len(text_content)} chars")
 
         # Verify we got text content
         assert "Text content from" in text_content, "Should return formatted text content"
@@ -372,6 +372,22 @@ class TestBrowserFunctionality:
             pytest.skip(f"External service unavailable, got error page: {text_content[:100]}")
 
         assert len(text_content) > 50, "Should return meaningful text content (excluding error pages)"
+
+        # Step 4: Test content_get_text with max_length limit
+        print("\n4️⃣  Testing content_get_text with max_length=100...")
+        limited_text_result = await mcp_client.call_tool("content_get_text", {
+            "tab_id": test_tab_id,
+            "max_length": 100
+        })
+
+        assert not limited_text_result.get('isError', False), f"content_get_text with max_length should not error: {limited_text_result}"
+
+        limited_content = limited_text_result.get('content', '')
+        print(f"   Limited text content received: {len(limited_content)} chars")
+
+        # Verify truncation occurred (accounting for header text)
+        assert "..." in limited_content, "Limited content should be truncated"
+        assert len(limited_content) < len(text_content), "Limited content should be shorter than unlimited"
 
         print("✅ End-to-end content_get_text test successful!")
 

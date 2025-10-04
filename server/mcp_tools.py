@@ -1161,11 +1161,12 @@ class FoxMCPTools:
 
         # Get Page Text Tool
         @self.mcp.tool()
-        async def content_get_text(tab_id: int) -> str:
+        async def content_get_text(tab_id: int, max_length: Optional[int] = None) -> str:
             """Get text content from a tab's page
 
             Args:
                 tab_id: ID of the tab to get content from
+                max_length: Optional maximum length of text to return (default: unlimited)
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -1190,7 +1191,12 @@ class FoxMCPTools:
                 if not text:
                     return f"No text content found in tab {tab_id} ({title})"
 
-                return f"Text content from {title} ({url}):\n\n{text[:2000]}{'...' if len(text) > 2000 else ''}"
+                # Apply length limit if specified
+                if max_length is not None and len(text) > max_length:
+                    truncated_text = text[:max_length]
+                    return f"Text content from {title} ({url}):\n\n{truncated_text}..."
+                else:
+                    return f"Text content from {title} ({url}):\n\n{text}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to get page text: {error_msg}"

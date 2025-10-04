@@ -38,7 +38,8 @@ Complete reference for all MCP tools and browser functions available through Fox
 - `navigation_go_to_url(tab_id, url)` - Navigate to URL
 
 ### Content Access
-- `content_get_text(tab_id)` - Extract page text content
+- `content_get_text(tab_id, max_length=None)` - Extract page text content
+  - `max_length`: Optional maximum length of text to return (default: unlimited)
 - `content_get_html(tab_id)` - Get page HTML source
 - `content_execute_script(tab_id, script)` - Execute JavaScript directly
 - `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
@@ -135,8 +136,14 @@ await client.call_tool("bookmarks_update", {
 
 ### Content Interaction
 ```python
-# Get page text
+# Get page text (unlimited)
 text = await client.call_tool("content_get_text", {"tab_id": 123})
+
+# Get page text with length limit
+text = await client.call_tool("content_get_text", {
+    "tab_id": 123,
+    "max_length": 1000
+})
 
 # Execute JavaScript
 result = await client.call_tool("content_execute_script", {
