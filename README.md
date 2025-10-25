@@ -35,15 +35,9 @@ This script automatically:
 
 **Install Firefox Extension:**
 
-After running the installation script, install the FoxMCP extension:
-
-**Recommended**: Install from Firefox Add-ons:
+After running the installation script, install the FoxMCP extension from Firefox Add-ons:
 - Visit: https://addons.mozilla.org/en-US/firefox/addon/foxmcp/
 - Click "Add to Firefox"
-
-**Alternative**: Install from downloaded file:
-- Follow the installation instructions provided by the script
-- Use the `./scripts/install-xpi.sh` script for automated installation
 
 ### Option 2: Install from Source
 
