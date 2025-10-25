@@ -33,6 +33,18 @@ This script automatically:
 - Optionally connects to Claude Code
 - Creates a startup script for easy server management
 
+**Install Firefox Extension:**
+
+After running the installation script, install the FoxMCP extension:
+
+**Recommended**: Install from Firefox Add-ons:
+- Visit: https://addons.mozilla.org/en-US/firefox/addon/foxmcp/
+- Click "Add to Firefox"
+
+**Alternative**: Install from downloaded file:
+- Follow the installation instructions provided by the script
+- Use the `./scripts/install-xpi.sh` script for automated installation
+
 ### Option 2: Install from Source
 
 #### 1. Install Dependencies
