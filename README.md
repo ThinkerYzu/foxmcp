@@ -220,6 +220,31 @@ The `claude-ex/` directory contains example CLAUDE.md templates that help Claude
 - Help you create new predefined external scripts
 - Provide context about foxmcp tools and capabilities
 
+### 5. Available Predefined Scripts
+
+The `predefined-ex/` directory includes ready-to-use scripts. To use them, point `FOXMCP_EXT_SCRIPTS` to the `predefined-ex/` directory:
+
+```bash
+export FOXMCP_EXT_SCRIPTS="/path/to/foxmcp/predefined-ex"
+```
+
+**YouTube Control** (`youtube-play-pause.sh`):
+- Control YouTube video playback (play, pause, or toggle)
+- Returns JSON with video state and playback position
+- Usage: `youtube-play-pause.sh [play|pause|toggle]`
+
+**Google Calendar Scripts**:
+- `gcal-daily-events-js.sh` - Extract events for a specific day
+- `gcal-monthly-events-js.sh` - Extract events for the entire month
+- `gcal-cal-event-js.sh` - Extract detailed event information
+
+**DOM Simplification** (`dom-summarize.sh`):
+- Simplify complex DOM trees for AI agent understanding
+- Shows only visible interactive elements
+- Usage: `dom-summarize.sh [onscreen] [withpos]`
+
+See [docs/scripts.md](docs/scripts.md) for detailed documentation on creating and using predefined scripts.
+
 ## Documentation
 
 - **[API Reference](docs/api-reference.md)** - Complete function reference
