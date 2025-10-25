@@ -98,7 +98,7 @@ download_release() {
     mkdir -p predefined-scripts-download
 
     # List of predefined scripts to download
-    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh" "dom-summarize.sh")
+    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh" "dom-summarize.sh" "youtube-play-pause.sh")
 
     for script in "${scripts[@]}"; do
         if curl -L -o "predefined-scripts-download/$script" "https://raw.githubusercontent.com/$GITHUB_REPO/$VERSION/predefined-ex/$script"; then
@@ -194,6 +194,14 @@ The last argument is a stringified JSON array of strings.
 - Returns: Hierarchical structure of visible interactive elements (input, textarea, select, button, a, option)
 - Features: Assigns persistent dsid attributes for element reference, flattens non-interesting containers
 - Use case: Helps AI agents understand page components without parsing full HTML
+
+**youtube-play-pause.sh** - Control YouTube video playback
+- Usage: `content_execute_predefined(tab_id, "youtube-play-pause.sh", "[]")` (toggle play/pause)
+- Usage: `content_execute_predefined(tab_id, "youtube-play-pause.sh", "[\"play\"]")` (play video)
+- Usage: `content_execute_predefined(tab_id, "youtube-play-pause.sh", "[\"pause\"]")` (pause video)
+- Returns: JSON with success status, action taken, video state, current time, and duration
+- Use case: Control YouTube playback without user interaction
+- Note: Must be used on a YouTube video page
 
 ### Available Google Calendar Scripts
 
