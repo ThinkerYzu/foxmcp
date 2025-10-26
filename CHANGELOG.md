@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2025-10-26
+
+### Added
+- **Web Request Monitoring API**: Foundation for capturing and inspecting network requests
+  - `requests_start_monitoring()`: Start capturing web requests/responses
+  - `requests_list_captured()`: Retrieve captured request data
+  - `requests_stop_monitoring()`: Stop monitoring and cleanup
+  - Two-phase workflow: start monitoring → capture data → stop monitoring
+  - Extension integration with comprehensive error handling
+
+- **Bookmark Management Enhancements**
+  - Bookmark folder creation support with proper hierarchy
+  - Bookmark update functionality for modifying existing bookmarks
+  - Enhanced test infrastructure for bookmark operations
+
+- **Predefined Scripts**: Ready-to-use automation scripts
+  - `youtube-play-pause.sh`: Control YouTube video playback (play/pause/toggle)
+  - `dom-summarize.sh`: Simplify DOM tree for AI agent understanding
+  - `gcal-cal-event-js.sh`: Extract specific Google Calendar event details
+  - `gcal-daily-events-js.sh`: Get all events for a specific day
+  - `gcal-monthly-events-js.sh`: Extract entire month view from calendar
+  - All scripts include comprehensive documentation and usage examples
+
+- **Content API Enhancement**
+  - Optional `max_length` parameter for `content_get_text` tool
+  - Allows truncation of large text extractions for AI context management
+
+- **Installation Options**
+  - Firefox Add-ons store installation option documented
+  - Simplified installation instructions to single command
+  - Updated installation script to include all predefined scripts
+
+- **Test Coverage**: Added comprehensive test for history query filtering
+  - Verifies that non-matching entries are excluded from filtered results
+  - Tests multiple distinct search terms to ensure proper filtering behavior
+
+- **Timestamp Validation**: Added comprehensive history timestamp validation
+  - New `validate_history_item_timestamp()` helper function ensures timestamps are valid
+  - Validates timestamp presence, format, range, and reasonableness
+  - All history tests now verify timestamps are non-null, positive, and within valid date ranges
+  - End-to-end test confirms MCP tools display actual timestamps to AI agents
+
 ### Fixed
 - **History Query Filtering**: Fixed parameter name mismatch that prevented history search filtering from working correctly
   - Extension now correctly reads `query` parameter (was reading non-existent `text` parameter)
@@ -20,16 +62,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affects `history_query` and `history_get_recent` MCP tools
   - Documentation updated to reflect correct field name and format
 
-### Added
-- **Test Coverage**: Added comprehensive test for history query filtering (`test_history_query_filter_excludes_non_matching`)
-  - Verifies that non-matching entries are excluded from filtered results
-  - Tests multiple distinct search terms to ensure proper filtering behavior
+- **Bookmark Management**: Fixed bookmark management integration test failures
+  - Improved test reliability and error handling
+  - Enhanced test infrastructure for bookmark operations
 
-- **Timestamp Validation**: Added comprehensive history timestamp validation
-  - New `validate_history_item_timestamp()` helper function ensures timestamps are valid
-  - Validates timestamp presence, format, range, and reasonableness
-  - All history tests now verify timestamps are non-null, positive, and within valid date ranges
-  - End-to-end test confirms MCP tools display actual timestamps to AI agents
+- **Google Calendar Scripts**: Fixed gcal-daily-events-js.sh to get current month correctly
+  - Script now accurately determines the current month/year
+  - Improved date handling for calendar automation
+
+### Changed
+- **Infrastructure**: Clear profile cache after packaging extension
+  - Ensures clean state for extension testing
+  - Prevents stale profile data from affecting tests
+
+- **Documentation**: Enhanced CLAUDE.md with comprehensive instructions
+  - Added ENABLE_DEBUG_LOGGING_TO_SERVER debugging documentation
+  - Documented all available predefined scripts with usage examples
+  - Updated installation instructions with predefined scripts
+
+### Developer Experience
+- 211 total tests passing (59 unit + 152 integration)
+- All tests enabled and maintaining 100% pass rate
+- Enhanced debugging capabilities with configurable logging
+- Improved developer documentation and troubleshooting guides
 
 ## [1.0.0] - 2024-09-28
 
@@ -112,4 +167,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
-[1.0.0]: https://github.com/foxmcp/foxmcp/releases/tag/v1.0.0
+[1.1.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.1.0
+[1.0.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.0.0

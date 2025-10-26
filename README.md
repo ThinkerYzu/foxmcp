@@ -21,11 +21,11 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 ### Option 1: Install from GitHub Release (Recommended)
 
 ```bash
-curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.0.0/install-from-github.sh | bash
+curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.1.0/install-from-github.sh | bash
 ```
 
 This script automatically:
-- Downloads the latest v1.0.0 release binaries
+- Downloads the latest v1.1.0 release binaries
 - Sets up Python virtual environment and dependencies
 - Downloads the Firefox extension and installation script
 - Creates CLAUDE.md for Claude Code integration

@@ -416,9 +416,13 @@ jobs:
 ### Version Management
 
 1. Update version in `extension/manifest.json`
-2. Update version in `server/server.py`
-3. Update `docs/PLAN.md` with release notes
-4. Create git tag: `git tag v1.0.0`
+2. Update version in `package.json`
+3. Update version in `scripts/install-from-github.sh`
+4. Update version in `release-commands.sh`
+5. Update `README.md` installation URL
+6. Update `docs/PLAN.md` with release notes
+7. Update `CHANGELOG.md` and `RELEASES.md` with release notes
+8. Create git tag: `git tag v1.1.0`
 
 ### Building Release
 

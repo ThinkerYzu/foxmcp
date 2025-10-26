@@ -2,6 +2,215 @@
 
 This document provides release notes and upgrade instructions for FoxMCP.
 
+## v1.1.0 - Enhanced Automation (2025-10-26)
+
+### 🚀 Feature Release
+
+**FoxMCP v1.1.0** adds powerful new capabilities for web request monitoring, enhanced bookmark management, and ready-to-use automation scripts. This release builds on the solid v1.0.0 foundation with practical features for common automation tasks.
+
+### ✨ New Features
+
+#### **Web Request Monitoring API**
+Monitor and capture HTTP requests/responses in real-time:
+- **Start Monitoring**: `requests_start_monitoring()` - Begin capturing network activity
+- **List Captured Data**: `requests_list_captured()` - Retrieve captured requests/responses
+- **Stop Monitoring**: `requests_stop_monitoring()` - End capture session and cleanup
+- **Two-Phase Workflow**: Start monitoring → perform actions → retrieve data → stop
+- **Use Cases**: Debug API calls, analyze network traffic, validate request patterns
+
+#### **Enhanced Bookmark Management**
+New bookmark operations for better organization:
+- **Folder Creation**: Create bookmark folders with proper hierarchy support
+- **Update Bookmarks**: Modify existing bookmark titles, URLs, and locations
+- **Improved Reliability**: Fixed integration test failures and enhanced error handling
+
+#### **Predefined Scripts Collection**
+Ready-to-use scripts for common automation tasks:
+
+**YouTube Control** (`youtube-play-pause.sh`)
+- Play, pause, or toggle YouTube videos programmatically
+- Returns video state, current time, and duration
+- Example: `content_execute_predefined(tab_id, "youtube-play-pause.sh", "[]")`
+
+**DOM Simplification** (`dom-summarize.sh`)
+- Simplify complex DOM trees for AI agent understanding
+- Extract visible interactive elements with persistent IDs
+- Supports viewport-only filtering and position data
+- Example: `content_execute_predefined(tab_id, "dom-summarize.sh", "[\"onscreen\"]")`
+
+**Google Calendar Integration** (3 scripts)
+- `gcal-cal-event-js.sh`: Extract specific event details by title, day, and time
+- `gcal-daily-events-js.sh`: Get all events for a specific day
+- `gcal-monthly-events-js.sh`: Extract entire month view with statistics
+- Perfect for calendar automation and event management
+
+#### **Content API Enhancement**
+- **max_length Parameter**: Optional parameter for `content_get_text` tool
+- **Context Management**: Truncate large text extractions to fit AI context windows
+- **Flexible Extraction**: Choose between full text or length-limited summaries
+
+#### **Installation Improvements**
+- **Firefox Add-ons Store**: Official installation option now available
+- **Simplified Instructions**: Single-command installation process
+- **Script Inclusion**: Installation script now downloads all predefined scripts
+- **Better Documentation**: Enhanced setup guides and troubleshooting
+
+### 🐛 Bug Fixes
+
+#### **Critical History Fixes**
+- **Query Filtering**: Fixed parameter mismatch preventing history search filtering
+  - Extension now correctly reads `query` parameter
+  - Non-matching entries properly excluded from results
+  - All tests updated to use correct parameter names
+
+- **Timestamp Display**: Fixed "Unknown time" in history MCP tools
+  - Tools now correctly read `lastVisitTime` field
+  - AI agents see actual timestamps (milliseconds since epoch)
+  - Affects `history_query` and `history_get_recent` tools
+
+#### **Other Fixes**
+- **Bookmark Tests**: Fixed intermittent bookmark management test failures
+- **Calendar Script**: Fixed gcal-daily-events-js.sh month detection
+- **Profile Cache**: Clear cache after packaging to prevent stale data
+
+### 🔧 Improvements
+
+#### **Testing & Quality**
+- **211 Total Tests**: 59 unit + 152 integration tests, all passing
+- **History Validation**: Comprehensive timestamp validation in all tests
+- **Query Testing**: New tests verify filtering excludes non-matching entries
+- **100% Pass Rate**: All tests enabled and maintaining quality standards
+
+#### **Developer Experience**
+- **Debug Logging**: Configurable `ENABLE_DEBUG_LOGGING_TO_SERVER` setting
+- **Enhanced Documentation**: Comprehensive CLAUDE.md updates
+- **Script Documentation**: Detailed usage examples for all predefined scripts
+- **Better Error Messages**: Improved debugging and troubleshooting
+
+### 📦 Installation
+
+#### **Upgrade from v1.0.0**
+```bash
+# Pull latest changes
+git pull origin master
+
+# Rebuild extension and server
+make clean
+make package
+
+# Clear profile cache
+rm -rf dist/profile-cache/*
+
+# Reinstall extension
+./scripts/install-xpi.sh /path/to/firefox/profile
+
+# Restart Firefox and server
+```
+
+#### **Fresh Installation**
+```bash
+# One-command installation (installs v1.1.0)
+curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.1.0/install-from-github.sh | bash
+```
+
+#### **Package Downloads**
+- **Firefox Extension**: [foxmcp@codemud.org.xpi](https://github.com/ThinkerYzu/foxmcp/releases/download/v1.1.0/foxmcp@codemud.org.xpi)
+- **Server Package**: [foxmcp-server.zip](https://github.com/ThinkerYzu/foxmcp/releases/download/v1.1.0/foxmcp-server.zip)
+- **Source Code**: [v1.1.0.tar.gz](https://github.com/ThinkerYzu/foxmcp/archive/v1.1.0.tar.gz)
+
+### 🎯 Use Cases
+
+#### **Network Analysis**
+```python
+# Start monitoring network requests
+requests_start_monitoring()
+
+# Perform actions that trigger requests
+tabs_navigate(tab_id, "https://example.org/api")
+
+# Retrieve captured data
+data = requests_list_captured()
+
+# Stop monitoring
+requests_stop_monitoring()
+```
+
+#### **Calendar Automation**
+```python
+# Get today's meetings (if today is the 26th)
+events = content_execute_predefined(tab_id, "gcal-daily-events-js.sh", "[\"26\"]")
+
+# Get specific event details
+event = content_execute_predefined(
+    tab_id,
+    "gcal-cal-event-js.sh",
+    "[\"Team Standup\", \"26\", \"9:00am\"]"
+)
+```
+
+#### **YouTube Control**
+```python
+# Toggle play/pause
+result = content_execute_predefined(tab_id, "youtube-play-pause.sh", "[]")
+
+# Explicitly pause
+result = content_execute_predefined(tab_id, "youtube-play-pause.sh", "[\"pause\"]")
+```
+
+### 🔄 Breaking Changes
+
+**None** - This release is fully backward compatible with v1.0.0.
+
+### 📊 Statistics
+
+- **25 Commits** since v1.0.0
+- **5 New APIs** (web request monitoring)
+- **5 Predefined Scripts** included
+- **40+ Test Additions** for new features
+- **2 Critical Fixes** (history timestamp and filtering)
+
+### 🌟 Community Highlights
+
+This release includes contributions and feedback addressing:
+- Request monitoring for debugging workflows
+- Calendar integration for productivity automation
+- YouTube control for media management
+- History fixes improving search reliability
+
+### 📚 Documentation Updates
+
+- **README.md**: Updated with v1.1.0 features and predefined scripts
+- **CLAUDE.md**: Comprehensive predefined scripts documentation
+- **Protocol Docs**: Web request monitoring message formats
+- **Installation Guide**: Simplified single-command setup
+
+### 🚧 Future Roadmap
+
+Building on v1.1.0, planned enhancements include:
+- **Complete Web Request API**: Full request/response inspection and filtering
+- **Downloads Management**: Download tracking and control
+- **Cookie Management**: Comprehensive cookie operations
+- **Enhanced MCP Features**: Batch operations and event streaming
+
+### ⚠️ Notes
+
+- **Extension Rebuild Required**: After upgrade, run `make package` and reinstall
+- **Profile Cache**: Clear `dist/profile-cache/*` for clean test environment
+- **Predefined Scripts**: Located in `predefined-scripts/` directory
+- **Debug Logging**: Disabled by default; enable in `extension/background.js:97`
+
+### 💬 Feedback
+
+We welcome feedback on the new features:
+- Report issues via [GitHub Issues](https://github.com/ThinkerYzu/foxmcp/issues)
+- Share your automation scripts and use cases
+- Suggest new predefined scripts for common tasks
+- Contribute improvements via pull requests
+
+---
+
+**Thank you for upgrading to FoxMCP v1.1.0!** This release adds practical automation capabilities while maintaining the stability and reliability of the v1.0.0 foundation.
+
 ## v1.0.0 - Initial Release (2024-09-28)
 
 ### 🚀 First Stable Release

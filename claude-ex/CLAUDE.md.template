@@ -33,6 +33,9 @@ The last argument is a stringified JSON object that is a list of strings.
   Usage: `gcal-daily-events-js.sh day [month] [year]`. Examples: `gcal-daily-events-js.sh 8` (current month/year),
   `gcal-daily-events-js.sh 15 10` (October 15, current year), `gcal-daily-events-js.sh 25 12 2024` (December 25, 2024).
   Returns focused daily event data with chronological sorting, RSVP status, and meeting type detection.
+- youtube-play-pause.sh: controls YouTube video playback.
+  Usage: `youtube-play-pause.sh [action]`. Actions: no argument (toggle), `"play"`, `"pause"`, or `"toggle"`.
+  Returns JSON with success status, action taken, video state, current time, and duration.
 
 ## Browser Content Scripts
 

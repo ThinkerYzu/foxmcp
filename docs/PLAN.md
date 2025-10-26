@@ -2,9 +2,9 @@
 
 **Goal**: Create a browser extension that exposes data and functions to MCP clients via a WebSocket connection to a Python FastMCP server.
 
-## 🎉 **v1.0.0 RELEASED** - September 28, 2024
+## 🎉 **v1.1.0 RELEASED** - October 26, 2025
 
-**FoxMCP v1.0.0** is now available! Complete Firefox browser automation through Model Context Protocol with 25+ MCP tools, comprehensive testing (171 tests), and production-ready deployment.
+**FoxMCP v1.1.0** is now available! Enhanced with web request monitoring API, bookmark management improvements, predefined scripts (YouTube, DOM summarize, Google Calendar), and critical history fixes. 211 tests passing with complete feature coverage.
 
 ## Phase 1: Foundation ✅ **COMPLETED**
 1. ✅ **Research existing codebase** - Check current project structure and dependencies
