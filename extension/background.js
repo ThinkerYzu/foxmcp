@@ -432,7 +432,7 @@ async function handleHistoryAction(id, action, data) {
     switch (action) {
       case 'history.query':
         const historyItems = await browser.history.search({
-          text: data.text || '',
+          text: data.query || '',
           startTime: data.startTime || 0,
           endTime: data.endTime || Date.now(),
           maxResults: data.maxResults || 100

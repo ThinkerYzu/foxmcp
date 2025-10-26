@@ -110,7 +110,7 @@ class TestHistoryMCPIntegration:
             "id": "test_dual_arch",
             "type": "request",
             "action": "history.query",
-            "data": {"text": "", "maxResults": 1},
+            "data": {"query": "", "maxResults": 1},
             "timestamp": datetime.now().isoformat()
         }
         

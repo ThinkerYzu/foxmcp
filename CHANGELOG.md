@@ -5,6 +5,20 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **History Query Filtering**: Fixed parameter name mismatch that prevented history search filtering from working correctly
+  - Extension now correctly reads `query` parameter (was reading non-existent `text` parameter)
+  - History searches now properly filter results based on search query
+  - Non-matching entries are correctly excluded from search results
+  - All tests updated to use correct `query` parameter per protocol specification
+
+### Added
+- **Test Coverage**: Added comprehensive test for history query filtering (`test_history_query_filter_excludes_non_matching`)
+  - Verifies that non-matching entries are excluded from filtered results
+  - Tests multiple distinct search terms to ensure proper filtering behavior
+
 ## [1.0.0] - 2024-09-28
 
 ### Added

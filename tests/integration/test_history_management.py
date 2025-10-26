@@ -41,7 +41,7 @@ class TestHistoryManagementEndToEnd:
             "type": "request",
             "action": "history.query",
             "data": {
-                "text": "",  # Empty text to get all history
+                "query": "",  # Empty query to get all history
                 "maxResults": 10,
                 "startTime": 0,
                 "endTime": int(datetime.now().timestamp() * 1000)
@@ -81,10 +81,10 @@ class TestHistoryManagementEndToEnd:
         # Send history query with search text
         request = {
             "id": "test_history_search_001",
-            "type": "request", 
+            "type": "request",
             "action": "history.query",
             "data": {
-                "text": "github",  # Search for github-related history
+                "query": "github",  # Search for github-related history
                 "maxResults": 5,
                 "startTime": 0,
                 "endTime": int(datetime.now().timestamp() * 1000)
@@ -108,7 +108,7 @@ class TestHistoryManagementEndToEnd:
         # If we found items, verify they contain the search term
         for item in data["items"]:
             url = item.get("url", "").lower()
-            title = item.get("title", "").lower()
+            title = (item.get("title") or "").lower()
             # Note: Firefox may not return exact matches, so we'll just log what we got
             print(f"  - Found: {item.get('title', 'No title')} - {item.get('url', 'No URL')}")
     
@@ -124,9 +124,9 @@ class TestHistoryManagementEndToEnd:
         request = {
             "id": "test_history_timerange_001",
             "type": "request",
-            "action": "history.query", 
+            "action": "history.query",
             "data": {
-                "text": "",
+                "query": "",
                 "maxResults": 20,
                 "startTime": int(yesterday.timestamp() * 1000),
                 "endTime": int(now.timestamp() * 1000)
@@ -245,9 +245,9 @@ class TestHistoryManagementEndToEnd:
             },
             # Test case 2: All parameters
             {
-                "name": "all_params", 
+                "name": "all_params",
                 "data": {
-                    "text": "test",
+                    "query": "test",
                     "maxResults": 3,
                     "startTime": int((datetime.now() - timedelta(hours=1)).timestamp() * 1000),
                     "endTime": int(datetime.now().timestamp() * 1000)
@@ -305,7 +305,7 @@ class TestHistoryManagementEndToEnd:
                 "type": "request",
                 "action": "history.query",
                 "data": {
-                    "text": "" if i % 2 == 0 else "test",
+                    "query": "" if i % 2 == 0 else "test",
                     "maxResults": 5 + i,
                     "startTime": 0,
                     "endTime": int(datetime.now().timestamp() * 1000)
@@ -396,6 +396,147 @@ class TestHistoryManagementEndToEnd:
             print(f"✓ Request {expected_id} properly correlated")
         
         print("✓ All history response correlations verified")
+
+    @pytest.mark.asyncio
+    async def test_history_query_filter_excludes_non_matching(self, server_with_extension):
+        """Test that history query filtering actually excludes non-matching entries"""
+        server, firefox, test_port = server_with_extension
+
+        # Visit 3 URLs with distinct keywords
+        test_urls = [
+            "https://example.org/python-tutorial",    # Contains "python"
+            "https://example.org/javascript-guide",   # Contains "javascript"
+            "https://example.org/rust-documentation"  # Contains "rust"
+        ]
+
+        print(f"⏳ Visiting {len(test_urls)} test URLs...")
+
+        # Visit all test URLs
+        try:
+            visit_result = await asyncio.wait_for(
+                server.visit_multiple_urls_for_test(
+                    test_urls,
+                    wait_time=8.0,
+                    delay_between=3.0
+                ),
+                timeout=90.0
+            )
+        except asyncio.TimeoutError:
+            pytest.skip("URL visits timed out - skipping filtering test")
+
+        if not visit_result.get("success"):
+            pytest.skip(f"Failed to visit URLs: {visit_result}")
+
+        successful_visits = visit_result.get("successfulVisits", 0)
+        if successful_visits < len(test_urls):
+            pytest.skip(f"Only {successful_visits}/{len(test_urls)} URLs visited successfully")
+
+        print(f"✓ Visited {len(test_urls)} URLs successfully")
+
+        # Wait for history to be recorded
+        print("⏳ Waiting 10 seconds for history to be recorded...")
+        await asyncio.sleep(10.0)
+
+        # First verify all URLs are in history
+        all_query = {
+            "id": "test_filter_verify_all",
+            "type": "request",
+            "action": "history.query",
+            "data": {
+                "query": "example.org",  # Should match all our test URLs
+                "maxResults": 50,
+                "startTime": 0,
+                "endTime": int(datetime.now().timestamp() * 1000)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+        all_response = await server.send_request_and_wait(all_query, timeout=10.0)
+        assert "error" not in all_response, f"Query for all URLs failed: {all_response}"
+
+        all_items = all_response.get("data", {}).get("items", [])
+        all_urls = [item.get("url") for item in all_items]
+
+        # Check how many of our test URLs are in history
+        found_urls = [url for url in test_urls if url in all_urls]
+
+        if len(found_urls) < len(test_urls):
+            pytest.skip(f"Only {len(found_urls)}/{len(test_urls)} test URLs found in history: {found_urls}")
+
+        print(f"✓ All {len(test_urls)} test URLs verified in history")
+
+        # Now search for "python" - should return ONLY the python URL
+        python_query = {
+            "id": "test_filter_python_only",
+            "type": "request",
+            "action": "history.query",
+            "data": {
+                "query": "python",  # Should match only python-tutorial URL
+                "maxResults": 50,
+                "startTime": 0,
+                "endTime": int(datetime.now().timestamp() * 1000)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+        python_response = await server.send_request_and_wait(python_query, timeout=10.0)
+        assert "error" not in python_response, f"Python search failed: {python_response}"
+
+        python_items = python_response.get("data", {}).get("items", [])
+        python_urls = [item.get("url") for item in python_items]
+
+        print(f"📋 Search for 'python' returned {len(python_urls)} items:")
+        for url in python_urls:
+            print(f"  - {url}")
+
+        # Verify filtering worked correctly
+        python_url = test_urls[0]  # python-tutorial
+        javascript_url = test_urls[1]  # javascript-guide
+        rust_url = test_urls[2]  # rust-documentation
+
+        # Check that python URL is included
+        assert python_url in python_urls, \
+            f"Expected URL '{python_url}' not found in search results"
+
+        # Check that non-matching URLs are excluded
+        assert javascript_url not in python_urls, \
+            f"Non-matching URL '{javascript_url}' should be excluded from 'python' search"
+        assert rust_url not in python_urls, \
+            f"Non-matching URL '{rust_url}' should be excluded from 'python' search"
+
+        print(f"✓ Search for 'python' correctly returned only matching URL")
+        print(f"✓ Non-matching URLs (javascript, rust) were properly excluded")
+
+        # Test another keyword to be thorough
+        rust_query = {
+            "id": "test_filter_rust_only",
+            "type": "request",
+            "action": "history.query",
+            "data": {
+                "query": "rust",  # Should match only rust-documentation URL
+                "maxResults": 50,
+                "startTime": 0,
+                "endTime": int(datetime.now().timestamp() * 1000)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+        rust_response = await server.send_request_and_wait(rust_query, timeout=10.0)
+        assert "error" not in rust_response, f"Rust search failed: {rust_response}"
+
+        rust_items = rust_response.get("data", {}).get("items", [])
+        rust_urls = [item.get("url") for item in rust_items]
+
+        # Verify rust filtering
+        assert rust_url in rust_urls, \
+            f"Expected URL '{rust_url}' not found in rust search results"
+        assert python_url not in rust_urls, \
+            f"Non-matching URL '{python_url}' should be excluded from 'rust' search"
+        assert javascript_url not in rust_urls, \
+            f"Non-matching URL '{javascript_url}' should be excluded from 'rust' search"
+
+        print(f"✓ Search for 'rust' correctly returned only matching URL")
+        print(f"✓ History query filtering verified - non-matching entries are properly excluded")
 
 
 if __name__ == "__main__":

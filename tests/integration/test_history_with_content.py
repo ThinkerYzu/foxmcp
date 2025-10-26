@@ -174,7 +174,7 @@ class TestHistoryWithContent:
 
         print("⏳ Checking for history...")
         search_criteria = {
-            "text": "",  # Broad search - any history
+            "query": "",  # Broad search - any history
             "maxResults": 50,
             "startTime": 0,  # Search all history (like the working sleep approach)
             "endTime": int(datetime.now().timestamp() * 1000)
@@ -211,7 +211,7 @@ class TestHistoryWithContent:
                 "type": "request",
                 "action": "history.query",
                 "data": {
-                    "text": search_text,
+                    "query": search_text,
                     "maxResults": 50,
                     "startTime": 0,
                     "endTime": int(datetime.now().timestamp() * 1000)
@@ -247,7 +247,7 @@ class TestHistoryWithContent:
                 "type": "request",
                 "action": "history.query",
                 "data": {
-                    "text": "",
+                    "query": "",
                     "maxResults": 100,
                     "startTime": recent_time,
                     "endTime": int(datetime.now().timestamp() * 1000)
@@ -342,7 +342,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
 
         print("⏳ Checking for multiple URLs in history...")
         search_criteria = {
-            "text": "example.org",  # Search for our test domain
+            "query": "example.org",  # Search for our test domain
             "maxResults": 20,
             "startTime": 0,
             "endTime": int(datetime.now().timestamp() * 1000)
@@ -476,7 +476,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # Poll for history to be recorded instead of fixed wait
         print("⏳ Polling for search test URLs to appear in history...")
         search_criteria = {
-            "text": "example.org",  # Search for the domain
+            "query": "example.org",  # Search for the domain
             "maxResults": 20,
             "startTime": 0,
             "endTime": int(datetime.now().timestamp() * 1000)
@@ -505,7 +505,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
                 "type": "request",
                 "action": "history.query", 
                 "data": {
-                    "text": search_term,
+                    "query": search_term,
                     "maxResults": 10,
                     "startTime": 0,
                     "endTime": int(datetime.now().timestamp() * 1000)
@@ -560,7 +560,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # Poll for cleanup URLs to appear in history
         print("⏳ Polling for cleanup URLs to appear in history...")
         search_criteria = {
-            "text": "example.org",
+            "query": "example.org",
             "maxResults": 20,
             "startTime": 0,
             "endTime": int(datetime.now().timestamp() * 1000)
@@ -606,7 +606,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # Poll for cleanup to propagate instead of fixed wait
         print("⏳ Polling to verify cleanup was applied...")
         search_criteria = {
-            "text": "example.org",
+            "query": "example.org",
             "maxResults": 20,
             "startTime": 0,
             "endTime": int(datetime.now().timestamp() * 1000)
