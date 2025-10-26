@@ -669,7 +669,7 @@ class FoxMCPTools:
 
                 result = f"Found {total_count} history items for '{query}':\n"
                 for item in items:
-                    visit_time = item.get("visitTime", "Unknown time")
+                    visit_time = item.get("lastVisitTime", "Unknown time")
                     visit_count = item.get("visitCount", 0)
                     result += f"- {item.get('title', 'No title')} - {item.get('url', 'No URL')} (visited {visit_count} times, last: {visit_time})\n"
 
@@ -728,7 +728,7 @@ class FoxMCPTools:
 
                 result = f"Recent {len(items)} history items:\n"
                 for item in items:
-                    visit_time = item.get("visitTime", "Unknown time")
+                    visit_time = item.get("lastVisitTime", "Unknown time")
                     result += f"- {item.get('title', 'No title')} - {item.get('url', 'No URL')} (last visit: {visit_time})\n"
 
                 return result

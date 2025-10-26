@@ -846,6 +846,57 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
         """Context manager exit with cleanup"""
         self.cleanup()
 
+def validate_history_item_timestamp(item, field_name="lastVisitTime"):
+    """
+    Validate that a history item has a valid timestamp.
+
+    Ensures:
+    1. Timestamp field is present (not None)
+    2. Timestamp is > 0
+    3. Timestamp is a valid number
+    4. Timestamp represents a reasonable date (after year 2000, not in future)
+
+    Args:
+        item: History item dict to validate
+        field_name: Name of timestamp field (default: "lastVisitTime")
+
+    Raises:
+        AssertionError: If timestamp validation fails with detailed message
+    """
+    from datetime import datetime
+
+    # Check field exists and is not None
+    assert field_name in item, f"History item missing '{field_name}' field. Item: {item}"
+
+    timestamp = item[field_name]
+    assert timestamp is not None, f"History item '{field_name}' is None. Item: {item}"
+
+    # Check timestamp is a number
+    assert isinstance(timestamp, (int, float)), \
+        f"History item '{field_name}' must be a number, got {type(timestamp).__name__}: {timestamp}"
+
+    # Check timestamp is positive
+    assert timestamp > 0, \
+        f"History item '{field_name}' must be > 0, got: {timestamp}"
+
+    # Convert milliseconds to seconds for datetime validation
+    timestamp_seconds = timestamp / 1000
+
+    # Check timestamp represents a valid date (after year 2000)
+    # Year 2000-01-01 00:00:00 UTC = 946684800 seconds
+    year_2000_ms = 946684800 * 1000
+    assert timestamp >= year_2000_ms, \
+        f"History item '{field_name}' represents date before year 2000: {datetime.fromtimestamp(timestamp_seconds)}"
+
+    # Check timestamp is not in the future (allow 60 second clock skew)
+    now_ms = datetime.now().timestamp() * 1000
+    max_future_ms = now_ms + 60000  # 60 seconds in future
+    assert timestamp <= max_future_ms, \
+        f"History item '{field_name}' is in the future: {datetime.fromtimestamp(timestamp_seconds)} (now: {datetime.now()})"
+
+    return True
+
+
 def _get_extension_xpi_path():
     """Get path to built extension XPI file"""
     xpi_path = project_root / 'dist' / 'packages' / 'foxmcp@codemud.org.xpi'

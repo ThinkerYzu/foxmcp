@@ -22,7 +22,7 @@ from server.server import FoxMCPServer
 
 # Import test utilities
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-from firefox_test_utils import FirefoxTestManager
+from firefox_test_utils import FirefoxTestManager, validate_history_item_timestamp
 from port_coordinator import coordinated_test_ports
 
 
@@ -70,7 +70,10 @@ class TestHistoryManagementEndToEnd:
             expected_fields = ["id", "url", "title", "lastVisitTime", "visitCount"]
             for field in expected_fields:
                 assert field in item, f"History item missing field: {field}"
-            
+
+            # Validate timestamp is valid and reasonable
+            validate_history_item_timestamp(item)
+
             print(f"✓ History item structure validated: {item.get('title', 'No title')}")
     
     @pytest.mark.asyncio
@@ -145,15 +148,19 @@ class TestHistoryManagementEndToEnd:
         assert "items" in data
         
         print(f"✓ History query for last 24 hours returned {len(data['items'])} items")
-        
+
         # Verify timestamps are within range (if we have items)
         for item in data["items"]:
-            visit_time = item.get("lastVisitTime")
-            if visit_time:
-                # Verify timestamp is within our range
-                assert visit_time >= int(yesterday.timestamp() * 1000)
-                assert visit_time <= int(now.timestamp() * 1000)
-                print(f"  - {item.get('title', 'No title')} visited at {datetime.fromtimestamp(visit_time/1000)}")
+            # Validate timestamp is valid and reasonable
+            validate_history_item_timestamp(item)
+
+            visit_time = item["lastVisitTime"]  # Now guaranteed to exist and be valid
+            # Verify timestamp is within our range
+            assert visit_time >= int(yesterday.timestamp() * 1000), \
+                f"Visit time {visit_time} is before range start {int(yesterday.timestamp() * 1000)}"
+            assert visit_time <= int(now.timestamp() * 1000), \
+                f"Visit time {visit_time} is after range end {int(now.timestamp() * 1000)}"
+            print(f"  - {item.get('title', 'No title')} visited at {datetime.fromtimestamp(visit_time/1000)}")
     
     @pytest.mark.asyncio
     async def test_history_get_recent(self, server_with_extension):
@@ -185,19 +192,24 @@ class TestHistoryManagementEndToEnd:
         assert len(data["items"]) <= 5  # Should not exceed requested count
         
         print(f"✓ Recent history returned {len(data['items'])} items")
-        
+
+        # Validate all timestamps first
+        for item in data["items"]:
+            validate_history_item_timestamp(item)
+
         # Verify items are sorted by visit time (most recent first)
         if len(data["items"]) > 1:
             for i in range(len(data["items"]) - 1):
-                current_time = data["items"][i].get("lastVisitTime", 0)
-                next_time = data["items"][i + 1].get("lastVisitTime", 0)
-                assert current_time >= next_time, "Recent history items not sorted correctly"
-            
+                current_time = data["items"][i]["lastVisitTime"]  # Now guaranteed to exist
+                next_time = data["items"][i + 1]["lastVisitTime"]
+                assert current_time >= next_time, \
+                    f"Recent history items not sorted correctly: item[{i}]={current_time} should be >= item[{i+1}]={next_time}"
+
             print("✓ Recent history items are properly sorted")
-        
+
         # Display recent items
         for i, item in enumerate(data["items"]):
-            visit_time = datetime.fromtimestamp(item.get("lastVisitTime", 0) / 1000)
+            visit_time = datetime.fromtimestamp(item["lastVisitTime"] / 1000)  # Now guaranteed to exist
             print(f"  {i+1}. {item.get('title', 'No title')} - visited {visit_time}")
     
     @pytest.mark.asyncio

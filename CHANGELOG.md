@@ -14,10 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Non-matching entries are correctly excluded from search results
   - All tests updated to use correct `query` parameter per protocol specification
 
+- **History Timestamp Display**: Fixed MCP tools showing "Unknown time" for history items
+  - MCP tools now correctly read `lastVisitTime` field (was reading non-existent `visitTime` field)
+  - AI agents now see actual timestamps in milliseconds since epoch
+  - Affects `history_query` and `history_get_recent` MCP tools
+  - Documentation updated to reflect correct field name and format
+
 ### Added
 - **Test Coverage**: Added comprehensive test for history query filtering (`test_history_query_filter_excludes_non_matching`)
   - Verifies that non-matching entries are excluded from filtered results
   - Tests multiple distinct search terms to ensure proper filtering behavior
+
+- **Timestamp Validation**: Added comprehensive history timestamp validation
+  - New `validate_history_item_timestamp()` helper function ensures timestamps are valid
+  - Validates timestamp presence, format, range, and reasonableness
+  - All history tests now verify timestamps are non-null, positive, and within valid date ranges
+  - End-to-end test confirms MCP tools display actual timestamps to AI agents
 
 ## [1.0.0] - 2024-09-28
 

@@ -55,7 +55,7 @@ All messages follow this JSON structure:
         "id": "hist_123",
         "url": "https://github.com/user/repo",
         "title": "GitHub Repository",
-        "visitTime": "2025-09-02T14:30:00.000Z",
+        "lastVisitTime": 1693664400000,
         "visitCount": 5
       }
     ],
@@ -64,6 +64,8 @@ All messages follow this JSON structure:
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
+
+**Note:** `lastVisitTime` is in milliseconds since Unix epoch (not ISO 8601 string). This matches Firefox's WebExtensions API format.
 
 #### Get Recent History
 **Request:**

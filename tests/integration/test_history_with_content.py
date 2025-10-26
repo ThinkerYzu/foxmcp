@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
 import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
-from firefox_test_utils import FirefoxTestManager
+from firefox_test_utils import FirefoxTestManager, validate_history_item_timestamp
 from port_coordinator import coordinated_test_ports
 
 
@@ -287,13 +287,16 @@ Consider increasing wait times or using a non-headless Firefox instance for this
                 break
         
         assert our_item is not None, "Could not find our URL in history items"
-        
+
         # Verify history item structure
         assert "id" in our_item
         assert "title" in our_item
         assert "lastVisitTime" in our_item
         assert "visitCount" in our_item
-        
+
+        # Validate timestamp is valid and reasonable
+        validate_history_item_timestamp(our_item)
+
         print(f"✓ Found URL in history: {our_item['title']} (visited {our_item['visitCount']} times)")
         print(f"✓ History verification successful for: {test_url}")
     
@@ -422,11 +425,14 @@ Consider increasing wait times or using a non-headless Firefox instance for this
             if urls_match(test_url, item.get("url", "")):
                 our_item = item
                 break
-        
+
         assert our_item is not None
-        
+
+        # Validate timestamp is valid and reasonable
+        validate_history_item_timestamp(our_item)
+
         # Verify the visit time is recent (within last 60 seconds to account for test delays)
-        visit_timestamp = our_item["lastVisitTime"]
+        visit_timestamp = our_item["lastVisitTime"]  # Now guaranteed to exist and be valid
         visit_datetime = datetime.fromtimestamp(visit_timestamp / 1000)
         time_diff = abs((visit_datetime - visit_time).total_seconds())
 
@@ -436,7 +442,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # - Test execution overhead
         # - Cached profile reuse
         assert time_diff < 60, f"Visit time {visit_datetime} is not recent enough (diff: {time_diff}s)"
-        
+
         print(f"✓ Recently visited URL found in recent history")
         print(f"✓ Visit time verified: {visit_datetime} (within {time_diff:.1f}s)")
     
