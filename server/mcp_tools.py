@@ -637,7 +637,7 @@ class FoxMCPTools:
             """Search browser history
 
             Args:
-                query: Search query for history
+                query: Substring to match in URL or title (exact substring match, not tokenized keywords)
                 max_results: Maximum number of results (default: 200)
                 start_time: Start time filter (ISO format, optional)
                 end_time: End time filter (ISO format, optional)
