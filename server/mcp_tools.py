@@ -60,6 +60,7 @@ class TabInfo(TypedDict):
     active: bool
     windowId: int
     pinned: bool
+    index: int
 
 class TabsListResponse(TypedDict):
     """Type definition for tabs.list response from browser extension"""
@@ -424,24 +425,44 @@ class FoxMCPTools:
 
         # Tab List Tool
         @self.mcp.tool()
-        async def tabs_list() -> str:
+        async def tabs_list(window_id: Optional[Union[int, str]] = None) -> str:
             """
-            List all open browser tabs
-            
+            List open browser tabs, across every window or within one window
+
+            Each line ends with "[window {id}, index {n}]", and carries "(active)" for the
+            active tab of its window and "(pinned)" for a pinned one. The window, the index
+            and the pinned mark are what tabs_move needs: the window to move a tab out of or
+            into, the position it currently holds, and whether a leading run of pinned tabs
+            blocks the low indexes.
+
+            Args:
+                window_id: Restrict the listing to this window (optional, accepts int or
+                    string). Omit it to list tabs in every window.
+
             Returns:
                 Formatted string with tab information:
                 "Open tabs ({count} found):
-                - ID {tab_id}: {title} - {url}{status_indicators}"
-                
-                Status indicators include:
-                - (active) - for the currently active tab
-                - (pinned) - for pinned tabs
+                - ID {tab_id}: {title} - {url}{status_indicators} [window {window_id}, index {index}]"
+
+                The index is the tab's position in its window, counting from 0 — pass it to
+                tabs_move to reorder.
+
+                Not exposed to clients — see the description above.
             """
+            # Convert window_id to int if it's a string (for MCP client compatibility)
+            if window_id is not None and isinstance(window_id, str):
+                try:
+                    window_id = int(window_id)
+                except (ValueError, TypeError):
+                    return f"Error: Invalid window_id '{window_id}'. Must be a valid integer."
+
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "tabs.list",
-                "data": {},
+                "data": {
+                    **({"windowId": window_id} if window_id else {})
+                },
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -457,11 +478,19 @@ class FoxMCPTools:
                     # More informative message for debugging
                     return f"No tabs found. Extension response: {response.get('data', {})}"
 
-                result = f"Open tabs ({len(tabs)} found):\n"
+                # The location goes at the end of the line, not next to the tab ID.
+                #
+                # Callers pick tab IDs out of this listing with an `ID (\d+):` pattern, so
+                # nothing may come between the ID and its colon. One test in the suite feeds
+                # that match into pytest.skip, which would quietly stop testing rather than
+                # fail if the pattern broke.
+                scope = f" in window {window_id}" if window_id else ""
+                result = f"Open tabs{scope} ({len(tabs)} found):\n"
                 for tab in tabs:
                     active = " (active)" if tab.get("active") else ""
                     pinned = " (pinned)" if tab.get("pinned") else ""
-                    result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}{pinned}\n"
+                    location = f" [window {tab.get('windowId')}, index {tab.get('index')}]"
+                    result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}{pinned}{location}\n"
                 return result
 
             return "Unable to retrieve tabs"
@@ -574,6 +603,110 @@ class FoxMCPTools:
                 return f"Failed to switch to tab: {error_msg}"
 
             return f"Unable to switch to tab {tab_id}"
+
+        # Tab Move Tool
+        @self.mcp.tool()
+        async def tabs_move(
+            tab_ids: Union[int, str, List[Union[int, str]]],
+            window_id: Optional[Union[int, str]] = None,
+            index: int = -1
+        ) -> str:
+            """Move tabs to a new position, optionally into another window
+
+            Reorders tabs within their window, or gathers them into a different window —
+            to collect every tab for one site into a window of its own, create the window
+            with create_window and pass its ID here.
+
+            Succeeding partially is normal, so check the result: it reads
+            "Moved {n} of {m}", and a tab missing from the list did not move. Firefox
+            declines some moves without raising an error, and the common one is that
+            **an unpinned tab cannot be placed in front of a pinned tab** — with 3 pinned
+            tabs, the lowest index an unpinned tab can reach is 3, and asking for 0, 1 or 2
+            moves nothing. Use tabs_list to see which tabs are pinned and what index each
+            tab currently holds. A pinned tab can be moved to index 0 freely.
+
+            Moving between windows requires both to be normal windows, not popups, and
+            either both private or both non-private.
+
+            Args:
+                tab_ids: Tab ID, or several as a list (`[12, 15]`) or a JSON string
+                    (`"[12, 15]"`). Listed tabs keep their given order at the destination.
+                window_id: Window to move the tabs into (optional, accepts int or string).
+                    Omit it to reorder within each tab's current window.
+                index: Position to move to, counting from 0; -1 means the end (default: -1).
+                    An index inside a leading run of pinned tabs is refused for an unpinned
+                    tab — the move reports "No tabs moved" rather than failing.
+
+            Returns:
+                "Moved {n} of {m} tab(s):" and one line per moved tab with its new window
+                and index, or "No tabs moved." when Firefox declined every one. Note that
+                FastMCP does not expose this section to clients — anything a caller must
+                know belongs in the description above or on the arguments.
+            """
+            # A JSON string is how MCP clients that cannot send arrays pass a list, the same
+            # convention content_execute_predefined uses for its arguments.
+            if isinstance(tab_ids, str):
+                try:
+                    tab_ids = json.loads(tab_ids)
+                except json.JSONDecodeError:
+                    return f"Error: Invalid tab_ids '{tab_ids}'. Must be an integer or a JSON list of integers."
+
+            requested_ids = tab_ids if isinstance(tab_ids, list) else [tab_ids]
+            if not requested_ids:
+                return "Error: tab_ids is empty. Provide at least one tab ID."
+
+            normalized_ids: List[int] = []
+            for tab_id in requested_ids:
+                try:
+                    normalized_ids.append(int(tab_id))
+                except (ValueError, TypeError):
+                    return f"Error: Invalid tab ID '{tab_id}'. Must be a valid integer."
+
+            # Convert window_id to int if it's a string (for MCP client compatibility)
+            if window_id is not None and isinstance(window_id, str):
+                try:
+                    window_id = int(window_id)
+                except (ValueError, TypeError):
+                    return f"Error: Invalid window_id '{window_id}'. Must be a valid integer."
+
+            if index < -1:
+                return f"Error: Invalid index {index}. Must be -1 (end) or 0 or greater."
+
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "tabs.move",
+                "data": {
+                    "tabIds": normalized_ids,
+                    "index": index,
+                    **({"windowId": window_id} if window_id else {})
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error moving tabs: {response['error']}"
+
+            if response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return f"Failed to move tabs: {error_msg}"
+
+            if response.get("type") == "response" and "data" in response:
+                moved_tabs: List[TabInfo] = response["data"].get("tabs", [])
+                if not moved_tabs:
+                    return (
+                        f"No tabs moved. Firefox refused the move of {len(normalized_ids)} tab(s) — "
+                        "check that the target index is not in front of a pinned tab."
+                    )
+
+                result = f"Moved {len(moved_tabs)} of {len(normalized_ids)} tab(s):\n"
+                for tab in moved_tabs:
+                    result += f"- ID {tab.get('id')} -> window {tab.get('windowId')}, index {tab.get('index')}: {tab.get('title', 'No title')}\n"
+                return result
+
+            return "Unable to move tabs"
 
         # Tab Screenshot Tool
         @self.mcp.tool()

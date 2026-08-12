@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**219 passing, 0 skipped** — 71 unit and 148 integration.
+**247 collected, 0 skipped** — 95 unit and 152 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,18 +42,19 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 219. Run them by hand if you need them.
+and are **not** part of the 247. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 71 | no |
-| `integration/` | 148 | yes |
+| `unit/` | 95 | no |
+| `integration/` | 152 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
 
 | File | Tests | Covers |
 |---|---|---|
+| `test_tab_move.py` | 24 | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
 | `test_protocol.py` | 14 | Message structure, JSON serialization, error codes |
 | `test_window_handlers.py` | 14 | Window action handlers |
 | `test_predefined_script_logging.py` | 12 | The audit log around `content_execute_predefined`, and the validation chain behind it |
@@ -86,6 +87,7 @@ and are **not** part of the 219. Run them by hand if you need them.
 | `test_mcp_port_not_web_reachable.py` | 5 | That no web page can reach the MCP port — see [Dependency-held guarantees](#dependency-held-guarantees) |
 | `test_real_firefox_communication.py` | 5 | Extension-server message exchange in a real browser |
 | `test_request_monitoring_end_to_end.py` | 5 | Capture a request and read its content back |
+| `test_tab_move_end_to_end.py` | 4 | Gathering tabs into a new window, and reordering within one |
 | `test_history_mcp_integration.py` | 4 | History through the MCP tool surface |
 
 ## Test Import System
@@ -286,7 +288,7 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 219 must pass.
+- **Run the suite before committing.** All 247 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem

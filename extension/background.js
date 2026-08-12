@@ -470,12 +470,17 @@ async function handleTabsAction(id, action, data) {
   try {
     switch (action) {
       case 'tabs.list':
-        const tabs = await browser.tabs.query({
-          currentWindow: data.currentWindow || true
-        });
+        // No windowId means every window, which is what the tool has always claimed to return.
+        //
+        // The query object must omit the filter entirely rather than pass a falsy one:
+        // `{windowId: undefined}` matches nothing. This used to read
+        // `currentWindow: data.currentWindow || true`, where the `|| true` made the filter
+        // unconditional and left no way to ask for anything but the current window.
+        const tabQuery = data.windowId ? { windowId: data.windowId } : {};
+        const tabs = await browser.tabs.query(tabQuery);
         // Include all tabs, even about:blank for debugging
-        sendResponse(id, action, { 
-          tabs: tabs.map(tab => ({url: tab.url, id: tab.id, title: tab.title, active: tab.active, windowId: tab.windowId, pinned: tab.pinned})),
+        sendResponse(id, action, {
+          tabs: tabs.map(tab => ({url: tab.url, id: tab.id, title: tab.title, active: tab.active, windowId: tab.windowId, pinned: tab.pinned, index: tab.index})),
           debug: {
             totalFound: tabs.length,
             tabUrls: tabs.map(tab => tab.url)
@@ -524,6 +529,32 @@ async function handleTabsAction(id, action, data) {
       case 'tabs.switch':
         await browser.tabs.update(data.tabId, { active: true });
         sendResponse(id, action, { success: true });
+        break;
+
+      case 'tabs.move':
+        if (data.tabIds === undefined || data.tabIds === null) {
+          sendError(id, 'INVALID_PARAMETER', 'tabIds is required for tabs.move');
+          return;
+        }
+
+        // Report how many tabs actually moved, because a refused move is not an error.
+        //
+        // browser.tabs.move returns [] instead of throwing when it declines — moving an
+        // unpinned tab in front of a pinned one is the common case. Without the counts, a
+        // caller cannot tell a silent refusal from a successful move.
+        const tabIdsToMove = Array.isArray(data.tabIds) ? data.tabIds : [data.tabIds];
+        const moveProperties = { index: data.index === undefined ? -1 : data.index };
+        if (data.windowId) {
+          moveProperties.windowId = data.windowId;
+        }
+
+        const movedResult = await browser.tabs.move(tabIdsToMove, moveProperties);
+        const movedTabs = Array.isArray(movedResult) ? movedResult : [movedResult];
+        sendResponse(id, action, {
+          tabs: movedTabs.map(tab => ({id: tab.id, url: tab.url, title: tab.title, windowId: tab.windowId, index: tab.index, pinned: tab.pinned})),
+          requested: tabIdsToMove.length,
+          moved: movedTabs.length
+        });
         break;
 
       case 'tabs.captureVisibleTab':
