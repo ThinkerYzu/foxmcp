@@ -15,7 +15,7 @@ import re
 from server.server import FoxMCPServer
 from port_coordinator import coordinated_test_ports
 from mcp_client_harness import DirectMCPTestClient
-from firefox_test_utils import FirefoxTestManager
+from firefox_test_utils import FirefoxTestManager, resolve_firefox_path
 
 
 @pytest.mark.asyncio
@@ -26,9 +26,9 @@ async def test_complete_mcp_to_firefox_chain():
     
     # Check requirements - placeholder for any additional checks
         
-    firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
-    if not os.path.exists(os.path.expanduser(firefox_path)):
-        print(f"❌ Firefox not found at {firefox_path}. Set FIREFOX_PATH environment variable.")
+    firefox_path = resolve_firefox_path()
+    if not firefox_path:
+        print("❌ Firefox not found. Set FIREFOX_PATH environment variable.")
         return False
     
     print("✅ Prerequisites met: Extension XPI and Firefox available")

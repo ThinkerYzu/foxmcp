@@ -155,7 +155,7 @@ class TestMCPProtocolCompliance:
 
                 # As a fallback, verify tools exist in the server instance directly
                 server = system['server']
-                tools_dict = await server.mcp_app.get_tools()
+                tools_dict = {tool.name: tool for tool in await server.mcp_app.list_tools()}
                 tool_names = list(tools_dict.keys())
 
                 # Same verification as above
@@ -182,7 +182,7 @@ class TestMCPProtocolCompliance:
         server = system['server']
 
         # Get the FastMCP tool to examine its expected parameters
-        tools_dict = await server.mcp_app.get_tools()
+        tools_dict = {tool.name: tool for tool in await server.mcp_app.list_tools()}
         history_tool = tools_dict['history_get_recent']
 
         print("Testing parameter format validation for history_get_recent:")
@@ -391,7 +391,7 @@ class TestMCPProtocolCompliance:
         from server.server import FoxMCPServer
 
         server = FoxMCPServer(start_mcp=False)
-        tools_dict = await server.mcp_app.get_tools()
+        tools_dict = {tool.name: tool for tool in await server.mcp_app.list_tools()}
 
         # Find all history tools
         history_tools = {name: tool for name, tool in tools_dict.items() if 'history' in name}
@@ -425,7 +425,7 @@ class TestMCPProtocolCompliance:
         from server.server import FoxMCPServer
 
         server = FoxMCPServer(start_mcp=False)
-        tools_dict = await server.mcp_app.get_tools()
+        tools_dict = {tool.name: tool for tool in await server.mcp_app.list_tools()}
 
         tab_tools = {name: func for name, func in tools_dict.items() if 'tab' in name}
 
@@ -458,7 +458,7 @@ class TestMCPProtocolCompliance:
         from server.server import FoxMCPServer
 
         server = FoxMCPServer(start_mcp=False)
-        tools_dict = await server.mcp_app.get_tools()
+        tools_dict = {tool.name: tool for tool in await server.mcp_app.list_tools()}
 
         # Essential tab tools that should exist
         essential_tab_tools = [
@@ -483,7 +483,7 @@ class TestMCPProtocolCompliance:
         from server.server import FoxMCPServer
 
         server = FoxMCPServer(start_mcp=False)
-        tools_dict = await server.mcp_app.get_tools()
+        tools_dict = {tool.name: tool for tool in await server.mcp_app.list_tools()}
 
         # Test a specific tool's parameter validation
         if 'history_get_recent' in tools_dict:

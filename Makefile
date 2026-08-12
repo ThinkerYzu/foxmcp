@@ -4,6 +4,11 @@
 # Variables
 FIREFOX_PATH ?= firefox
 
+# Install into the project venv explicitly. A bare `pip` targets whatever
+# interpreter happens to be active, which is how the venv ended up holding the
+# server dependencies but no pytest.
+VENV_PIP ?= venv/bin/pip
+
 .PHONY: help install build test clean run-server run-tests dev setup check lint package all setup-test-imports
 
 # Default target
@@ -41,12 +46,12 @@ help:
 # Setup and Installation
 setup: install setup-test-imports
 	@echo "Installing test dependencies..."
-	cd tests && pip install -r requirements.txt
+	$(VENV_PIP) install -r tests/requirements.txt
 	@echo "✅ Setup complete!"
 
 install:
 	@echo "Installing server dependencies..."
-	cd server && pip install -r requirements.txt
+	$(VENV_PIP) install -r server/requirements.txt
 	@echo "✅ Server dependencies installed!"
 
 setup-test-imports:

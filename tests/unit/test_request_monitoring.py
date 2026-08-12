@@ -69,7 +69,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.start_monitoring", mock_response)
 
         # Get the monitoring function
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         start_monitoring = tools_dict.get("requests_start_monitoring").fn
 
         assert start_monitoring is not None, "requests_start_monitoring tool not found"
@@ -102,7 +102,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.start_monitoring", mock_response)
 
         start_monitoring = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_start_monitoring":
                 start_monitoring = tool.fn
@@ -121,7 +121,7 @@ class TestRequestMonitoringAPIs:
     async def test_requests_start_monitoring_empty_patterns(self, mcp_tools, mock_websocket_server):
         """Test start monitoring with empty URL patterns"""
         start_monitoring = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_start_monitoring":
                 start_monitoring = tool.fn
@@ -147,7 +147,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.stop_monitoring", mock_response)
 
         stop_monitoring = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_stop_monitoring":
                 stop_monitoring = tool.fn
@@ -207,7 +207,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.list_captured", mock_response)
 
         list_captured = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_list_captured":
                 list_captured = tool.fn
@@ -252,7 +252,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.get_content", mock_response)
 
         get_content = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_get_content":
                 get_content = tool.fn
@@ -304,7 +304,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.get_content", mock_response)
 
         get_content = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_get_content":
                 get_content = tool.fn
@@ -339,7 +339,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.stop_monitoring", mock_response)
 
         stop_monitoring = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_stop_monitoring":
                 stop_monitoring = tool.fn
@@ -357,7 +357,7 @@ class TestRequestMonitoringAPIs:
         mock_websocket_server.set_mock_response("requests.start_monitoring", {"error": "Connection failed"})
 
         start_monitoring = None
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name == "requests_start_monitoring":
                 start_monitoring = tool.fn
@@ -371,7 +371,7 @@ class TestRequestMonitoringAPIs:
     @pytest.mark.asyncio
     async def test_requests_tools_registration(self, mcp_tools):
         """Test that all monitoring tools are properly registered"""
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         tool_names = list(tools_dict.keys())
 
         expected_tools = [
@@ -394,7 +394,7 @@ class TestRequestMonitoringAPIs:
             "requests_get_content"
         ]
 
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for tool_name in monitoring_tools:
             tool = tools_dict.get(tool_name)
             assert tool is not None, f"Tool {tool_name} not found"

@@ -24,6 +24,26 @@ from port_coordinator import FirefoxPortCoordinator
 
 project_root = Path(__file__).resolve().parent.parent
 
+
+def resolve_firefox_path(firefox_path=None):
+    """Find the Firefox binary to test against.
+
+    Returns a usable path, or None when Firefox cannot be found anywhere —
+    callers should skip the test rather than try to launch it.
+
+    Takes an explicit path if given, otherwise $FIREFOX_PATH, otherwise a bare
+    "firefox". A bare command name only resolves through PATH: os.path.exists()
+    on its own reports it as missing even when Firefox is installed.
+    """
+    candidate = firefox_path or os.environ.get('FIREFOX_PATH', 'firefox')
+
+    expanded = os.path.expanduser(candidate)
+    if os.path.exists(expanded):
+        return expanded
+
+    return shutil.which(candidate)
+
+
 @dataclass
 class ProfileCacheEntry:
     """Cache entry for Firefox profiles stored as compressed files"""

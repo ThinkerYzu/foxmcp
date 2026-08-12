@@ -179,7 +179,7 @@ class TestRequestMonitoringIntegration:
 
         # Get tool functions
         tools = {}
-        tools_dict = await mcp_tools.mcp.get_tools()
+        tools_dict = {tool.name: tool for tool in await mcp_tools.mcp.list_tools()}
         for name, tool in tools_dict.items():
             if name.startswith("requests_"):
                 tools[name] = tool.fn
@@ -277,7 +277,7 @@ class TestRequestMonitoringIntegration:
             }
         })
 
-        start_monitoring = (await mcp_tools.mcp.get_tools())["requests_start_monitoring"].fn
+        start_monitoring = (await mcp_tools.mcp.get_tool("requests_start_monitoring")).fn
 
         result = await start_monitoring(
             url_patterns=["*"],
@@ -324,7 +324,7 @@ class TestRequestMonitoringIntegration:
             }
         })
 
-        get_content = (await mcp_tools.mcp.get_tools())["requests_get_content"].fn
+        get_content = (await mcp_tools.mcp.get_tool("requests_get_content")).fn
 
         result = await get_content(
             monitor_id="mon_test",
@@ -353,7 +353,7 @@ class TestRequestMonitoringIntegration:
             "data": {"message": "Monitor session not found"}
         })
 
-        list_captured = (await mcp_tools.mcp.get_tools())["requests_list_captured"].fn
+        list_captured = (await mcp_tools.mcp.get_tool("requests_list_captured")).fn
         result = await list_captured(monitor_id="invalid_monitor")
 
         data = json.loads(result)
@@ -361,7 +361,7 @@ class TestRequestMonitoringIntegration:
         assert "Monitor session not found" in data["error"]
 
         # Test empty URL patterns
-        start_monitoring = (await mcp_tools.mcp.get_tools())["requests_start_monitoring"].fn
+        start_monitoring = (await mcp_tools.mcp.get_tool("requests_start_monitoring")).fn
         result = await start_monitoring(url_patterns=[])
 
         data = json.loads(result)
@@ -372,7 +372,7 @@ class TestRequestMonitoringIntegration:
     async def test_monitoring_performance_data(self, mcp_tools, mock_extension_server):
         """Test that performance and timing data is properly captured"""
 
-        list_captured = (await mcp_tools.mcp.get_tools())["requests_list_captured"].fn
+        list_captured = (await mcp_tools.mcp.get_tool("requests_list_captured")).fn
         result = await list_captured(monitor_id="mon_test")
 
         data = json.loads(result)
@@ -395,8 +395,8 @@ class TestRequestMonitoringIntegration:
         """Test handling of concurrent monitoring API requests"""
 
         tools = {
-            name: tool.fn for name, tool in (await mcp_tools.mcp.get_tools()).items()
-            if name.startswith("requests_")
+            tool.name: tool.fn for tool in await mcp_tools.mcp.list_tools()
+            if tool.name.startswith("requests_")
         }
 
         # Start multiple concurrent requests

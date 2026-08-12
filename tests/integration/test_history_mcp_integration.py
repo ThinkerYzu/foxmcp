@@ -137,7 +137,8 @@ class TestHistoryMCPIntegration:
 
         # Test 1: Call history_query through MCP tool
         print("\n🔍 Testing history_query MCP tool...")
-        query_result = await mcp_tools.mcp._tool_manager._tools['history_query'].fn(
+        history_query = (await mcp_tools.mcp.get_tool('history_query')).fn
+        query_result = await history_query(
             query="",
             max_results=5
         )
@@ -176,7 +177,8 @@ class TestHistoryMCPIntegration:
 
         # Test 2: Call history_get_recent through MCP tool
         print("\n🔍 Testing history_get_recent MCP tool...")
-        recent_result = await mcp_tools.mcp._tool_manager._tools['history_get_recent'].fn(
+        history_get_recent = (await mcp_tools.mcp.get_tool('history_get_recent')).fn
+        recent_result = await history_get_recent(
             count=5
         )
 

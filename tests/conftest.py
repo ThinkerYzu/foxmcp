@@ -16,7 +16,7 @@ import logging
 
 from port_coordinator import get_port_by_type, coordinated_test_ports
 from server.server import FoxMCPServer
-from firefox_test_utils import FirefoxTestManager
+from firefox_test_utils import FirefoxTestManager, resolve_firefox_path
 from test_config import FIREFOX_TEST_CONFIG
 
 # Store allocated ports for Firefox configuration
@@ -118,9 +118,9 @@ async def server_with_extension():
         await asyncio.sleep(0.1)  # Let server start
 
         # Check Firefox path
-        firefox_path = os.environ.get('FIREFOX_PATH', 'firefox')
-        if not os.path.exists(os.path.expanduser(firefox_path)):
-            pytest.skip(f"Firefox not found at {firefox_path}")
+        firefox_path = resolve_firefox_path()
+        if not firefox_path:
+            pytest.skip("Firefox not found; set FIREFOX_PATH to the binary")
 
         firefox = FirefoxTestManager(
             firefox_path=firefox_path,

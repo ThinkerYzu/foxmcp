@@ -441,8 +441,8 @@ class TestRequestMonitoringEndToEnd:
 
         # Get all tools
         try:
-            tools = await server.mcp_tools.mcp.get_tools()
-            monitoring_tools = [name for name in tools.keys() if name.startswith("requests_")]
+            tools = await server.mcp_tools.mcp.list_tools()
+            monitoring_tools = [tool.name for tool in tools if tool.name.startswith("requests_")]
 
             expected_tools = [
                 "requests_start_monitoring",

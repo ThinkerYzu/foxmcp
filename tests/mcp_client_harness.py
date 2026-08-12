@@ -147,8 +147,8 @@ class DirectMCPTestClient:
         try:
             # Get actual tool names from FastMCP
             mcp_app = self.mcp_tools.get_mcp_app()
-            tools = await mcp_app.get_tools()
-            return list(tools.keys())
+            tools = await mcp_app.list_tools()
+            return [tool.name for tool in tools]
         except Exception:
             # Fallback to known MCP tool names if FastMCP fails
             return [
@@ -184,18 +184,16 @@ class DirectMCPTestClient:
         try:
             # Get the FastMCP app from the MCP tools
             mcp_app = self.mcp_tools.get_mcp_app()
-            tools = await mcp_app.get_tools()
-            
+            tool = await mcp_app.get_tool(tool_name)
+
             # Check if the tool exists
-            if tool_name not in tools:
+            if tool is None:
+                available = [t.name for t in await mcp_app.list_tools()]
                 return {
-                    'content': f"Tool '{tool_name}' not found. Available tools: {list(tools.keys())}",
+                    'content': f"Tool '{tool_name}' not found. Available tools: {available}",
                     'isError': True,
                     'success': False
                 }
-            
-            # Get the tool and call it directly
-            tool = tools[tool_name]
             
             try:
                 # Call the tool function directly with the arguments
