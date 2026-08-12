@@ -14,7 +14,7 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 - **MCP Integration**: Works with Claude Desktop, Claude Code, and other MCP clients
 - **Custom Scripts**: Execute parameterized scripts in browser tabs
 - **Real-time Communication**: WebSocket-based with automatic reconnection
-- **Security**: Localhost-only operation with comprehensive input validation
+- **Security**: Localhost-only operation with comprehensive input validation. Web pages are kept off both ports deliberately; see [SECURITY.md](SECURITY.md) for the threat model
 
 ## Quick Start
 
@@ -260,6 +260,7 @@ See [docs/scripts.md](docs/scripts.md) for detailed documentation on creating an
 - **[Development](docs/development.md)** - Development setup and workflow
 - **[Architecture](docs/architecture.md)** - System design and components
 - **[Protocol](docs/protocol.md)** - WebSocket message format
+- **[Security Policy](SECURITY.md)** - Threat model and how to report a vulnerability
 
 ## Development
 

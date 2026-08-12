@@ -9,6 +9,7 @@ foxmcp/
 ├── CLAUDE.md           # Project requirements and instructions
 ├── README.md          # Main project documentation and quick start
 ├── LICENSE             # MIT License file
+├── SECURITY.md         # Threat model and vulnerability reporting
 ├── package.json        # Project metadata and npm scripts
 ├── claude.sh          # Claude Code integration script with FM_ROOT environment
 ├── Makefile           # Build system and development commands
