@@ -144,6 +144,8 @@ Once connected, you can control Firefox through natural language:
 - List, create, close, and switch between tabs
 - Take screenshots of tabs (PNG/JPEG)
 - Cross-window tab creation
+- Reorder tabs, or move them into another window — including gathering the tabs for one
+  site into a window of their own
 
 ### Content Interaction
 - Extract page text and HTML

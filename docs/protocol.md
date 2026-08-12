@@ -98,13 +98,19 @@ All messages follow this JSON structure:
 ### 2. Tab Management
 
 #### List All Tabs
+
+`windowId` is optional. Omit it to list the tabs of every window; supply it to list
+only that window's tabs.
+
 **Request:**
 ```json
 {
   "id": "req_004",
   "type": "request",
   "action": "tabs.list",
-  "data": {},
+  "data": {
+    "windowId": 1
+  },
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
 ```
@@ -124,8 +130,7 @@ All messages follow this JSON structure:
         "title": "Example Page",
         "active": true,
         "index": 0,
-        "pinned": false,
-        "favIconUrl": "https://example.com/favicon.ico"
+        "pinned": false
       },
       {
         "id": 124,
@@ -134,14 +139,20 @@ All messages follow this JSON structure:
         "title": "GitHub",
         "active": false,
         "index": 1,
-        "pinned": false,
-        "favIconUrl": "https://github.com/favicon.ico"
+        "pinned": false
       }
-    ]
+    ],
+    "debug": {
+      "totalFound": 2,
+      "tabUrls": ["https://example.com", "https://github.com"]
+    }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
+
+`index` is the tab's position within its window, counting from 0. It is what
+`tabs.move` takes as a destination.
 
 #### Create New Tab
 **Request:**
@@ -208,6 +219,66 @@ All messages follow this JSON structure:
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
 ```
+
+#### Move Tabs
+
+Reorders tabs within a window, or moves them into another window. `tabIds` takes a
+single ID or an array; `index` is the destination position, with `-1` meaning the end.
+`windowId` is optional — without it, each tab moves within the window it is already in.
+
+**Request:**
+```json
+{
+  "id": "req_007a",
+  "type": "request",
+  "action": "tabs.move",
+  "data": {
+    "tabIds": [123, 124],
+    "windowId": 2,
+    "index": -1
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_007a",
+  "type": "response",
+  "action": "tabs.move",
+  "data": {
+    "tabs": [
+      {
+        "id": 123,
+        "url": "https://example.com",
+        "title": "Example Page",
+        "windowId": 2,
+        "index": 0,
+        "pinned": false
+      },
+      {
+        "id": 124,
+        "url": "https://github.com",
+        "title": "GitHub",
+        "windowId": 2,
+        "index": 1,
+        "pinned": false
+      }
+    ],
+    "requested": 2,
+    "moved": 2
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+`requested` and `moved` exist because `browser.tabs.move` refuses some moves by
+returning an empty array rather than by failing — moving an unpinned tab in front of a
+pinned one is the usual cause. `moved` short of `requested` means Firefox declined,
+and the response is still a success. Moves that do fail outright return an `API_ERROR`:
+an unknown tab ID, a target window that is not a normal window, or a move between a
+private window and a non-private one.
 
 #### Capture Screenshot of Tab
 **Request:**

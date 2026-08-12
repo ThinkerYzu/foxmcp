@@ -44,7 +44,7 @@ make test-integration  # integration only
 make check             # lint + test
 ```
 
-Expect **219 passing** in about ten minutes. See [`../tests/README.md`](../tests/README.md)
+Expect **247 passing** in about ten minutes. See [`../tests/README.md`](../tests/README.md)
 for the suite layout, fixtures, and troubleshooting.
 
 ### Other
@@ -66,7 +66,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 35 MCP tool definitions
+│   └── mcp_tools.py # The 36 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment

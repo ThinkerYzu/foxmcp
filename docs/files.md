@@ -47,14 +47,15 @@ foxmcp/
     │   ├── test_server.py      # Server component tests
     │   ├── test_protocol.py    # Protocol message tests
     │   ├── test_ping_pong.py   # Ping-pong functionality tests
-    │   └── test_window_handlers.py # Window management message and MCP tool tests
+    │   ├── test_window_handlers.py # Window management message and MCP tool tests
+    │   └── test_tab_move.py    # Tab moving, and the window scoping on tabs_list
     ├── integration/   # Integration tests
     │   ├── test_websocket_communication.py # WebSocket communication tests
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests
     │   ├── test_real_firefox_communication.py # Real Firefox extension tests
     │   ├── test_ui_storage_sync.py        # UI storage synchronization tests with Firefox
     │   ├── test_window_management.py      # End-to-end window management tests with Firefox
-    │   ├── test_end_to_end_mcp.py         # Complete MCP tool chain tests (includes navigation reload)
+    │   ├── test_tab_move_end_to_end.py    # Gathering tabs into a window, and reordering within one
     │   ├── test_test_helper_protocol.py   # Test helper protocol unit tests
     │   └── foxmcp_scripts/    # External scripts for predefined script execution tests
     │       ├── simple_test.sh     # Basic test script (no user interaction)

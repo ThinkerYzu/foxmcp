@@ -70,7 +70,7 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 - **Lifecycle**: Graceful startup and shutdown, including cleanup of the extension connection
 
 #### MCP Tools (`mcp_tools.py`)
-- **MCP Tool Definitions**: 35 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
+- **MCP Tool Definitions**: 36 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
 - **Parameter Validation**: Type-annotated tool signatures; FastMCP derives the schema
 - **Response Formatting**: Each tool turns the raw browser response into a human-readable string
 - **Error Handling**: Every tool checks for `error` in the response before reading data

@@ -5,10 +5,18 @@ Complete reference for all MCP tools and browser functions available through Fox
 ## Available MCP Tools
 
 ### Tab Management
-- `tabs_list()` - List all open tabs
+- `tabs_list(window_id=None)` - List open tabs, in every window or in one window
+  - Each line ends with `[window {window_id}, index {index}]`; the index is the tab's
+    position in its window, counting from 0
 - `tabs_create(url, active=True, pinned=False, window_id=None)` - Create new tab (optionally in specific window)
 - `tabs_close(tab_id)` - Close specific tab
 - `tabs_switch(tab_id)` - Switch to specific tab
+- `tabs_move(tab_ids, window_id=None, index=-1)` - Move tabs to a position, optionally into another window
+  - `tab_ids` takes one ID, a list, or a JSON string such as `"[12, 15]"`
+  - `index` is the destination, counting from 0; `-1` is the end
+  - Without `window_id`, tabs are reordered within the window they are in
+  - Reports `Moved {n} of {m}` — Firefox refuses some moves silently, chiefly moving an
+    unpinned tab in front of a pinned one, and a refused tab is absent from the result
 - `tabs_capture_screenshot(filename=None, window_id=None, format="png", quality=90)` - Capture screenshot of visible tab
   - If `filename` provided: saves screenshot to file and returns success message
   - If `filename` omitted: returns base64 encoded image data URL
@@ -87,6 +95,35 @@ result = await client.call_tool("tabs_create", {"url": "https://example.com"})
 
 # Take screenshot
 screenshot = await client.call_tool("tabs_capture_screenshot", {"format": "png"})
+```
+
+### Gathering Tabs Into Their Own Window
+```python
+# Find the tabs to gather. Every window is listed, and each line ends with
+# "[window {id}, index {n}]", so the tab IDs can be picked out of the listing.
+listing = await client.call_tool("tabs_list")
+
+# Open the window they are going to
+window = await client.call_tool("create_window", {"url": "about:blank"})
+window_id = int(re.search(r'ID (\d+)', window["content"]).group(1))
+
+# Move them in, keeping the given order, appended at the end
+await client.call_tool("tabs_move", {"tab_ids": [12, 15, 18], "window_id": window_id})
+
+# Confirm they arrived, and nothing else came along
+await client.call_tool("tabs_list", {"window_id": window_id})
+```
+
+The new window opens with a blank tab of its own, which stays until closed with
+`tabs_close`. Its ID is in the scoped `tabs_list` above.
+
+### Reordering Tabs
+```python
+# Move one tab to the front of its window
+await client.call_tool("tabs_move", {"tab_ids": 12, "index": 0})
+
+# Move several to the end, in the order given
+await client.call_tool("tabs_move", {"tab_ids": [12, 15], "index": -1})
 ```
 
 ### History and Bookmarks
