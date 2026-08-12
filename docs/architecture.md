@@ -172,6 +172,7 @@ Enforced in `mcp_tools.py` before a predefined script runs:
 - **Executable Check**: The file must exist and be executable
 - **Timeout Protection**: Scripts are killed after 30 seconds
 - **Execution Isolation**: Scripts run as separate subprocesses
+- **Audit Logging**: Every invocation is logged at `INFO` with script name, arguments and tab; every refusal and failure at `WARNING`. Arguments are truncated at 120 characters; the generated JavaScript is never logged, only its size. See [`scripts.md`](scripts.md#what-gets-logged)
 
 ### 4. Extension Connection Origin
 

@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**202 passing, 0 skipped** — 59 unit and 143 integration.
+**214 passing, 0 skipped** — 71 unit and 143 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,11 +42,11 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 202. Run them by hand if you need them.
+and are **not** part of the 214. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 59 | no |
+| `unit/` | 71 | no |
 | `integration/` | 143 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
@@ -56,6 +56,7 @@ and are **not** part of the 202. Run them by hand if you need them.
 |---|---|---|
 | `test_protocol.py` | 14 | Message structure, JSON serialization, error codes |
 | `test_window_handlers.py` | 14 | Window action handlers |
+| `test_predefined_script_logging.py` | 12 | The audit log around `content_execute_predefined`, and the validation chain behind it |
 | `test_request_monitoring.py` | 11 | Web request capture logic |
 | `test_ping_pong.py` | 8 | Ping-pong protocol |
 | `test_server.py` | 7 | Server init, connection handling, message processing |
@@ -81,6 +82,7 @@ and are **not** part of the 202. Run them by hand if you need them.
 | `test_request_monitoring_integration.py` | 6 | Request capture through the MCP layer |
 | `test_ui_storage_sync.py` | 6 | Popup settings persistence |
 | `test_browser_functionality.py` | 5 | Tabs, script execution, reload, content, screenshots |
+| `test_connection_origin.py` | 5 | The origin allowlist on the extension WebSocket |
 | `test_real_firefox_communication.py` | 5 | Extension-server message exchange in a real browser |
 | `test_request_monitoring_end_to_end.py` | 5 | Capture a request and read its content back |
 | `test_history_mcp_integration.py` | 4 | History through the MCP tool surface |
@@ -265,7 +267,7 @@ The check itself is tested in `integration/test_connection_origin.py`.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 202 must pass.
+- **Run the suite before committing.** All 214 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem

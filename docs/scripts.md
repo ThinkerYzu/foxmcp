@@ -170,6 +170,31 @@ echo "(function() { document.body.style.backgroundColor = 'lightblue'; return 'B
 - ✅ **Executable Validation**: Scripts must have execute permissions
 - ✅ **JSON Validation**: Arguments must be valid JSON array of strings
 - ✅ **Timeout Protection**: Scripts timeout after 30 seconds
+- ✅ **Audit Logging**: Every invocation and every refusal is logged
+
+### What Gets Logged
+
+Script execution is the one place an MCP client can run a program on your machine, so the server records each attempt. A normal run produces three lines:
+
+```
+INFO:server.mcp_tools:Running predefined script 'bugzilla-comment.sh' in tab 17 with 'Please run mozregression to find the regression window.'
+INFO:server.mcp_tools:Predefined script 'bugzilla-comment.sh' generated 133 bytes of JavaScript in 0.2s; injecting into tab 17
+INFO:server.mcp_tools:Predefined script 'bugzilla-comment.sh' completed in tab 17 (https://bugzilla.mozilla.org/show_bug.cgi?id=1992198)
+```
+
+Refusals and failures are logged at `WARNING`, so `grep WARNING` finds everything that did not go to plan:
+
+```
+WARNING:server.mcp_tools:Predefined script refused: name '../../../etc/passwd' contains a path separator or '..'
+WARNING:server.mcp_tools:Predefined script 'broken.sh' exited 2 after 0.4s: 'cannot reach the page'
+```
+
+Two deliberate choices about content:
+
+- **Arguments are logged**, truncated at 120 characters with the full length noted. Knowing that `element-send-message.sh` ran without knowing what it sent is not an audit trail. The consequence is that message and comment text reaches the log file, which on the default setup is `foxmcp.log` in plain text — readable by anything running as you, which under FoxMCP's threat model can already read the browser profile.
+- **The generated JavaScript is never logged**, only its size. A DOM-walking script runs to tens of kilobytes and would bury everything else.
+
+The completion line names the **URL**, not just the tab id, because the tab may have navigated between the caller choosing it and the script running — the URL is what says where the code actually landed.
 
 ## Best Practices
 

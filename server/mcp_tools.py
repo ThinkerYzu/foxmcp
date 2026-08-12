@@ -8,9 +8,11 @@ Licensed under the MIT License - see LICENSE file for details
 """
 
 import asyncio
+import logging
 import uuid
 import os
 import subprocess
+import time
 import json
 import base64
 from datetime import datetime
@@ -18,6 +20,37 @@ from typing import Dict, Any, Optional, List, TypedDict, Union
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+# Longest a single script argument may appear in the log before being cut short.
+#
+# Arguments carry real content - a Bugzilla comment, a chat message - so the log
+# records them: knowing that element-send-message.sh ran without knowing what it
+# sent is not an audit trail. The cap keeps one long comment from burying the
+# rest of the log, since start.sh writes it to a plain file that only truncates
+# when the server restarts.
+MAX_LOGGED_ARG_LENGTH = 120
+
+
+def format_script_args_for_log(args_list):
+    """Render predefined-script arguments as a single line for the log
+
+    Long arguments are cut to MAX_LOGGED_ARG_LENGTH with an ellipsis and their
+    full length appended, so a truncated entry still says how much was elided.
+    Returns "(no arguments)" for an empty list rather than an empty string,
+    which would read as missing information in the log.
+    """
+    if not args_list:
+        return "(no arguments)"
+
+    rendered = []
+    for arg in args_list:
+        if len(arg) > MAX_LOGGED_ARG_LENGTH:
+            rendered.append(f"{arg[:MAX_LOGGED_ARG_LENGTH]!r}...[{len(arg)} chars]")
+        else:
+            rendered.append(repr(arg))
+    return ", ".join(rendered)
 
 class TabInfo(TypedDict):
     """Type definition for tab information from browser extension"""
@@ -1295,18 +1328,34 @@ class FoxMCPTools:
                 script_args: JSON array of strings to pass to the external script (e.g., '["arg1", "arg2"]')
                             or empty string for no arguments
             """
+            # Every rejection below is logged at warning level.
+            #
+            # This is the code-execution surface an MCP client can reach, so a
+            # refusal is worth a line whether it came from a typo or from an
+            # attempt to escape the scripts directory - the two are
+            # indistinguishable here, and only the log preserves the attempt.
+
             # Get the scripts directory from environment variable
             scripts_dir = os.environ.get('FOXMCP_EXT_SCRIPTS')
             if not scripts_dir:
+                logger.warning(
+                    f"Predefined script '{script_name}' refused: FOXMCP_EXT_SCRIPTS is not set"
+                )
                 return "Error: FOXMCP_EXT_SCRIPTS environment variable not set"
 
             # Validate script name to prevent path traversal attacks
             if not script_name or '..' in script_name or '/' in script_name or '\\' in script_name:
+                logger.warning(
+                    f"Predefined script refused: name {script_name!r} contains a path separator or '..'"
+                )
                 return f"Error: Invalid script name '{script_name}'. Script names cannot contain path separators or '..' sequences"
 
             # Additional validation: only allow alphanumeric, underscore, dash, and dot
             import re
             if not re.match(r'^[a-zA-Z0-9._-]+$', script_name):
+                logger.warning(
+                    f"Predefined script refused: name {script_name!r} has characters outside [a-zA-Z0-9._-]"
+                )
                 return f"Error: Invalid script name '{script_name}'. Only alphanumeric characters, underscore, dash, and dot are allowed"
 
             # Resolve absolute paths to prevent symlink attacks
@@ -1315,12 +1364,18 @@ class FoxMCPTools:
 
             # Ensure the resolved script path is still within the scripts directory
             if not script_path.startswith(scripts_dir + os.sep) and script_path != scripts_dir:
+                logger.warning(
+                    f"Predefined script refused: {script_name!r} resolves to {script_path!r}, "
+                    f"outside {scripts_dir!r}"
+                )
                 return f"Error: Script path '{script_name}' escapes the allowed directory"
 
             if not os.path.exists(script_path):
+                logger.warning(f"Predefined script refused: {script_name!r} not found in {scripts_dir!r}")
                 return f"Error: Script '{script_name}' not found in {scripts_dir}"
 
             if not os.access(script_path, os.X_OK):
+                logger.warning(f"Predefined script refused: {script_name!r} is not executable")
                 return f"Error: Script '{script_name}' is not executable"
 
             try:
@@ -1333,31 +1388,59 @@ class FoxMCPTools:
                         # Parse as JSON array
                         args_list = json.loads(script_args)
                         if not isinstance(args_list, list):
+                            logger.warning(
+                                f"Predefined script {script_name!r} refused: script_args is "
+                                f"{type(args_list).__name__}, not a list"
+                            )
                             return f"Error: script_args must be a JSON array of strings or empty string, got: {type(args_list).__name__}"
 
                         # Validate all arguments are strings
                         for i, arg in enumerate(args_list):
                             if not isinstance(arg, str):
+                                logger.warning(
+                                    f"Predefined script {script_name!r} refused: argument {i} is "
+                                    f"{type(arg).__name__}, not a string"
+                                )
                                 return f"Error: All arguments must be strings. Argument {i} is {type(arg).__name__}: {arg}"
 
                 except json.JSONDecodeError as e:
+                    logger.warning(f"Predefined script {script_name!r} refused: script_args is not valid JSON - {e}")
                     return f"Error: Invalid JSON in script_args: {e}"
 
                 # Execute the external script with arguments
+                logger.info(
+                    f"Running predefined script {script_name!r} in tab {tab_id} "
+                    f"with {format_script_args_for_log(args_list)}"
+                )
+                started_at = time.monotonic()
                 result = subprocess.run(
                     [script_path] + args_list,
                     capture_output=True,
                     text=True,
                     timeout=30  # 30 second timeout
                 )
+                elapsed = time.monotonic() - started_at
 
                 if result.returncode != 0:
+                    logger.warning(
+                        f"Predefined script {script_name!r} exited {result.returncode} "
+                        f"after {elapsed:.1f}s: {result.stderr.strip()!r}"
+                    )
                     return f"Error: Script '{script_name}' failed with exit code {result.returncode}. stderr: {result.stderr}"
 
                 # The script output should be JavaScript code
                 javascript_code = result.stdout.strip()
                 if not javascript_code:
+                    logger.warning(f"Predefined script {script_name!r} produced no output after {elapsed:.1f}s")
                     return f"Error: Script '{script_name}' produced no output"
+
+                # Log the size, never the JavaScript itself - a generated
+                # DOM-walking script runs to tens of kilobytes and would bury
+                # every other line in the log.
+                logger.info(
+                    f"Predefined script {script_name!r} generated {len(javascript_code)} bytes "
+                    f"of JavaScript in {elapsed:.1f}s; injecting into tab {tab_id}"
+                )
 
                 # Now execute the generated JavaScript in the tab
                 request = {
@@ -1374,11 +1457,19 @@ class FoxMCPTools:
                 response = await self.websocket_server.send_request_and_wait(request)
 
                 if "error" in response:
+                    logger.warning(
+                        f"Predefined script {script_name!r} failed in tab {tab_id}: {response['error']}"
+                    )
                     return f"Error executing generated script: {response['error']}"
 
                 if response.get("type") == "response" and "data" in response:
                     result_data = response["data"].get("result")
                     url = response["data"].get("url", "Unknown URL")
+
+                    # The URL is the point of this line: it says which page the
+                    # script actually ran against, which the tab id alone does
+                    # not - the tab may have navigated since the caller chose it.
+                    logger.info(f"Predefined script {script_name!r} completed in tab {tab_id} ({url})")
 
                     if result_data is None:
                         return f"Predefined script '{script_name}' executed successfully in tab {tab_id} ({url}) - no return value"
@@ -1386,15 +1477,21 @@ class FoxMCPTools:
                     return f"Predefined script '{script_name}' result from tab {tab_id} ({url}):\n{result_data}"
                 elif response.get("type") == "error":
                     error_msg = response.get("data", {}).get("message", "Unknown error")
+                    logger.warning(
+                        f"Predefined script {script_name!r} failed in tab {tab_id}: {error_msg}"
+                    )
                     return f"Failed to execute generated script: {error_msg}"
 
                 return f"Unable to execute generated script in tab {tab_id}"
 
             except subprocess.TimeoutExpired:
+                logger.warning(f"Predefined script {script_name!r} timed out after 30 seconds and was killed")
                 return f"Error: Script '{script_name}' timed out after 30 seconds"
             except subprocess.SubprocessError as e:
+                logger.warning(f"Predefined script {script_name!r} could not be run: {e}")
                 return f"Error executing script '{script_name}': {e}"
             except Exception as e:
+                logger.exception(f"Predefined script {script_name!r} raised an unexpected error")
                 return f"Unexpected error running script '{script_name}': {e}"
 
     def _setup_request_monitoring_tools(self):
