@@ -44,7 +44,7 @@ make test-integration  # integration only
 make check             # lint + test
 ```
 
-Expect **197 passing** in about ten minutes. See [`../tests/README.md`](../tests/README.md)
+Expect **202 passing** in about ten minutes. See [`../tests/README.md`](../tests/README.md)
 for the suite layout, fixtures, and troubleshooting.
 
 ### Other

@@ -14,6 +14,7 @@ import os
 from server.server import FoxMCPServer
 from firefox_test_utils import FirefoxTestManager
 from port_coordinator import get_port_by_type
+from test_config import connect_as_extension
 
 class TestFirefoxAwaitableIntegration:
     """Test Firefox test utilities with awaitable connection mechanism"""
@@ -55,7 +56,7 @@ class TestFirefoxAwaitableIntegration:
 
             # Simulate extension connection
             await asyncio.sleep(0.5)
-            websocket = await websockets.connect(f"ws://localhost:{port}")
+            websocket = await connect_as_extension(f"ws://localhost:{port}")
 
             # The wait should complete successfully
             connected = await wait_task
@@ -133,7 +134,7 @@ class TestFirefoxAwaitableIntegration:
 
             # Simulate extension connection
             await asyncio.sleep(0.5)
-            websocket = await websockets.connect(f"ws://localhost:{port}")
+            websocket = await connect_as_extension(f"ws://localhost:{port}")
 
             # The wait should complete successfully
             connected = await wait_task

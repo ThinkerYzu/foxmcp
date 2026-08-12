@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**197 passing, 0 skipped** — 59 unit and 138 integration.
+**202 passing, 0 skipped** — 59 unit and 143 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,12 +42,12 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 197. Run them by hand if you need them.
+and are **not** part of the 202. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
 | `unit/` | 59 | no |
-| `integration/` | 138 | yes |
+| `integration/` | 143 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
@@ -239,13 +239,37 @@ Test profiles are cached. Editing `extension/` has no effect until the cache is 
 make clean && make package && rm -rf dist/profile-cache/*
 ```
 
+### Connecting as the extension
+
+A test that stands in for the extension has to look like one. The server accepts only
+`moz-extension://` origins — the check that keeps web pages off the socket — so use the
+helper rather than connecting directly:
+
+```python
+from test_config import connect_as_extension
+
+async with connect_as_extension(f"ws://localhost:{port}") as websocket:
+    ...
+```
+
+It is a drop-in replacement for `websockets.connect()` and takes the same arguments. A
+plain `websockets.connect()` gets a `403` and raises `InvalidStatus`.
+
+The origin the helper sends is arbitrary — the server matches the `moz-extension://`
+scheme, not a specific UUID, because Firefox assigns a different one to every install.
+The check itself is tested in `integration/test_connection_origin.py`.
+
 ## Rules
 
 - **Test URLs are `example.org`.** Never `httpbin.org` or any other live service —
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 197 must pass.
+- **Run the suite before committing.** All 202 must pass.
+- **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
+  `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
+  so a plain connect is refused with a 403, and the failure reads like a server problem
+  rather than a missing header. See [Connecting as the extension](#connecting-as-the-extension).
 
 ## Coverage
 

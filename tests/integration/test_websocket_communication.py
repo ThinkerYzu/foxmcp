@@ -9,7 +9,7 @@ import websockets
 import time
 import re
 from unittest.mock import Mock, patch, AsyncMock
-from server.server import FoxMCPServer
+from server.server import FoxMCPServer, EXTENSION_ORIGIN_PATTERN
 
 class TestWebSocketCommunication:
 
@@ -54,8 +54,17 @@ class TestWebSocketCommunication:
                 server.handle_extension_connection,
                 "localhost",
                 8767,
-                reuse_address=True
+                reuse_address=True,
+                origins=[EXTENSION_ORIGIN_PATTERN],
+                process_response=server.log_rejected_handshake
             )
+
+            # The origin allowlist is the whole defense against a web page
+            # taking the socket, so assert what it accepts, not just that it
+            # was passed through.
+            origins = mock_serve.call_args.kwargs['origins']
+            assert any(p.fullmatch('moz-extension://abc-123') for p in origins)
+            assert not any(p.fullmatch('https://evil.example.com') for p in origins)
 
     @pytest.mark.asyncio
     async def test_message_exchange(self):

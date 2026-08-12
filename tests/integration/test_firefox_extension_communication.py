@@ -20,7 +20,7 @@ from pathlib import Path
 
 import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
-from test_config import TEST_PORTS
+from test_config import TEST_PORTS, connect_as_extension
 from firefox_test_utils import FirefoxTestManager
 from port_coordinator import get_port_by_type
 
@@ -93,7 +93,7 @@ user_pref("browser.tabs.remote.autostart", false);
         # Try to connect as client to verify server is accessible
         try:
             uri = f"ws://localhost:{running_server._test_port}"
-            websocket = await websockets.connect(uri)
+            websocket = await connect_as_extension(uri)
             
             # Send test message
             test_msg = {
@@ -308,7 +308,7 @@ class TestFirefoxConnectionResilience:
         try:
             # Connect and disconnect multiple times
             for i in range(3):
-                websocket = await websockets.connect(f"ws://localhost:{port}")
+                websocket = await connect_as_extension(f"ws://localhost:{port}")
                 
                 # Send message
                 msg = {
@@ -348,7 +348,7 @@ class TestFirefoxConnectionResilience:
             connections = []
             
             for i in range(5):
-                websocket = await websockets.connect(f"ws://localhost:{port}")
+                websocket = await connect_as_extension(f"ws://localhost:{port}")
                 connections.append(websocket)
                 
                 # Send unique message

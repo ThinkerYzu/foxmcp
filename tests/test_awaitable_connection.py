@@ -16,6 +16,7 @@ import os
 import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
 from port_coordinator import get_port_by_type
+from test_config import connect_as_extension
 
 class TestAwaitableConnection:
     """Test the new awaitable connection mechanism"""
@@ -80,7 +81,7 @@ class TestAwaitableConnection:
 
             # Connect from a mock extension after a short delay
             await asyncio.sleep(0.5)
-            websocket = await websockets.connect(f"ws://localhost:{port}")
+            websocket = await connect_as_extension(f"ws://localhost:{port}")
 
             # The wait should complete successfully
             connected = await wait_task
@@ -124,7 +125,7 @@ class TestAwaitableConnection:
 
             # Connect after a delay
             await asyncio.sleep(0.5)
-            websocket = await websockets.connect(f"ws://localhost:{port}")
+            websocket = await connect_as_extension(f"ws://localhost:{port}")
 
             # All waiters should complete successfully
             results = await asyncio.gather(*wait_tasks)
@@ -158,7 +159,7 @@ class TestAwaitableConnection:
 
         try:
             # Connect first
-            websocket = await websockets.connect(f"ws://localhost:{port}")
+            websocket = await connect_as_extension(f"ws://localhost:{port}")
 
             # Give server time to register the connection
             await asyncio.sleep(0.1)
@@ -203,7 +204,7 @@ class TestAwaitableConnection:
 
             # Connect and send a message like a real extension would
             await asyncio.sleep(0.1)
-            websocket = await websockets.connect(f"ws://localhost:{port}")
+            websocket = await connect_as_extension(f"ws://localhost:{port}")
 
             # Wait should complete
             connected = await wait_task

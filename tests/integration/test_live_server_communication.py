@@ -15,7 +15,7 @@ import os
 import re
 
 from server.server import FoxMCPServer
-from test_config import TEST_PORTS
+from test_config import TEST_PORTS, connect_as_extension
 from port_coordinator import get_port_by_type
 
 
@@ -59,7 +59,7 @@ class TestLiveServerCommunication:
         try:
             # Try to connect as a client
             uri = f"ws://localhost:{port}"
-            websocket = await websockets.connect(uri)
+            websocket = await connect_as_extension(uri)
             
             connection_successful = True
             
@@ -163,7 +163,7 @@ class TestLiveServerCommunication:
             try:
                 # Connect as "extension"
                 uri = f"ws://localhost:{port}"
-                websocket = await websockets.connect(uri)
+                websocket = await connect_as_extension(uri)
                 
                 # Simulate extension sending a response
                 extension_response = {

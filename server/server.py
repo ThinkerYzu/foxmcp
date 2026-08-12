@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import json
 import logging
+import re
 import socket
 import sys
 import os
@@ -36,6 +37,22 @@ except ImportError:
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Only browser extensions may open the extension WebSocket.
+#
+# WebSocket handshakes are exempt from the same-origin policy and are never
+# preflighted, so without this any web page the user visits could connect to
+# the localhost port and be accepted as the extension. Binding to localhost
+# does not exclude web pages: they reach it from inside the user's own browser.
+#
+# The check is on the scheme rather than a whole origin because Firefox
+# generates the extension's UUID per install, so no fixed value would work for
+# more than one profile. A page's origin is always http:// or https://, which
+# the pattern excludes, and page JavaScript cannot suppress or forge it.
+#
+# The trailing .+ is required: websockets matches this with fullmatch(), so a
+# bare prefix pattern would reject every origin including the extension's.
+EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')
 
 def find_available_port(start_port=3000, max_attempts=100):
     """Find an available port starting from start_port"""
@@ -105,6 +122,25 @@ class FoxMCPServer:
         self.mcp_server_instance = None
         self._shutdown_event = None
         self.websocket_server = None
+
+    def log_rejected_handshake(self, connection, request, response):
+        """Log handshakes the library refused, and let the refusal stand
+
+        Registered as the `process_response` hook so that origin rejections are
+        visible. The library rejects them with a 403 but logs only at debug
+        level, which would make a legitimate extension that stopped connecting
+        indistinguishable from a server that was never reached at all.
+
+        Always returns None, meaning "use the response you already built" - this
+        hook observes, it never decides.
+        """
+        if response.status_code == 403:
+            origin = request.headers.get('Origin')
+            logger.warning(
+                f"Rejected WebSocket handshake from {origin!r} - only "
+                f"moz-extension:// origins may connect as the extension"
+            )
+        return None
 
     async def handle_extension_connection(self, websocket):
         """Handle WebSocket connection from browser extension
@@ -637,7 +673,12 @@ class FoxMCPServer:
             self.handle_extension_connection,
             self.host,
             self.port,
-            reuse_address=True  # Enable SO_REUSEADDR for immediate port reuse
+            reuse_address=True,  # Enable SO_REUSEADDR for immediate port reuse
+            # Rejected during the handshake, so a non-extension client never
+            # reaches handle_extension_connection - which would otherwise close
+            # the real extension's socket to make room for it.
+            origins=[EXTENSION_ORIGIN_PATTERN],
+            process_response=self.log_rejected_handshake
         )
 
         logger.info("FoxMCP WebSocket server is running...")

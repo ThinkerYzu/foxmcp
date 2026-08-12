@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Extension WebSocket now accepts only `moz-extension://` origins.** Previously any inbound connection was accepted as the extension. WebSocket handshakes are exempt from the same-origin policy and are never preflighted, so any web page the user visited could connect to the localhost port, displace the real extension — an arriving connection closes the existing one — and answer requests on its behalf with content of its choosing. Non-extension connections are now rejected with a 403 during the handshake, and logged.
+
+  Test clients that stand in for the extension must send an extension origin; use `connect_as_extension()` from `tests/test_config.py`.
+
 ## [1.1.0] - 2025-10-26
 
 ### Added

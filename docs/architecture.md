@@ -145,9 +145,18 @@ MCP Client
 ## Security Architecture
 
 ### 1. Network Security
-- **Localhost Binding**: The server binds to `localhost` by default
+- **Localhost Binding**: The server binds to `localhost` by default, and `--host` is forced back to localhost if given anything else
 - **No External Access**: Not reachable from the network in the default configuration
 - **Port Separation**: WebSocket and MCP listen on different ports
+
+**Localhost binding excludes the network, not web pages.** A page the user visits runs inside their browser, so it can reach `127.0.0.1` — the same-origin policy does not stop it, and WebSocket handshakes are never preflighted. Each port handles this differently:
+
+| Port | What stops a web page |
+|---|---|
+| Extension WebSocket | An origin allowlist: `websockets.serve(origins=[...])` accepts only `moz-extension://` origins and rejects anything else with a 403 during the handshake. See [Extension Connection Origin](#4-extension-connection-origin) |
+| MCP HTTP | No CORS headers are sent, so preflighted requests are blocked; a `text/plain` request that would skip preflight is rejected for its content type; and the transport requires a session id that cross-origin JavaScript cannot read |
+
+Neither port authenticates local processes, which is deliberate — a process running as the user already has the browser profile and the script directory, so a shared secret between two components under that user's control would guard nothing.
 
 ### 2. Extension Security
 - **Broad Permissions**: The extension requests `tabs`, `windows`, `history`, `bookmarks`, `activeTab`, `storage`, `webRequest`, and `<all_urls>`. This is deliberately wide — the extension exists to expose browser state — and it is the reason the server must stay on localhost. Treat an installed FoxMCP as granting its MCP client the same reach over the browser that you have.
@@ -163,6 +172,23 @@ Enforced in `mcp_tools.py` before a predefined script runs:
 - **Executable Check**: The file must exist and be executable
 - **Timeout Protection**: Scripts are killed after 30 seconds
 - **Execution Isolation**: Scripts run as separate subprocesses
+
+### 4. Extension Connection Origin
+
+Only browser extensions may connect to the WebSocket port. `server.py` passes an allowlist to `websockets.serve()`:
+
+```python
+EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')
+```
+
+- **Scheme, not identity**: Firefox generates a per-install UUID, so the extension's origin differs on every profile — `moz-extension://8690897d-…` on one machine, something else on the next. Matching the scheme lets any legitimate install pass
+- **Rejected during the handshake**: The connection never reaches `handle_extension_connection`, which matters because that function closes the existing extension connection to admit a new one — a rejection arriving any later would itself be a denial of service
+- **Matched with `fullmatch()`**: The trailing `.+` is required; a bare prefix pattern rejects everything, including the extension
+- **Rejections are logged** at warning level with the offending origin. The library logs them only in debug mode, which would make a legitimate extension that stopped connecting look identical to a server that was never reached
+
+This does not stop a *malicious installed extension*, which can send a `moz-extension://` origin of its own. That is a different threat — it requires the user to install hostile software, at which point the browser is already compromised.
+
+Tested in `tests/integration/test_connection_origin.py`. Test clients standing in for the extension must use `connect_as_extension()` from `tests/test_config.py`; a plain `websockets.connect()` is refused.
 
 ## Concurrency and Limits
 

@@ -18,6 +18,7 @@ import os
 
 import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
+from test_config import connect_as_extension
 
 # Configure logging for better debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -74,7 +75,7 @@ class TestRealWebSocketCommunication:
         try:
             # Try to connect as a client would
             uri = f"ws://localhost:{real_server._test_port}"
-            async with websockets.connect(uri) as websocket:
+            async with connect_as_extension(uri) as websocket:
                 logger.info("Successfully connected to server")
                 
                 # Send a test message
@@ -175,7 +176,7 @@ class TestRealWebSocketCommunication:
             # Create multiple client connections
             for i in range(3):
                 uri = f"ws://localhost:{real_server._test_port}"
-                websocket = await websockets.connect(uri)
+                websocket = await connect_as_extension(uri)
                 connections.append(websocket)
                 logger.info(f"Client {i+1} connected")
                 

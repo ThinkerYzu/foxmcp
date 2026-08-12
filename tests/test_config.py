@@ -3,7 +3,18 @@ Test configuration constants for FoxMCP testing
 Ports come from port_coordinator, which assigns a fixed port per server role
 """
 
+import websockets
+
 from port_coordinator import get_port_by_type
+
+# Stands in for a real extension's origin when a test opens the socket itself.
+#
+# The server accepts only moz-extension:// origins, so a plain
+# websockets.connect() is refused with a 403 - correctly, since that is the
+# check that keeps web pages out. Tests that impersonate the extension have to
+# look like one. The UUID is arbitrary: the server matches the scheme prefix,
+# because Firefox assigns a different UUID to every install.
+EXTENSION_TEST_ORIGIN = 'moz-extension://f0e1d2c3-b4a5-4968-8778-6a5b4c3d2e1f'
 
 DEFAULT_TEST_CONFIG = {
     'test_timeout': 10.0,    # Default test timeout
@@ -44,3 +55,16 @@ def _get_test_ports_dict():
     }
 
 TEST_PORTS = _get_test_ports_dict()
+
+def connect_as_extension(uri, **kwargs):
+    """Open a WebSocket to the server the way the real extension does
+
+    Use this instead of websockets.connect() anywhere a test stands in for the
+    extension. Returns the same awaitable/context manager that
+    websockets.connect() returns, so it is a drop-in replacement.
+
+    Extra keyword arguments are passed through untouched, but passing
+    additional_headers will drop the Origin and the server will refuse the
+    connection - merge your headers into a copy of this function instead.
+    """
+    return websockets.connect(uri, additional_headers={'Origin': EXTENSION_TEST_ORIGIN}, **kwargs)
