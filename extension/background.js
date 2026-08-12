@@ -1088,6 +1088,12 @@ function captureRequestEvent(monitorId, eventType, details) {
       request.status_code = details.statusCode;
       request.completed = true;
       request.duration_ms = details.timeStamp - (request.events[0]?.timeStamp || details.timeStamp);
+
+      // Fall back to the bytes actually received when the response carried no
+      // Content-Length, which is the common case for compressed HTTP/2.
+      if (!request.response_content_length && details.responseSize > 0) {
+        request.response_content_length = details.responseSize;
+      }
       break;
 
     case 'onErrorOccurred':
