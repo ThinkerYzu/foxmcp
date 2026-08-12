@@ -13,7 +13,6 @@ foxmcp/
 ├── claude.sh          # Claude Code integration script with FM_ROOT environment
 ├── Makefile           # Build system and development commands
 ├── docs/               # Documentation directory
-│   ├── PLAN.md        # Development plan and phases
 │   ├── protocol.md    # WebSocket message protocol specification
 │   ├── files.md       # This file - explains project structure
 │   └── venv-setup.md  # Virtual environment setup documentation

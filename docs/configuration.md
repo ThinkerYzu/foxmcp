@@ -107,14 +107,15 @@ export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
 
 ### Optional Configuration
 
-```bash
-# Override default ports
-export FOXMCP_WEBSOCKET_PORT=8765
-export FOXMCP_MCP_PORT=3000
+`FOXMCP_EXT_SCRIPTS` is the only environment variable the server reads. It points at
+the directory holding predefined scripts:
 
-# Debug mode
-export FOXMCP_DEBUG=1
+```bash
+export FOXMCP_EXT_SCRIPTS=/path/to/predefined/
 ```
+
+Ports are set on the command line, not through the environment — see
+[Multiple Server Instances](#multiple-server-instances).
 
 ## Multiple Server Instances
 
@@ -204,47 +205,42 @@ server = FoxMCPServer()
 
 ### Advanced Logging
 
+Importing `server.server` calls `logging.basicConfig(level=logging.INFO)` at module
+level, so a later `basicConfig()` call does nothing. Reconfigure the root logger
+instead:
+
 ```python
 import logging
+from server.server import FoxMCPServer
 
-# Configure detailed logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('foxmcp.log'),
-        logging.StreamHandler()
-    ]
-)
+root = logging.getLogger()
+root.setLevel(logging.DEBUG)
+root.addHandler(logging.FileHandler('foxmcp.log'))
 
-# Server will use configured logging
 server = FoxMCPServer()
 ```
 
-## Performance Tuning
+## Tuning
 
-### WebSocket Configuration
+`FoxMCPServer` takes only `host`, `port`, `mcp_port`, and `start_mcp`. WebSocket frame
+sizes, ping intervals, and MCP concurrency are not exposed — the server accepts the
+`websockets` and FastMCP defaults.
 
-```python
-# Adjust WebSocket settings for performance
-server = FoxMCPServer(
-    max_size=1000000,  # Max message size
-    ping_interval=20,  # Ping interval (seconds)
-    ping_timeout=10,   # Ping timeout (seconds)
-    close_timeout=10   # Close timeout (seconds)
-)
-```
+Two things you can change:
 
-### MCP Server Optimization
+**Request timeout.** `send_request_and_wait` waits 30 seconds by default. Pass
+`timeout` to override it for a slow call:
 
 ```python
-# Configure FastMCP server
-server = FoxMCPServer(
-    mcp_workers=4,     # Number of worker threads
-    mcp_timeout=30,    # Request timeout
-    mcp_max_requests=100  # Max concurrent requests
-)
+response = await server.send_request_and_wait(request, timeout=60.0)
 ```
+
+A timeout returns an error dict rather than raising, so callers must check for
+`"error"` in the response.
+
+**Extension reconnection.** `CONFIG` at the top of `extension/background.js` sets
+`retryInterval` (5000 ms) and `maxRetries` (`-1`, meaning retry forever). Both are also
+editable from the extension popup. Changing the source values requires a rebuild.
 
 ## Troubleshooting Configuration
 
@@ -266,22 +262,25 @@ server = FoxMCPServer(
 
 3. **MCP client connection issues**:
    ```bash
-   # Test MCP server
-   curl http://localhost:3000/health
-
-   # Check MCP server logs
-   python server/server.py --debug
+   # Reach the MCP server
+   curl http://localhost:3000
    ```
 
-### Debug Mode
+   The server logs to stdout, so run it in the foreground to watch connections
+   arrive.
+
+### Debug Logging
+
+The server logs at `INFO`. There is no verbosity flag — the level is set in
+`server/server.py`.
+
+For extension-side detail, set `ENABLE_DEBUG_LOGGING_TO_SERVER = true` near the top of
+`extension/background.js`. The extension then forwards its logs over the WebSocket and
+the server prints them under `----- EXTENSION DEBUG LOG -----`. Rebuild after the edit,
+and set it back to `false` before committing:
 
 ```bash
-# Enable verbose logging
-python server/server.py --debug
-
-# Or set environment variable
-export FOXMCP_DEBUG=1
-python server/server.py
+make clean && make package && rm -rf dist/profile-cache/*
 ```
 
 ## Security Configuration
@@ -319,29 +318,16 @@ else:
     )
 ```
 
-## Monitoring and Health Checks
+## Checking Server Health
 
-### Health Endpoints
+There are no health, status, or metrics HTTP endpoints. Three things tell you whether
+the pair is connected:
 
-```bash
-# Check WebSocket server
-curl http://localhost:8765/health
+| Check | How | Tells you |
+|---|---|---|
+| `debug_websocket_status` | Call the MCP tool | Whether the extension is connected right now |
+| Extension popup | Click the toolbar icon | Connection state from the browser's side |
+| `make status` | From the project root | Whether port 8765 is in use |
 
-# Check MCP server
-curl http://localhost:3000/health
-
-# Get server status
-curl http://localhost:8765/status
-```
-
-### Metrics Collection
-
-```python
-# Enable metrics collection
-server = FoxMCPServer(
-    enable_metrics=True,
-    metrics_port=9090
-)
-
-# Access metrics at http://localhost:9090/metrics
-```
+The server logs connections and disconnections to stdout, so running it in the
+foreground is the quickest way to watch the socket come and go.

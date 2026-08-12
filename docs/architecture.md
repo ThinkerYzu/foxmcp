@@ -18,11 +18,12 @@ Overview of the FoxMCP system architecture, components, and data flow.
 │ WebExtensions   │
 │ APIs            │
 │  - Tabs         │
+│  - Windows      │
 │  - History      │
 │  - Bookmarks    │
 │  - Navigation   │
 │  - Content      │
-│  - Windows      │
+│  - webRequest   │
 └─────────────────┘
 ```
 
@@ -34,44 +35,45 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 
 **Location**: `extension/`
 
+**Manifest**: Manifest V2, extension ID `foxmcp@codemud.org`.
+
 #### Background Script (`background.js`)
-- **Service Worker**: Runs in background, persists across browser sessions
-- **WebSocket Client**: Maintains connection to Python server
-- **API Handler**: Processes incoming requests and calls WebExtensions APIs
-- **Response Manager**: Formats and sends responses back to server
+- **Persistent Background Page**: Declared `"persistent": true` in the manifest, so it runs for the lifetime of the browser session (this is a background page, not a service worker)
+- **WebSocket Client**: Maintains the connection to the Python server and reconnects when it drops
+- **Action Router**: Splits each incoming action on `.` and dispatches to the handler for that namespace
+- **Response Manager**: Formats and sends responses back to the server
 
 #### Content Script (`content.js`)
-- **Page Injection**: Injected into web pages for content access
+- **Page Injection**: Injected into all pages (`<all_urls>`) for content access
 - **JavaScript Execution**: Executes custom scripts in page context
 - **DOM Interaction**: Extracts text, HTML, and manipulates page content
 - **Communication Bridge**: Relays data between page and background script
 
 #### Popup Interface (`popup/`)
-- **Configuration UI**: User-friendly settings interface
+- **Configuration UI**: Connection settings
 - **Real-time Status**: Live connection status and diagnostics
-- **Storage Management**: Persists settings using `storage.sync` API
+- **Storage Management**: Persists settings using `storage.sync`
 - **Test Mode**: Override settings for development and testing
+
+#### Options Page (`options.html`, `options.js`)
+- Full settings page, opened in a tab (`options_ui.open_in_tab`), backed by the same `storage.sync` values as the popup
 
 ### 2. Python Server
 
 **Location**: `server/`
 
 #### WebSocket Server (`server.py`)
-- **Connection Management**: Handles extension connections and reconnections
-- **Message Routing**: Routes messages between extension and MCP clients
+- **Connection Management**: Accepts the extension connection and tracks it as `self.extension_connection`
+- **Request Correlation**: Maps request IDs to `asyncio.Future` objects in `self.pending_requests` and resolves them when the matching response arrives
 - **Protocol Implementation**: WebSocket message protocol handling
-- **Security**: Localhost-only binding and input validation
+- **Security**: Localhost-only binding
+- **Lifecycle**: Graceful startup and shutdown, including cleanup of the extension connection
 
-#### FastMCP Integration (`fastmcp_tools.py`)
-- **MCP Tool Definitions**: Converts browser functions to MCP tools
-- **Parameter Validation**: Validates tool parameters and types
-- **Response Formatting**: Formats browser responses for MCP clients
-- **Error Handling**: Comprehensive error handling and reporting
-
-#### Utilities (`utils.py`)
-- **Helper Functions**: Common utilities for message handling
-- **Validation**: Input validation and sanitization
-- **Logging**: Structured logging and debugging support
+#### MCP Tools (`mcp_tools.py`)
+- **MCP Tool Definitions**: 35 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
+- **Parameter Validation**: Type-annotated tool signatures; FastMCP derives the schema
+- **Response Formatting**: Each tool turns the raw browser response into a human-readable string
+- **Error Handling**: Every tool checks for `error` in the response before reading data
 
 ### 3. Communication Protocols
 
@@ -80,11 +82,13 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 {
   "id": "unique-request-id",
   "type": "request|response|error",
-  "action": "function_name",
-  "data": {...},
+  "action": "namespace.function",
+  "data": {},
   "timestamp": "ISO-8601"
 }
 ```
+
+Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.create`, `requests.start_monitoring`. The prefix selects the handler in the extension. See [protocol.md](protocol.md) for the full specification.
 
 #### MCP Protocol
 - **Standard MCP Tools**: Browser functions exposed as MCP tools
@@ -126,7 +130,7 @@ Python Server
 External Script
     ↓ (JavaScript code output)
 Python Server
-    ↓ (WebSocket: content_execute_script)
+    ↓ (WebSocket: content.execute_script)
 Firefox Extension
     ↓ (Inject into content script)
 Page JavaScript Context
@@ -141,65 +145,96 @@ MCP Client
 ## Security Architecture
 
 ### 1. Network Security
-- **Localhost Binding**: All servers bind only to `127.0.0.1`
-- **No External Access**: Cannot be accessed from network
-- **Port Isolation**: Default ports for different services
+- **Localhost Binding**: The server binds to `localhost` by default
+- **No External Access**: Not reachable from the network in the default configuration
+- **Port Separation**: WebSocket and MCP listen on different ports
 
 ### 2. Extension Security
-- **Content Security Policy**: Strict CSP in manifest
-- **Permission Model**: Minimal required permissions
-- **Input Validation**: All inputs validated before processing
-- **Sandboxing**: Content scripts run in isolated context
+- **Broad Permissions**: The extension requests `tabs`, `windows`, `history`, `bookmarks`, `activeTab`, `storage`, `webRequest`, and `<all_urls>`. This is deliberately wide — the extension exists to expose browser state — and it is the reason the server must stay on localhost. Treat an installed FoxMCP as granting its MCP client the same reach over the browser that you have.
+- **Sandboxing**: Content scripts run in the standard isolated content-script context
 
 ### 3. Script Security
-- **Path Validation**: Predefined scripts path traversal protection
-- **Character Filtering**: Only safe characters allowed in script names
-- **Timeout Protection**: Scripts timeout after 30 seconds
-- **Execution Isolation**: Scripts run in separate processes
 
-## Scalability Considerations
+Enforced in `mcp_tools.py` before a predefined script runs:
+
+- **Opt-in**: Scripts are disabled unless `FOXMCP_EXT_SCRIPTS` is set
+- **Name Filtering**: Script names must match `^[a-zA-Z0-9._-]+$` and may not contain `/`, `\`, or `..`
+- **Path Containment**: The resolved absolute path must stay inside the scripts directory
+- **Executable Check**: The file must exist and be executable
+- **Timeout Protection**: Scripts are killed after 30 seconds
+- **Execution Isolation**: Scripts run as separate subprocesses
+
+## Concurrency and Limits
 
 ### 1. Connection Management
-- **Single Extension Connection**: One extension per server instance
-- **Multiple MCP Clients**: Multiple clients can connect to same server
-- **Reconnection Logic**: Automatic reconnection on connection loss
+- **Single Extension Connection**: One extension connection at a time. When a new one arrives, the server closes the existing connection first, which prevents connection races between two browsers or a stale socket.
+- **MCP Clients**: Served by FastMCP. There is no per-client state — all clients share the one extension connection, and requests from different clients interleave.
+- **Reconnection Logic**: The extension retries indefinitely by default (`maxRetries: -1`, subject to an absolute ceiling) and reconnects when settings change.
 
-### 2. Performance Optimization
+### 2. Request Handling
 - **Async Processing**: All operations are asynchronous
-- **Message Queuing**: WebSocket messages queued for reliability
-- **Resource Cleanup**: Automatic cleanup of resources
-- **Caching**: Response caching where appropriate
+- **Concurrent Requests**: Multiple requests can be in flight on the single socket at once; responses are matched by `id`, not by order, so a slow request does not block the others
+- **Timeouts**: `send_request_and_wait` defaults to 30 seconds and **returns** an `{"error": ...}` dict on expiry rather than raising — callers must check for `error` before reading data
+- **Cleanup**: Every exit path removes its entry from `pending_requests`
 
-### 3. Resource Limits
-- **Message Size**: Maximum WebSocket message size limits
-- **Timeout Handling**: Request timeouts prevent hanging
-- **Memory Management**: Automatic garbage collection
-- **Process Isolation**: External scripts run in separate processes
+### 3. Known Limits
+- **No queuing or retry**: A request sent while the extension is disconnected fails immediately; nothing is buffered for later delivery
+- **No response caching**: Every tool call is a fresh round trip to the browser
+- **No message size limit configured**: The `websockets` library default applies
 
 ## Extension Points
 
 ### 1. Adding New Browser Functions
 
-**Step 1: Extension** (`background.js`)
+Both halves must be changed. One without the other is a silent failure.
+
+**Step 1: Extension** (`background.js`) — add a `case` to the handler for the namespace, or a new `handle<Namespace>Action` function plus a `case` in `handleMessage`'s router:
+
 ```javascript
-actions.new_function = async (data) => {
-    const result = await browser.someAPI.someFunction(data.param);
-    return { success: true, result };
-};
+case 'windows.new_function':
+  if (!data.windowId) {
+    sendError(id, 'INVALID_PARAMETER', 'windowId is required for windows.new_function');
+    return;
+  }
+  const result = await browser.windows.someFunction(data.windowId);
+  sendResponse(id, action, { result });
+  break;
 ```
 
-**Step 2: MCP Tool** (`fastmcp_tools.py`)
+**Step 2: MCP Tool** (`mcp_tools.py`) — register the tool and build the request explicitly:
+
 ```python
-@app.tool()
-def new_function(param: str) -> str:
-    """New browser function"""
-    return send_browser_request({
-        "action": "new_function",
-        "data": {"param": param}
-    })
+@self.mcp.tool()
+async def new_function(window_id: int) -> str:
+    """New browser function
+
+    Args:
+        window_id: The ID of the window
+
+    Returns:
+        String describing the outcome
+    """
+    request = {
+        "id": str(uuid.uuid4()),
+        "type": "request",
+        "action": "windows.new_function",
+        "data": {"windowId": window_id},
+        "timestamp": datetime.now().isoformat()
+    }
+
+    response = await self.websocket_server.send_request_and_wait(request)
+
+    if "error" in response:
+        return f"Error: {response['error']}"
+
+    return f"Result: {response.get('data', {}).get('result')}"
 ```
+
+**Step 3**: add the permission to `manifest.json` if the API needs one, document the action in [protocol.md](protocol.md) and the tool in [api-reference.md](api-reference.md), and add an integration test.
 
 ### 2. Custom Script Integration
+
+A predefined script is a program whose **stdout is JavaScript**. The server runs it, then injects what it printed.
 
 **Script Creation**
 ```bash
@@ -212,124 +247,102 @@ echo "(function() { return 'Custom functionality'; })()"
 result = content_execute_predefined(
     tab_id=123,
     script_name="custom_script.sh",
-    script_args=["arg1", "arg2"]
+    script_args='["arg1", "arg2"]'
 )
 ```
+
+See [scripts.md](scripts.md) for the full guide.
 
 ## Testing Architecture
 
 ### 1. Unit Tests
 - **Server Components**: Test individual server functions
 - **Protocol Validation**: Test message format validation
-- **Utility Functions**: Test helper functions and utilities
 
 ### 2. Integration Tests
 - **End-to-End**: Test complete MCP → Browser flow
 - **Extension Communication**: Test WebSocket communication
-- **Browser APIs**: Test actual browser function calls
+- **Browser APIs**: Test actual browser function calls with real Firefox
 - **Script Execution**: Test predefined script execution
 
 ### 3. Test Infrastructure
 - **Centralized Fixtures**: Shared test setup in `conftest.py`
-- **Port Coordination**: Isolated test ports prevent conflicts
-- **Firefox Management**: Automated Firefox profile creation
+- **Port Coordination**: `port_coordinator.py` allocates ports dynamically, and `FoxMCPServer` detects pytest to avoid the default MCP port — so the suite can run while a development server is up
+- **Firefox Management**: Automated temporary profile creation and extension installation via `setup_and_start_firefox()`
 - **Cleanup**: Automatic resource cleanup after tests
 
 ## Configuration Architecture
 
 ### 1. Server Configuration
+
+Constructed in code:
+
 ```python
 server = FoxMCPServer(
     host="localhost",      # Security: localhost only
-    port=8765,            # WebSocket port
-    mcp_port=3000,        # MCP server port
-    start_mcp=True        # Enable MCP integration
+    port=8765,             # WebSocket port
+    mcp_port=3000,         # MCP server port (None → 3000, or dynamic under pytest)
+    start_mcp=True         # Enable MCP integration
 )
+```
+
+Or from the command line:
+
+```bash
+python server/server.py --host localhost --port 8765 --mcp-port 3000
+python server/server.py --no-mcp          # WebSocket only
 ```
 
 ### 2. Extension Configuration
 - **storage.sync**: Persistent configuration across browser restarts
-- **UI Configuration**: Real-time configuration via popup interface
+- **UI Configuration**: Real-time configuration via popup and options page
 - **Test Overrides**: Development configuration overrides
 - **Auto-reconnection**: Automatic reconnection on setting changes
 
 ### 3. Environment Configuration
+
 ```bash
-# Required for predefined scripts
+# Required for predefined scripts; without it, the feature is disabled
 export FOXMCP_EXT_SCRIPTS="/path/to/scripts"
-
-# Optional server configuration
-export FOXMCP_WEBSOCKET_PORT=8765
-export FOXMCP_MCP_PORT=3000
-export FOXMCP_DEBUG=1
 ```
 
-## Deployment Architecture
+This is the only environment variable the server reads. Host and ports are set through the constructor or the command-line flags above.
 
-### 1. Development Deployment
+## Deployment
+
+### 1. Development
+
 ```bash
-# Local development
 make dev                # Setup environment
-make build             # Build extension
-make run-server        # Start server
+make build              # Build extension
+make run-server         # Start server
 ```
 
-### 2. Production Considerations
-- **Extension Packaging**: XPI file for distribution
-- **Server Packaging**: Python package with dependencies
-- **Security Hardening**: Production security configuration
-- **Monitoring**: Health checks and logging
+### 2. Distribution
+- **Extension Packaging**: XPI file, published to the Firefox Add-ons store and attached to GitHub releases
+- **Server**: Run from the checkout with its virtual environment; `scripts/install-from-github.sh` sets this up for end users
+- **Versioning**: Extension and server are released together — the WebSocket protocol is the compatibility boundary between them
 
-### 3. Docker Deployment
-```dockerfile
-FROM python:3.11
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt
-EXPOSE 8765 3000
-CMD ["python", "server/server.py"]
-```
+### 3. Observability
 
-## Monitoring and Observability
-
-### 1. Logging
-- **Structured Logging**: JSON-formatted logs
-- **Log Levels**: DEBUG, INFO, WARNING, ERROR
-- **Component Tracing**: Track requests across components
-- **Error Tracking**: Comprehensive error logging
-
-### 2. Metrics
-- **Connection Metrics**: Active connections, reconnections
-- **Request Metrics**: Request rate, response time, errors
-- **Resource Metrics**: Memory usage, CPU usage
-- **Custom Metrics**: Business-specific metrics
-
-### 3. Health Checks
-```bash
-# WebSocket server health
-curl http://localhost:8765/health
-
-# MCP server health
-curl http://localhost:3000/health
-
-# Extension connection status
-# Available through WebSocket /status endpoint
-```
+Python `logging` at INFO level, in the default text format, to stderr. `claudebugzilla/start.sh` redirects this to a log file. There are no health endpoints, no metrics collection, and no structured log format.
 
 ## Future Architecture Considerations
+
+These are not implemented. They are recorded as directions that have been considered, not as plans.
 
 ### 1. Multi-Browser Support
 - **Browser Abstraction**: Common interface for different browsers
 - **Protocol Standardization**: Browser-agnostic messaging
 - **Extension Variants**: Browser-specific extension implementations
 
-### 2. Distributed Architecture
-- **Server Clustering**: Multiple server instances
-- **Load Balancing**: Request distribution across servers
-- **State Management**: Shared state across server instances
+### 2. Production Hardening
+- **Health Checks**: HTTP health endpoints for the WebSocket and MCP servers
+- **Metrics**: Connection counts, request rates, response times, error rates
+- **Structured Logging**: JSON-formatted logs with request tracing across components
+- **Containerization**: A Docker image bundling the server and its dependencies
 
 ### 3. Enhanced Security
 - **Authentication**: User authentication for MCP clients
-- **Authorization**: Role-based access control
-- **Encryption**: End-to-end encryption for sensitive data
-- **Audit Logging**: Comprehensive audit trail
+- **Authorization**: Role-based access control over the tool surface
+- **Audit Logging**: A record of which client invoked which tool

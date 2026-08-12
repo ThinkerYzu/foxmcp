@@ -346,11 +346,10 @@ Test your scripts independently before using with FoxMCP:
 4. **Timeout errors**: Optimize script for faster execution (< 30 seconds)
 5. **Argument parsing**: Ensure arguments are properly escaped and validated
 
-### Debug Mode
+### Debug Logging
 
-Enable debug logging to troubleshoot script execution:
+The server logs script execution at `INFO`, so run it in the foreground to watch
+scripts resolve and execute. There is no verbosity flag.
 
-```bash
-# Server will log script execution details
-python server/server.py --debug
-```
+For the browser side of a failing script, set `ENABLE_DEBUG_LOGGING_TO_SERVER = true`
+in `extension/background.js` — see [Debug Logging](configuration.md#debug-logging).

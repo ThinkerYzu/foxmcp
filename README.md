@@ -184,8 +184,8 @@ python server/server.py --port 9000 --mcp-port 4000
 # WebSocket only (no MCP)
 python server/server.py --no-mcp
 
-# Debug mode
-python server/server.py --debug
+# Bind a different host
+python server/server.py --host 127.0.0.1
 ```
 
 ### Extension Configuration
@@ -293,7 +293,7 @@ See [Development Guide](docs/development.md) for detailed instructions.
 ### MCP Client Issues
 1. Check MCP server: `curl http://localhost:3000`
 2. Verify client configuration matches server ports
-3. Enable debug logging: `python server/server.py --debug`
+3. Run the server in the foreground and watch its log output
 
 ### Permission Errors
 1. Ensure virtual environment is activated

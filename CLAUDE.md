@@ -75,11 +75,14 @@ const ENABLE_DEBUG_LOGGING_TO_SERVER = false;  // Set to true for debugging
 
 # Documentation Files Reference
 
-## docs/PLAN.md
-- Development plan with 4 phases (3 complete, 1 partial)
-- Current implementation status and next priority tasks
-- 18 total tasks: 17 completed, 1 pending
-- Comprehensive test suite with 211 tests passing (59 unit + 134 integration), all tests enabled
+## Project status and planning
+Tracked outside this repo, in the docforge at
+`~/progm/claudebugzilla/proj_docs/foxmcp/` — see its `HANDOFF.md` for current
+status and next actions, and `DESIGN.md` for the decisions behind the
+architecture. `docs/PLAN.md` used to hold this and was retired on 2026-08-11
+after drifting out of date.
+
+Reference documentation for how FoxMCP *works* stays here in `docs/`.
 
 ## docs/protocol.md
 - WebSocket message protocol specification
