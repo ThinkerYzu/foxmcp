@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**214 passing, 0 skipped** — 71 unit and 143 integration.
+**219 passing, 0 skipped** — 71 unit and 148 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,12 +42,12 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 214. Run them by hand if you need them.
+and are **not** part of the 219. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
 | `unit/` | 71 | no |
-| `integration/` | 143 | yes |
+| `integration/` | 148 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
@@ -83,6 +83,7 @@ and are **not** part of the 214. Run them by hand if you need them.
 | `test_ui_storage_sync.py` | 6 | Popup settings persistence |
 | `test_browser_functionality.py` | 5 | Tabs, script execution, reload, content, screenshots |
 | `test_connection_origin.py` | 5 | The origin allowlist on the extension WebSocket |
+| `test_mcp_port_not_web_reachable.py` | 5 | That no web page can reach the MCP port — see [Dependency-held guarantees](#dependency-held-guarantees) |
 | `test_real_firefox_communication.py` | 5 | Extension-server message exchange in a real browser |
 | `test_request_monitoring_end_to_end.py` | 5 | Capture a request and read its content back |
 | `test_history_mcp_integration.py` | 4 | History through the MCP tool surface |
@@ -261,13 +262,31 @@ The origin the helper sends is arbitrary — the server matches the `moz-extensi
 scheme, not a specific UUID, because Firefox assigns a different one to every install.
 The check itself is tested in `integration/test_connection_origin.py`.
 
+## Dependency-Held Guarantees
+
+`integration/test_mcp_port_not_web_reachable.py` is unusual: it asserts behavior FoxMCP
+does not implement.
+
+The MCP port has no authentication, so anything that can send it a request can call
+every tool. Three things keep web pages out — no CORS headers, content-type enforcement
+that closes the no-preflight `text/plain` bypass, and a session id the browser cannot
+read cross-origin — and **all three belong to `fastmcp`, the MCP SDK and uvicorn**.
+
+A security property held by a dependency is only safe while someone is checking it. The
+`fastmcp` floor in `requirements.txt` has already drifted several major versions without
+anyone noticing, so an upgrade that starts sending permissive CORS headers is a real
+path. The test turns "we checked once" into "we check every run."
+
+**If it fails after a dependency bump, the port is reachable from any page the user
+visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
+
 ## Rules
 
 - **Test URLs are `example.org`.** Never `httpbin.org` or any other live service —
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 214 must pass.
+- **Run the suite before committing.** All 219 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem

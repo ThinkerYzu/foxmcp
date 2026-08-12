@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Test clients that stand in for the extension must send an extension origin; use `connect_as_extension()` from `tests/test_config.py`.
 
 ### Added
+- **A regression test for the MCP port's web-unreachability.** The port has no authentication, and what keeps web pages off it — absent CORS headers, content-type enforcement, and a session id the browser cannot read — is behavior of `fastmcp`/uvicorn rather than of FoxMCP. `tests/integration/test_mcp_port_not_web_reachable.py` asserts all three, so a dependency upgrade that re-opens the port fails the suite instead of passing quietly. No CORS policy was added: the door is already shut, and hand-rolling one risks breaking legitimate MCP clients.
 - **Audit logging for predefined scripts.** `content_execute_predefined` is the one tool that runs a program on the host, and it previously logged nothing at all — a refused path-traversal attempt and a routine call were equally invisible. Each invocation now logs the script name, arguments and tab at `INFO`, followed by the size of the generated JavaScript and the URL it ran against; every refusal and failure logs at `WARNING`. Arguments are truncated at 120 characters, and the generated JavaScript is never written to the log. See [`docs/scripts.md`](docs/scripts.md#what-gets-logged).
 
 ## [1.1.0] - 2025-10-26
