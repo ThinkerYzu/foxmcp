@@ -718,6 +718,10 @@ class FoxMCPTools:
         ) -> str:
             """Capture a screenshot of the visible tab
 
+            What comes back depends on whether you pass a filename: with one, the image is
+            written to disk and you get a success message and the path; without one, you get
+            the image inline as a base64 data URL, which for a full window is large.
+
             Args:
                 filename: Name of the file to save the screenshot (optional, if not provided returns base64)
                 window_id: ID of the window to capture (optional, defaults to current window)
@@ -726,6 +730,8 @@ class FoxMCPTools:
 
             Returns:
                 Success message with file path if filename provided, otherwise base64 encoded image data URL
+
+                Not exposed to clients — see the description above.
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -941,6 +947,11 @@ class FoxMCPTools:
         async def bookmarks_list(folder_id: Optional[str] = None) -> str:
             """List browser bookmarks
 
+            Folders are marked 📁 and bookmarks 🔖. Every line carries its own ID and its
+            parent folder's ID — those IDs are what bookmarks_update, bookmarks_delete and
+            the parent_id of bookmarks_create take, so this listing is how you find them.
+            An empty folder returns "No bookmarks found".
+
             Args:
                 folder_id: Optional folder ID to list bookmarks from
 
@@ -950,12 +961,7 @@ class FoxMCPTools:
                 📁 {folder_title} (ID: {folder_id}, Parent: {parent_id})
                 🔖 {bookmark_title} - {bookmark_url} (ID: {bookmark_id}, Parent: {parent_id})"
 
-                Format details:
-                - Folders are prefixed with 📁 emoji
-                - Bookmarks are prefixed with 🔖 emoji
-                - Each item includes its unique ID and parent ID for reference
-                - Parent ID shows which folder contains the item
-                - Returns "No bookmarks found" if the folder/root is empty
+                Not exposed to clients — see the description above.
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -993,7 +999,12 @@ class FoxMCPTools:
         # Search Bookmarks Tool
         @self.mcp.tool()
         async def bookmarks_search(query: str) -> str:
-            """Search browser bookmarks
+            """Search browser bookmarks by title or URL
+
+            Matches bookmarks only — **folders are never returned**, so a folder cannot be
+            found this way; use bookmarks_list to walk the tree instead. Each result carries
+            its own ID and its parent folder's ID, which is what bookmarks_update and
+            bookmarks_delete take. No matches returns "No bookmarks found".
 
             Args:
                 query: Search query for bookmarks
@@ -1003,10 +1014,7 @@ class FoxMCPTools:
                 "Found N bookmarks for 'query':
                 🔖 {bookmark_title} - {bookmark_url} (ID: {bookmark_id}, Parent: {parent_id})"
 
-                Format details:
-                - Only bookmarks (not folders) are included in search results
-                - Each result includes title, URL, unique ID, and parent folder ID
-                - Returns "No bookmarks found" if no matches
+                Not exposed to clients — see the description above.
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -1638,6 +1646,10 @@ class FoxMCPTools:
         ) -> str:
             """
             Start monitoring web requests
+
+            Returns JSON containing a **monitor_id**. Keep it — requests_list_captured,
+            requests_get_content and requests_stop_monitoring all take it, so losing it
+            leaves the monitor running with no way to read or stop it.
 
             Args:
                 url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
