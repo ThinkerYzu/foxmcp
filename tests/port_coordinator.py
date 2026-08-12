@@ -1,23 +1,32 @@
 """
-Dynamic Port Coordination System for FoxMCP Testing
+Port Assignments for FoxMCP Testing
 
-Provides centralized port allocation to avoid conflicts between:
-- Main server ports (fixed: websocket=40000, mcp=40200)
-- Individual test ports (dynamic: 40400-40599, 40600-40799)
-- Coordinated test environments (Firefox extension tests)
+Gives every test server a port well away from the ones a live FoxMCP server
+uses (8767 for the websocket, 3000 for MCP), so running the suite never
+disturbs a running installation.
+
+Each role gets one fixed port rather than a port picked from a range. Tests run
+sequentially in a single process, so only one server holds a port at a time,
+and SO_REUSEADDR lets the next test rebind it without waiting out TIME_WAIT.
+Fixed ports also keep the Firefox profile cache worth having: a cached profile
+records the port it was built for, so a stable port means the profile is reused
+instead of rebuilt from scratch.
+
+The cost is that two test runs at once collide - the second one fails to bind
+with "address already in use". Run one suite at a time.
 
 Main API:
-- get_port_by_type(port_type): Get any port by type
-- coordinated_test_ports(): Context manager for test coordination
+- get_port_by_type(port_type): Get the port assigned to a role
+- coordinated_test_ports(): Context manager pairing a websocket and MCP port
+  with a coordination file, for Firefox extension tests
 
 Port Types:
-- 'websocket': Fixed websocket server port (40000)
-- 'mcp': Fixed MCP server port (40200)
-- 'test_individual': Dynamic individual test ports (40400-40599)
-- 'test_mcp_individual': Dynamic individual MCP test ports (40600-40799)
+- 'websocket': Main websocket server port (40000)
+- 'mcp': Main MCP server port (40200)
+- 'test_individual': Individual test websocket port (40400)
+- 'test_mcp_individual': Individual test MCP port (40600)
 """
 
-import socket
 import tempfile
 import os
 import json
@@ -25,62 +34,34 @@ import time
 from contextlib import contextmanager
 from typing import Tuple, Dict, Optional
 
-# Module-level port range constants - use high ephemeral port range to avoid conflicts
-
-# Port ranges for the different server types and test scenarios
-PORT_RANGES = {
-    'websocket': {'type': 'fixed', 'port': 40000},
-    'mcp': {'type': 'fixed', 'port': 40200},
-    'test_individual': {'type': 'fixed', 'port': 40400},
-    'test_mcp_individual': {'type': 'fixed', 'port': 40600}
+# The port assigned to each server role, kept high to stay clear of the live
+# server and of anything else likely to be listening on a developer's machine.
+FIXED_PORTS = {
+    'websocket': 40000,
+    'mcp': 40200,
+    'test_individual': 40400,
+    'test_mcp_individual': 40600
 }
 
 
 class PortCoordinator:
-    """Manages dynamic port allocation and coordination for testing"""
+    """Hands out test server ports and the coordination file that shares them with Firefox"""
 
     def __init__(self):
-        self.allocated_ports = set()
         self.coordination_file = None
-    
-
-    def release_port(self, port: int):
-        """Release a port back to the available pool"""
-        self.allocated_ports.discard(port)
-
-    def release_all_ports(self):
-        """Release all allocated ports - useful for cleanup between tests"""
-        self.allocated_ports.clear()
 
     def get_port_by_type(self, port_type: str) -> int:
-        """Get port by type - handles both fixed ports and dynamic ranges"""
-        if port_type not in PORT_RANGES:
-            raise ValueError(f"Invalid port type '{port_type}'. Available types: {list(PORT_RANGES.keys())}")
+        """
+        Return the port assigned to a server role.
 
-        port_config = PORT_RANGES[port_type]
+        Raises ValueError for an unknown role, since a typo would otherwise
+        surface much later as a connection that never arrives.
+        """
+        if port_type not in FIXED_PORTS:
+            raise ValueError(f"Invalid port type '{port_type}'. Available types: {list(FIXED_PORTS.keys())}")
 
-        if port_config['type'] == 'fixed':
-            return port_config['port']
-        elif port_config['type'] == 'range':
-            # For ranges, find an available port within the range
-            start, end = port_config['range']
-            for port in range(start, end + 1):
-                if port not in self.allocated_ports:
-                    try:
-                        # Test if port is available
-                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                            sock.bind(('localhost', port))
-                            self.allocated_ports.add(port)
-                            return port
-                    except OSError:
-                        continue
+        return FIXED_PORTS[port_type]
 
-            raise RuntimeError(f"No available ports in range {port_config['range']} for type '{port_type}'")
-        else:
-            raise ValueError(f"Unknown port type configuration: {port_config['type']}")
-
-    
     def create_coordination_file(self, ports: Dict[str, int]) -> str:
         """Create a temporary file with port coordination info"""
         # Create temp file that both server and extension can access
@@ -120,11 +101,6 @@ class PortCoordinator:
         except Exception:
             return None
     
-    def release_ports(self, ports: Dict[str, int]):
-        """Release allocated ports"""
-        for port in ports.values():
-            self.allocated_ports.discard(port)
-    
     def cleanup(self):
         """Clean up coordination file"""
         if self.coordination_file and os.path.exists(self.coordination_file):
@@ -137,12 +113,17 @@ class PortCoordinator:
 
 @contextmanager
 def coordinated_test_ports():
-    """Context manager for coordinated test ports - allocates dynamic test ports"""
+    """
+    Yield the individual-test port pair together with a coordination file.
+
+    Firefox cannot be told the port on the command line, so the extension reads
+    it from the coordination file this creates; the file is removed on exit.
+    Ports are the fixed individual-test pair, so nested or repeated use hands
+    back the same two numbers.
+    """
     coordinator = PortCoordinator()
-    ports = None
 
     try:
-        # Allocate dynamic test ports instead of fixed server ports
         websocket_port = get_port_by_type('test_individual')
         mcp_port = get_port_by_type('test_mcp_individual')
 
@@ -157,8 +138,6 @@ def coordinated_test_ports():
         yield ports, coordination_file
 
     finally:
-        if ports:
-            coordinator.release_ports(ports)
         coordinator.cleanup()
 
 
@@ -211,7 +190,7 @@ class FirefoxPortCoordinator:
 
 
 def get_port_by_type(port_type: str) -> int:
-    """Get port by type using PortCoordinator - unified interface for all port allocation"""
+    """Return the port assigned to a role - the one entry point tests should use for ports"""
     coordinator = PortCoordinator()
     return coordinator.get_port_by_type(port_type)
 

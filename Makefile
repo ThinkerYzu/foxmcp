@@ -4,10 +4,13 @@
 # Variables
 FIREFOX_PATH ?= firefox
 
-# Install into the project venv explicitly. A bare `pip` targets whatever
-# interpreter happens to be active, which is how the venv ended up holding the
-# server dependencies but no pytest.
-VENV_PIP ?= venv/bin/pip
+# Install into the project venv explicitly, and run its tools from there too. A
+# bare `pip` targets whatever interpreter happens to be active, which is how the
+# venv ended up holding the server dependencies but no pytest; a bare `flake8`
+# has the matching problem of resolving against PATH rather than the venv the
+# package was just installed into.
+VENV_BIN ?= venv/bin
+VENV_PIP ?= $(VENV_BIN)/pip
 
 .PHONY: help install build test clean run-server run-tests dev setup check lint package all setup-test-imports
 
@@ -80,7 +83,7 @@ setup-test-imports:
 
 dev: setup
 	@echo "Setting up development environment..."
-	pip install --upgrade pip
+	$(VENV_PIP) install --upgrade pip
 	@echo "✅ Development environment ready!"
 
 # Building
@@ -144,11 +147,11 @@ check: lint test
 
 lint:
 	@echo "Running Python linting..."
-	@command -v flake8 >/dev/null 2>&1 || { echo "Installing flake8..."; pip install flake8; }
+	@test -x $(VENV_BIN)/flake8 || { echo "Installing flake8..."; $(VENV_PIP) install flake8; }
 	@echo "Linting server code..."
-	@flake8 server/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in server/"
+	@$(VENV_BIN)/flake8 server/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in server/"
 	@echo "Linting test code..."
-	@flake8 tests/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in tests/"
+	@$(VENV_BIN)/flake8 tests/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in tests/"
 	@echo "✅ Linting complete!"
 
 
@@ -188,16 +191,16 @@ quick-test: build test-unit
 # Install development tools
 dev-tools:
 	@echo "Installing development tools..."
-	pip install flake8 black isort pytest-cov
+	$(VENV_PIP) install flake8 black isort pytest-cov
 	@echo "✅ Development tools installed!"
 
 # Format code
 format:
 	@echo "Formatting Python code..."
-	@command -v black >/dev/null 2>&1 || { echo "Installing black..."; pip install black; }
-	@command -v isort >/dev/null 2>&1 || { echo "Installing isort..."; pip install isort; }
-	black server/ tests/ --line-length=100
-	isort server/ tests/ --line-length=100
+	@test -x $(VENV_BIN)/black || { echo "Installing black..."; $(VENV_PIP) install black; }
+	@test -x $(VENV_BIN)/isort || { echo "Installing isort..."; $(VENV_PIP) install isort; }
+	$(VENV_BIN)/black server/ tests/ --line-length=100
+	$(VENV_BIN)/isort server/ tests/ --line-length=100
 	@echo "✅ Code formatting complete!"
 
 # Project status
@@ -209,8 +212,8 @@ status:
 	@find . -maxdepth 2 -type f -name "*.py" -o -name "*.js" -o -name "*.json" -o -name "*.md" | grep -v __pycache__ | sort
 	@echo ""
 	@echo "🐍 Python Dependencies:"
-	@echo "Server:" && (cd server && pip list --format=freeze | grep -E "(websockets|fastmcp)" || echo "  Not installed")
-	@echo "Tests:" && (cd tests && pip list --format=freeze | grep -E "(pytest|coverage)" || echo "  Not installed")
+	@echo "Server:" && ($(VENV_PIP) list --format=freeze | grep -E "(websockets|fastmcp)" || echo "  Not installed")
+	@echo "Tests:" && ($(VENV_PIP) list --format=freeze | grep -E "(pytest|coverage)" || echo "  Not installed")
 	@echo ""
 	@echo "🔗 WebSocket Server:"
 	@netstat -ln 2>/dev/null | grep ":8765" >/dev/null && echo "  ✅ Port 8765 in use (server may be running)" || echo "  ❌ Port 8765 available (server not running)"

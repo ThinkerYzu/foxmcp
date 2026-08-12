@@ -229,17 +229,16 @@ async def test_complete_mcp_to_firefox_chain():
             # Cleanup
             if 'mcp_client' in locals():
                 await mcp_client.disconnect()
-            
-            websocket_task.cancel()
+
+            # shutdown() is what closes the listening socket. Cancelling the
+            # task only stops the coroutine waiting on it, leaving the port
+            # bound for the rest of the process - which then makes the next
+            # test to use this port fail to bind.
+            await server.shutdown(websocket_task)
+
             mcp_task.cancel()
-            
             try:
-                await websocket_task
-            except asyncio.CancelledError:
-                pass
-                
-            try:
-                await mcp_task  
+                await mcp_task
             except asyncio.CancelledError:
                 pass
 

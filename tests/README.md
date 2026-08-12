@@ -185,6 +185,12 @@ The extension's build-time fallback port also changes from 8765 to 48765, so an
 extension in a test profile cannot reach a development server even if its stored
 settings are missing.
 
+Each port is fixed rather than drawn from a range. Tests run one at a time, so
+only one server holds a port at a time, and a fixed port is what lets the
+Firefox profile cache hit — a cached profile records the port it was built for.
+The cost is that **two suite runs at once collide**: the second fails to bind
+with `[errno 98] address already in use`. Run one suite at a time.
+
 Firefox learns its port through a coordination file written by
 `coordinated_test_ports()` and read by `FirefoxTestManager` during profile setup.
 

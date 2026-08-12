@@ -82,19 +82,24 @@ def test_firefox_test_manager_coordination():
             firefox.cleanup()
 
 def test_multiple_coordination_instances():
-    """Test that multiple coordination instances don't conflict"""
+    """Test that nested coordination instances agree on ports and keep separate files"""
     print("\nTesting multiple coordination instances...")
-    
-    # Allocate two sets of ports simultaneously 
+
+    # Ports are fixed per role, so both instances name the same two ports. What
+    # must differ is the coordination file: each Firefox profile reads its own
+    # copy, and a shared path would let one instance delete the other's file on
+    # exit.
     with coordinated_test_ports() as (ports1, coord_file1):
         with coordinated_test_ports() as (ports2, coord_file2):
-            # Ports should be different
-            assert ports1['websocket'] != ports2['websocket']
-            assert ports1['mcp'] != ports2['mcp']
-            
-            print(f"✓ Instance 1 ports: {ports1}")
-            print(f"✓ Instance 2 ports: {ports2}")
-            print("✓ Multiple coordination instances have different ports")
+            assert ports1['websocket'] == ports2['websocket']
+            assert ports1['mcp'] == ports2['mcp']
+            assert coord_file1 != coord_file2
+            assert os.path.exists(coord_file1)
+            assert os.path.exists(coord_file2)
+
+            print(f"✓ Instance 1 ports: {ports1} ({coord_file1})")
+            print(f"✓ Instance 2 ports: {ports2} ({coord_file2})")
+            print("✓ Nested coordination instances share ports and keep separate files")
 
 if __name__ == "__main__":
     print("🧪 Running Port Coordination Tests...")

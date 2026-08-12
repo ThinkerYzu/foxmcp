@@ -18,7 +18,7 @@ import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG, get_test_ports
 from firefox_test_utils import FirefoxTestManager
-from port_coordinator import coordinated_test_ports
+from port_coordinator import coordinated_test_ports, get_port_by_type
 
 
 class TestRealFirefoxCommunication:
@@ -72,9 +72,11 @@ class TestRealFirefoxCommunication:
     async def test_extension_configuration_persistence(self):
         """Test that extension configuration persists correctly in SQLite storage"""
 
-        # This test verifies the extension configuration system works
-        test_port = 9876  # Different port for this test
-
+        # This test verifies the extension configuration system works. No server
+        # is started, so the port is only ever written into the profile and read
+        # back out - but it still comes from the coordinator, so the profile
+        # cache is shared with the other tests on this port.
+        test_port = get_port_by_type('test_individual')
 
         with FirefoxTestManager(test_port=test_port) as firefox:
             # Set up Firefox with extension (which creates SQLite storage)

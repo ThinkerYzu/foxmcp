@@ -20,11 +20,17 @@ pip install -r tests/requirements.txt
 ```
 
 ## Installed Packages
-- ✅ **websockets 15.0.1** - WebSocket server/client
-- ✅ **pytest 8.4.1** - Testing framework
-- ✅ **pytest-asyncio 1.1.0** - Async test support
-- ✅ **pytest-mock 3.14.1** - Mocking for tests
-- ✅ **coverage 7.10.6** - Code coverage reporting
+
+Verified 2026-08-12 against the project venv:
+
+- ✅ **websockets 17.0.1** - WebSocket server/client
+- ✅ **fastmcp 3.4.7** - MCP server framework
+- ✅ **pytest 9.1.1** - Testing framework
+- ✅ **pytest-asyncio 1.4.0** - Async test support
+- ✅ **pytest-mock 3.15.1** - Mocking for tests
+- ✅ **pytest-cov 7.1.0** - Coverage plugin
+- ✅ **coverage 7.15.4** - Code coverage reporting
+- ✅ **aiohttp 3.14.3** - HTTP client used by the request-monitoring tests
 
 ## Running the Server
 

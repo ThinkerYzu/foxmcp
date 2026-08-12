@@ -545,8 +545,16 @@ class FoxMCPServer:
             except Exception as e:
                 logger.warning(f"Error stopping MCP server: {e}")
 
-    def _stop_websocket_server(self):
-        """Stop the WebSocket server gracefully"""
+    async def _stop_websocket_server(self):
+        """
+        Stop the WebSocket server and wait for its listening socket to be released.
+
+        Must be awaited: both the connection close and the server shutdown are
+        coroutines, and returning before they finish leaves the port bound. The
+        next server to bind that port then fails, which in the test suite shows
+        up as a client connecting to the old listener and timing out on the
+        handshake rather than as an obvious "address already in use".
+        """
         if self.websocket_server:
             try:
                 logger.info("Stopping WebSocket server...")
@@ -554,26 +562,30 @@ class FoxMCPServer:
                 # Close all existing connections first
                 if self.extension_connection:
                     try:
-                        # Properly close the WebSocket connection (sync call)
-                        self.extension_connection.close()
+                        await self.extension_connection.close()
                         logger.info("Extension connection closed")
                     except Exception as e:
                         logger.warning(f"Error closing extension connection: {e}")
                     finally:
                         self.extension_connection = None
 
-                # Close the WebSocket server
+                # close() only starts the shutdown; wait_closed() is what
+                # actually releases the port. Bounded so a connection that
+                # refuses to close cannot hang the caller forever.
                 self.websocket_server.close()
+                try:
+                    await asyncio.wait_for(self.websocket_server.wait_closed(), timeout=5.0)
+                    logger.info("WebSocket server stopped gracefully")
+                except asyncio.TimeoutError:
+                    logger.warning("WebSocket server did not release its port within timeout")
 
                 # Clean up reference
                 self.websocket_server = None
 
-                logger.info("WebSocket server stopped gracefully")
-
             except Exception as e:
                 logger.warning(f"Error stopping WebSocket server: {e}")
 
-    def _stop(self):
+    async def _stop(self):
         """Stop all servers (WebSocket and MCP)"""
         logger.info("Stopping FoxMCP server...")
 
@@ -581,7 +593,7 @@ class FoxMCPServer:
         self._stop_mcp_server()
 
         # Stop WebSocket server
-        self._stop_websocket_server()
+        await self._stop_websocket_server()
 
         logger.info("FoxMCP server stopped")
 
@@ -594,7 +606,7 @@ class FoxMCPServer:
         """
         try:
             # Stop server resources first
-            self._stop()
+            await self._stop()
 
             # Cancel the task
             server_task.cancel()
