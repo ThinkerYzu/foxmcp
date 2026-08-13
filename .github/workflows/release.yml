@@ -1,0 +1,201 @@
+name: Release
+
+# Builds and publishes a release from a tag, in public, from this repository's
+# source. Answers https://github.com/ThinkerYzu/foxmcp/issues/1 — the artifact a
+# user installs should be traceable to the commit it was built from, without
+# taking the maintainer's word for it.
+#
+# Every action used here is published by GitHub itself. The one outside
+# dependency is web-ext, which only the AMO job installs, and that job is the
+# only one that touches a credential.
+#
+# Two ways in:
+#   - push a tag v1.2.0            builds, publishes, submits to AMO
+#   - run it by hand with a version  verifies and builds, publishes nothing
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to rehearse, e.g. 1.2.0. No tag, no release, no AMO upload.'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      publish: ${{ steps.resolve.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version, and whether this run publishes
+        id: resolve
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            version="${DISPATCH_VERSION#v}"
+            publish=false
+          else
+            version="${GITHUB_REF_NAME#v}"
+            publish=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "Version $version, publish=$publish"
+
+      - name: Every file must agree with the tag
+        run: scripts/check-version.sh "${{ steps.resolve.outputs.version }}"
+
+      - name: The changelog must have something to say
+        run: scripts/release-notes.sh "${{ steps.resolve.outputs.version }}"
+
+  suite:
+    name: Full suite
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+      - uses: ./.github/actions/setup-firefox
+
+      - name: Run the suite
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/junit.xml
+        run: make test
+
+      # Same guard as CI: skips are not passes, and a release must not go out on
+      # a suite that quietly never ran.
+      - name: Fail if tests were skipped rather than run
+        if: always()
+        shell: python
+        run: |
+          import os, sys, xml.etree.ElementTree as ET
+
+          report = os.path.join(os.environ["RUNNER_TEMP"], "junit.xml")
+          if not os.path.exists(report):
+              sys.exit("No JUnit report was written; the suite did not start.")
+
+          suite = ET.parse(report).getroot()
+          if suite.tag == "testsuites":
+              suite = suite[0]
+          total = int(suite.get("tests", 0))
+          skipped = int(suite.get("skipped", 0))
+          print(f"{total} tests, {skipped} skipped")
+
+          if skipped:
+              sys.exit(f"{skipped} tests skipped; the suite expects none.")
+          if total < 200:
+              sys.exit(f"Only {total} tests collected; the suite should be well over 200.")
+
+  build:
+    name: Build and attest
+    needs: [verify, suite]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Both are needed to sign the provenance statement.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: make package
+
+      - name: Record checksums
+        working-directory: dist/packages
+        run: |
+          sha256sum 'foxmcp@codemud.org.xpi' foxmcp-server.zip | tee SHA256SUMS
+
+      # This is the part that answers issue #1. The attestation is a signed
+      # statement that these exact bytes came out of this workflow, at this
+      # commit, in this repository. Anyone can check it without trusting us:
+      #   gh attestation verify foxmcp@codemud.org.xpi --repo ThinkerYzu/foxmcp
+      - name: Attest where these artifacts came from
+        if: needs.verify.outputs.publish == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/packages/foxmcp@codemud.org.xpi
+            dist/packages/foxmcp-server.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/packages/
+
+  github-release:
+    name: Publish the GitHub release
+    needs: [verify, build]
+    if: needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/packages
+
+      - name: Write the release notes
+        run: scripts/release-notes.sh "${{ needs.verify.outputs.version }}" > "$RUNNER_TEMP/notes.md"
+
+      # install-from-github.sh ships as a release asset because README.md tells
+      # users to curl it straight from the release URL.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            --title "FoxMCP v$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            'dist/packages/foxmcp@codemud.org.xpi' \
+            dist/packages/foxmcp-server.zip \
+            dist/packages/SHA256SUMS \
+            scripts/install-from-github.sh
+
+  amo:
+    name: Submit to addons.mozilla.org
+    needs: [verify, build, github-release]
+    if: needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    # The credential gate. Configure this environment in repository settings with
+    # required reviewers and a branch/tag restriction, so the AMO keys are only
+    # reachable from a tag release someone approved — not from any workflow
+    # change that happens to land on master.
+    environment: amo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm install --global web-ext@8
+
+      - name: Build the extension directory
+        run: make build
+
+      # --channel=listed submits the version to the public AMO listing, where it
+      # enters Mozilla's review queue. --approval-timeout=0 returns as soon as
+      # the upload is accepted instead of blocking the runner until a human at
+      # Mozilla gets to it.
+      - name: Submit the version
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          web-ext sign \
+            --channel=listed \
+            --source-dir=dist/extension \
+            --artifacts-dir=dist/signed \
+            --approval-timeout=0
