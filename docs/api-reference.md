@@ -70,6 +70,31 @@ Complete reference for all MCP tools and browser functions available through Fox
   - `save_response_body_to`: Optional file path to save response body
   - Returns JSON with full headers and content
 
+#### What response body capture actually delivers
+
+Two limitations, both measured against Firefox 154. Neither is a configuration
+problem, so no combination of `options` works around them.
+
+**Response bodies usually are not captured.** The WebExtensions `webRequest` API
+does not expose response bodies at all, so the extension gets them by overriding
+`window.fetch` and `XMLHttpRequest` from a content script. That override only
+covers requests the page makes *after* the override is installed, only in tabs
+where the content script is running, and never covers the document load itself —
+by the time a content script exists, the HTML that carried it has already
+arrived. When there is no captured body you get `included: false` and
+`content: null`.
+
+**`size_bytes` is 0 whenever the response omits `Content-Length`.** The value is
+read from that header. Compressed HTTP/2 responses routinely omit it —
+`example.org` is one — and the `details.responseSize` fallback in the
+`onCompleted` handler does not help, because Firefox reports it as `0` there for
+ordinary uncached requests. So a `size_bytes` of 0 means "not known", not "empty
+response". `status_code`, `content_type`, `duration_ms` and the headers are
+reliable.
+
+`requests_list_captured` is unaffected by the first limitation: request metadata
+comes from `webRequest` and is captured for every matching request.
+
 ### Window Management
 - `list_windows(populate=True)` - List all browser windows with optional tab details
 - `get_window(window_id, populate=True)` - Get specific window information
