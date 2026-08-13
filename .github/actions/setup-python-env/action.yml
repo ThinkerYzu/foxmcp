@@ -1,0 +1,36 @@
+name: Set up the project venv
+description: >
+  Create venv/ and install the server and test dependencies into it, with pip's
+  download cache carried between runs.
+
+  The Makefile runs everything out of venv/bin but never creates venv/ itself, so
+  `make setup` on a fresh checkout fails on a missing venv/bin/pip. This action
+  creates it first.
+
+inputs:
+  python-version:
+    description: >
+      Python version to install. Matches the venv the suite is green on locally.
+      Note that docs/venv-setup.md and docs/files.md still claim 3.13.3, and
+      package.json claims ">=3.8"; both are stale.
+    required: false
+    default: '3.14'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: |
+          server/requirements.txt
+          tests/requirements.txt
+
+    - name: Create the venv the Makefile expects
+      shell: bash
+      run: python -m venv venv
+
+    - name: Install server and test dependencies
+      shell: bash
+      run: make setup

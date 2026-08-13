@@ -1,0 +1,107 @@
+name: CI
+
+# Runs the checks the maintainer runs locally, on every push and pull request.
+# Nothing here publishes anything, so it needs no secrets and only read access.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+      - name: Install flake8
+        run: venv/bin/pip install flake8
+
+      # Split in two on purpose. `make lint` ends every flake8 call with
+      # `|| echo`, so it reports style problems and then exits 0 whatever it
+      # found — useful locally, useless as a gate. Real errors fail the build
+      # here; style is advisory, matching what the Makefile intended.
+      - name: Fail on syntax errors and undefined names
+        run: venv/bin/flake8 server/ tests/ --select=E9,F63,F7,F82 --show-source
+
+      - name: Report style issues
+        run: venv/bin/flake8 server/ tests/ --max-line-length=100 --ignore=E203,W503 --exit-zero
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+      - run: make test-unit
+
+  suite:
+    name: Full suite
+    runs-on: ubuntu-latest
+    # The suite takes about ten minutes locally against real Firefox. The cap is
+    # generous enough for a slow runner and still catches a hang.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+      - uses: ./.github/actions/setup-firefox
+
+      - name: Run the suite
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/junit.xml
+        run: make test
+
+      # A green run is only meaningful if the tests actually ran. Anything the
+      # browser touches skips rather than fails when Firefox is unusable, which
+      # would otherwise turn a broken environment into a passing build.
+      - name: Fail if tests were skipped rather than run
+        if: always()
+        shell: python
+        run: |
+          import os, sys, xml.etree.ElementTree as ET
+
+          report = os.path.join(os.environ["RUNNER_TEMP"], "junit.xml")
+          if not os.path.exists(report):
+              sys.exit("No JUnit report was written; the suite did not start.")
+
+          suite = ET.parse(report).getroot()
+          if suite.tag == "testsuites":
+              suite = suite[0]
+          total = int(suite.get("tests", 0))
+          skipped = int(suite.get("skipped", 0))
+          print(f"{total} tests, {skipped} skipped")
+
+          if skipped:
+              sys.exit(f"{skipped} tests skipped; the suite expects none.")
+          if total < 200:
+              sys.exit(f"Only {total} tests collected; the suite should be well over 200.")
+
+      - name: Keep the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: tests/htmlcov/
+          if-no-files-found: ignore
+
+  package:
+    name: Build packages
+    runs-on: ubuntu-latest
+    # No Python: `make package` only copies the extension and zips it.
+    steps:
+      - uses: actions/checkout@v4
+      - run: make package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/packages/

@@ -1,0 +1,52 @@
+name: Install Firefox
+description: >
+  Install a Mozilla-built Firefox and export FIREFOX_PATH for the integration
+  tests.
+
+  Deliberately not the distro package: Ubuntu ships Firefox as a snap, and the
+  snap sandbox cannot read the temporary profile directories the tests build for
+  it. The tarball from Mozilla has no such confinement.
+
+  The version check at the end is not decoration. tests/conftest.py *skips* when
+  Firefox is missing rather than failing, so a broken install would produce a
+  green run of a suite that never touched a browser.
+
+inputs:
+  version:
+    description: Firefox version to install, or "latest".
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Install the shared libraries Firefox needs
+      shell: bash
+      run: |
+        sudo apt-get update
+        # libdbus-glib is the one the runner image reliably lacks. The ALSA
+        # package was renamed in the 64-bit time_t transition, so accept either
+        # name rather than pinning to one Ubuntu release.
+        sudo apt-get install -y --no-install-recommends libdbus-glib-1-2
+        sudo apt-get install -y --no-install-recommends libasound2t64 \
+          || sudo apt-get install -y --no-install-recommends libasound2
+
+    - name: Download and unpack Firefox
+      shell: bash
+      env:
+        FIREFOX_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if [ "$FIREFOX_VERSION" = latest ]; then
+          url='https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-US'
+        else
+          url="https://ftp.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.xz"
+        fi
+        curl -fsSL "$url" -o "$RUNNER_TEMP/firefox.tar.xz"
+        tar -xf "$RUNNER_TEMP/firefox.tar.xz" -C "$RUNNER_TEMP"
+        echo "FIREFOX_PATH=$RUNNER_TEMP/firefox/firefox" >> "$GITHUB_ENV"
+
+    - name: Check that it runs
+      shell: bash
+      run: |
+        "$FIREFOX_PATH" --version
