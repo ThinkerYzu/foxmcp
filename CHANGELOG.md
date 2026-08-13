@@ -5,7 +5,7 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-08-12
 
 ### Security
 - **Extension WebSocket now accepts only `moz-extension://` origins.** Previously any inbound connection was accepted as the extension. WebSocket handshakes are exempt from the same-origin policy and are never preflighted, so any web page the user visited could connect to the localhost port, displace the real extension — an arriving connection closes the existing one — and answer requests on its behalf with content of its choosing. Non-extension connections are now rejected with a 403 during the handshake, and logged.
@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tabs_move` — move tabs to a new position, or into another window.** Takes one tab ID, a list, or a JSON string of IDs, with `index` as the destination (`-1` for the end) and an optional `window_id`. Together with `create_window` this covers gathering the tabs for one site into a window of their own, which was the request in [issue #2](https://github.com/ThinkerYzu/foxmcp/issues/2) — see [`docs/api-reference.md`](docs/api-reference.md#gathering-tabs-into-their-own-window). Firefox refuses some moves without reporting an error, so the result says `Moved {n} of {m}` rather than claiming success.
 - **`tabs_list` takes a `window_id`, and reports where each tab sits.** The parameter that was supposed to scope the listing never worked — a `|| true` in the extension made the current-window filter unconditional, so tabs in other windows could not be listed at all, despite the tool documenting itself as listing every tab. An unscoped call now spans every window, as documented, and each line ends with `[window {id}, index {n}]`.
 - **A regression test for the MCP port's web-unreachability.** The port has no authentication, and what keeps web pages off it — absent CORS headers, content-type enforcement, and a session id the browser cannot read — is behavior of `fastmcp`/uvicorn rather than of FoxMCP. `tests/integration/test_mcp_port_not_web_reachable.py` asserts all three, so a dependency upgrade that re-opens the port fails the suite instead of passing quietly. No CORS policy was added: the door is already shut, and hand-rolling one risks breaking legitimate MCP clients.
+- **Releases are built in public, and say where they came from.** Previously the XPI and server zip were built on the maintainer's machine and uploaded, so installing them meant taking his word that they matched the source — the concern in [issue #1](https://github.com/ThinkerYzu/foxmcp/issues/1). Pushing a `v*` tag now builds them on GitHub Actions from the tagged commit and publishes a signed provenance statement alongside them, which anyone can check without trusting us: `gh attestation verify 'foxmcp@codemud.org.xpi' --repo ThinkerYzu/foxmcp`. `SHA256SUMS` ships as a release asset too. The copy served by addons.mozilla.org is not covered, because Mozilla re-signs the file when it accepts a submission; verify the GitHub asset instead.
 - **Audit logging for predefined scripts.** `content_execute_predefined` is the one tool that runs a program on the host, and it previously logged nothing at all — a refused path-traversal attempt and a routine call were equally invisible. Each invocation now logs the script name, arguments and tab at `INFO`, followed by the size of the generated JavaScript and the URL it ran against; every refusal and failure logs at `WARNING`. Arguments are truncated at 120 characters, and the generated JavaScript is never written to the log. See [`docs/scripts.md`](docs/scripts.md#what-gets-logged).
 
 ## [1.1.0] - 2025-10-26
@@ -183,5 +184,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
+[1.2.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.0.0
