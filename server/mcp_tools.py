@@ -932,12 +932,12 @@ class FoxMCPTools:
                 return f"Error deleting history item: {response['error']}"
 
             if response.get("type") == "response":
-                return f"Successfully deleted history item: {params.url}"
+                return f"Successfully deleted history item: {url}"
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return f"Failed to delete history item: {error_msg}"
 
-            return f"Unable to delete history item: {params.url}"
+            return f"Unable to delete history item: {url}"
 
     def _setup_bookmark_tools(self):
         """Setup bookmark management tools"""
