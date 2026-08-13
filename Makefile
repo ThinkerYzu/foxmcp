@@ -12,7 +12,11 @@ FIREFOX_PATH ?= firefox
 VENV_BIN ?= venv/bin
 VENV_PIP ?= $(VENV_BIN)/pip
 
-.PHONY: help install build test clean run-server run-tests dev setup check lint package all setup-test-imports
+# The interpreter used to build venv/ in the first place, not to run anything
+# afterwards. Override it to build the venv against a different Python.
+PYTHON ?= python3
+
+.PHONY: help install build test clean run-server run-tests dev setup check lint package all setup-test-imports venv
 
 # Default target
 all: setup build test
@@ -21,6 +25,7 @@ help:
 	@echo "FoxMCP Project - Available Commands:"
 	@echo ""
 	@echo "Setup & Installation:"
+	@echo "  venv           - Create the virtual environment (implied by setup)"
 	@echo "  setup          - Install all dependencies (server + test requirements)"
 	@echo "  install        - Install Python server dependencies only"
 	@echo "  setup-test-imports - Create symbolic links for test import system"
@@ -52,7 +57,20 @@ setup: install setup-test-imports
 	$(VENV_PIP) install -r tests/requirements.txt
 	@echo "✅ Setup complete!"
 
-install:
+# Create the virtual environment everything else in this file runs out of.
+#
+# The real target is venv/bin/python rather than venv/, so make skips the work
+# once the interpreter is there. Without this, `make setup` on a fresh clone
+# died on a missing venv/bin/pip and said nothing about what to do next.
+$(VENV_BIN)/python:
+	@echo "Creating the virtual environment..."
+	$(PYTHON) -m venv venv
+	@echo "✅ Virtual environment created at venv/"
+
+venv: $(VENV_BIN)/python
+	@echo "✅ Virtual environment ready at venv/"
+
+install: $(VENV_BIN)/python
 	@echo "Installing server dependencies..."
 	$(VENV_PIP) install -r server/requirements.txt
 	@echo "✅ Server dependencies installed!"
@@ -98,9 +116,19 @@ build-extension:
 	@echo "Extension built at: dist/extension/"
 	@echo "✅ Extension build complete!"
 
+# Build the two release archives, containing exactly what the source tree holds.
+#
+# Both archives and the server staging directory are cleared before being
+# written. zip updates an existing archive instead of replacing it, so a file
+# deleted from the source tree used to survive in the package until someone ran
+# `make clean` — and the staging copy had the same problem. Bytecode is dropped
+# because `cp -r server/*` otherwise sweeps up whatever __pycache__ the last
+# local run left behind, which made a build here and a build in CI differ.
 package: build
 	@echo "Creating distributable packages..."
 	@mkdir -p dist/packages
+	@rm -f dist/packages/foxmcp@codemud.org.xpi dist/packages/foxmcp-server.zip
+	@rm -rf dist/server-package
 
 	# Package extension as XPI for Firefox
 	cd dist/extension && zip -r ../packages/foxmcp@codemud.org.xpi *
@@ -108,6 +136,7 @@ package: build
 	# Package server
 	@mkdir -p dist/server-package
 	@cp -r server/* dist/server-package/
+	@find dist/server-package -type d -name __pycache__ -prune -exec rm -rf {} +
 	@cp README.md dist/server-package/ 2>/dev/null || echo "README.md not found, skipping..."
 	cd dist && zip -r packages/foxmcp-server.zip server-package/
 
