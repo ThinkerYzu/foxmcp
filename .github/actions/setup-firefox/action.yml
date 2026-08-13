@@ -1,21 +1,35 @@
 name: Install Firefox
 description: >
-  Install a Mozilla-built Firefox and export FIREFOX_PATH for the integration
-  tests.
+  Install a Mozilla-built Firefox that permits unsigned extensions, and export
+  FIREFOX_PATH for the integration tests.
 
   Deliberately not the distro package: Ubuntu ships Firefox as a snap, and the
   snap sandbox cannot read the temporary profile directories the tests build for
   it. The tarball from Mozilla has no such confinement.
 
+  Deliberately not the release channel either. The tests install an unsigned XPI
+  by dropping it into the profile, which needs
+  xpinstall.signatures.required=false to be honoured -- and only Nightly,
+  Developer Edition and unbranded builds honour it. Release and Beta ignore the
+  pref and enforce signing regardless, so the extension silently never loads.
+
   The version check at the end is not decoration. tests/conftest.py *skips* when
-  Firefox is missing rather than failing, so a broken install would produce a
+  Firefox is unusable rather than failing, so a broken install would produce a
   green run of a suite that never touched a browser.
 
 inputs:
-  version:
-    description: Firefox version to install, or "latest".
+  channel:
+    description: >
+      Which Firefox to install: devedition, nightly, or release.
+
+      devedition is the default. It allows unsigned extensions, as the suite
+      requires, and tracks beta -- so it moves every few weeks rather than
+      nightly, which keeps upstream churn out of this project's CI.
+
+      release is accepted so the value is not a lie, but the suite cannot pass
+      against it. See above.
     required: false
-    default: latest
+    default: devedition
 
 runs:
   using: composite
@@ -34,19 +48,35 @@ runs:
     - name: Download and unpack Firefox
       shell: bash
       env:
-        FIREFOX_VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
       run: |
         set -euo pipefail
-        if [ "$FIREFOX_VERSION" = latest ]; then
-          url='https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-US'
-        else
-          url="https://ftp.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.xz"
-        fi
-        curl -fsSL "$url" -o "$RUNNER_TEMP/firefox.tar.xz"
+        case "$CHANNEL" in
+          devedition) product=firefox-devedition-latest-ssl ;;
+          nightly)    product=firefox-nightly-latest-ssl ;;
+          release)
+            product=firefox-latest-ssl
+            echo "::warning::channel=release enforces extension signing, so the" \
+                 "integration suite will skip every browser test. Use devedition."
+            ;;
+          *)
+            echo "Unknown channel '$CHANNEL'; expected devedition, nightly or release." >&2
+            exit 1
+            ;;
+        esac
+
+        curl -fsSL "https://download.mozilla.org/?product=$product&os=linux64&lang=en-US" \
+          -o "$RUNNER_TEMP/firefox.tar.xz"
         tar -xf "$RUNNER_TEMP/firefox.tar.xz" -C "$RUNNER_TEMP"
         echo "FIREFOX_PATH=$RUNNER_TEMP/firefox/firefox" >> "$GITHUB_ENV"
 
     - name: Check that it runs
       shell: bash
       run: |
-        "$FIREFOX_PATH" --version
+        version="$("$FIREFOX_PATH" --version)"
+        echo "$version"
+        # Record the channel in the log. When a browser test starts failing, the
+        # first question is which Firefox it ran against, and a version alone
+        # does not answer it -- 153.0a1 and 153.0.4 differ in whether the
+        # extension can load at all.
+        echo "Channel: ${{ inputs.channel }}"
