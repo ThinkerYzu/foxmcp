@@ -925,7 +925,7 @@ def _get_extension_xpi_path():
         return str(xpi_path)
 
     # Second try: search upward for the dist directory
-    search_path = current_file.parent
+    search_path = Path(__file__).resolve().parent
     while search_path != search_path.parent:  # Stop at filesystem root
         potential_xpi = search_path / 'dist' / 'packages' / 'foxmcp@codemud.org.xpi'
         if potential_xpi.exists():

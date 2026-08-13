@@ -1065,9 +1065,4 @@ class TestWindowManagementEndToEnd:
 
 
 if __name__ == "__main__":
-    # Run tests individually for debugging
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "debug":
-        asyncio.run(test_debug())
-    else:
-        pytest.main([__file__, "-v", "-s"])
+    pytest.main([__file__, "-v", "-s"])
