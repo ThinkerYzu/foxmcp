@@ -216,16 +216,47 @@ make lint     # flake8, max line length 100
 
 There is no JavaScript linting or formatting configured.
 
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every push to master and every pull request:
+lint, unit tests, the full suite against a real Firefox, and a package build.
+
+The suite job installs Firefox Developer Edition rather than release. The tests
+drop an unsigned XPI into the profile, which needs
+`xpinstall.signatures.required=false` to be honoured, and only Nightly,
+Developer Edition and unbranded builds honour it — release and beta enforce
+signing regardless, so the extension never loads and every browser test fails.
+Pass `channel: nightly` to `.github/actions/setup-firefox` to test against
+tomorrow's Firefox.
+
+The job also fails if any test was *skipped*. Everything that touches the
+browser skips rather than fails when Firefox is unusable, so without that guard
+a broken runner would produce a green build of a suite that never opened a
+browser.
+
 ## Release Process
 
-1. Update the version in `extension/manifest.json` and `package.json`
-2. Update the version in `scripts/install-from-github.sh` and `release-commands.sh`
-3. Update the installation URL in `README.md`
-4. Add release notes to `CHANGELOG.md` and `RELEASES.md`
-5. `make package`
-6. Tag: `git tag -a v1.2.0 -m "..."` and push the tag
+1. Bump the version in `extension/manifest.json`, `package.json`,
+   `scripts/install-from-github.sh` and the install URL in `README.md`
+2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.2.0] - <date>` and add
+   the link reference at the bottom
+3. `scripts/check-version.sh 1.2.0` — fails unless all five files agree
+4. Commit, then tag: `git tag -a v1.2.0 -m "..."` and push the tag
 
-`release-commands.sh` scripts steps 5 and 6. There is no CI — the suite runs locally.
+Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
+the version, runs the full suite, builds the artifacts, publishes a signed
+provenance attestation for them, creates the GitHub release with notes taken
+from the changelog section, and submits the extension to addons.mozilla.org.
+
+The AMO step runs in the `amo` deployment environment, which holds the API
+credentials and requires a human to approve the deployment. Nothing else in
+either workflow can reach those secrets.
+
+To rehearse without releasing anything, run the workflow by hand from the
+Actions tab and give it a version. It verifies and builds; it publishes nothing
+and never touches AMO.
+
+`release-commands.sh` predates all of this and is no longer the release path.
 
 ## Troubleshooting
 
