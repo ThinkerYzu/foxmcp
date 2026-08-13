@@ -159,7 +159,7 @@ MCP Client
 Neither port authenticates local processes, which is deliberate — a process running as the user already has the browser profile and the script directory, so a shared secret between two components under that user's control would guard nothing.
 
 ### 2. Extension Security
-- **Broad Permissions**: The extension requests `tabs`, `windows`, `history`, `bookmarks`, `activeTab`, `storage`, `webRequest`, and `<all_urls>`. This is deliberately wide — the extension exists to expose browser state — and it is the reason the server must stay on localhost. Treat an installed FoxMCP as granting its MCP client the same reach over the browser that you have.
+- **Broad Permissions**: The extension requests `tabs`, `windows`, `history`, `bookmarks`, `activeTab`, `storage`, `webRequest`, `webRequestBlocking`, and `<all_urls>`. `webRequestBlocking` is there for `filterResponseData`, which is the only way to read a response body and which Firefox grants only to an extension holding that permission; no listener blocks, cancels or rewrites a request. The set is deliberately wide — the extension exists to expose browser state — and it is the reason the server must stay on localhost. Treat an installed FoxMCP as granting its MCP client the same reach over the browser that you have.
 - **Sandboxing**: Content scripts run in the standard isolated content-script context
 
 ### 3. Script Security

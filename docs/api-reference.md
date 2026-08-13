@@ -72,28 +72,31 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 #### What response body capture actually delivers
 
-Two limitations, both measured against Firefox 154. Neither is a configuration
-problem, so no combination of `options` works around them.
+The `webRequest` API does not expose response bodies, so the extension taps the
+response stream itself with `webRequest.filterResponseData`. That covers every
+matching request, the document load included, and Firefox has already undone any
+`Content-Encoding` by the time the bytes arrive — so what you get back is the
+real body, not a compressed one.
 
-**Response bodies usually are not captured.** The WebExtensions `webRequest` API
-does not expose response bodies at all, so the extension gets them by overriding
-`window.fetch` and `XMLHttpRequest` from a content script. That override only
-covers requests the page makes *after* the override is installed, only in tabs
-where the content script is running, and never covers the document load itself —
-by the time a content script exists, the HTML that carried it has already
-arrived. When there is no captured body you get `included: false` and
-`content: null`.
+**You get a body only if you asked for its content type.** `content` is filled
+in when the response is text *and* its content type matches
+`content_types_to_capture` — which defaults to
+`["application/json", "text/plain"]`. An HTML page therefore returns no content
+unless you pass `content_types_to_capture: ["text/html"]`. Binary responses
+never return content, whatever you pass. In every one of these cases `included`
+is `false`, `content` is `null`, and `note` says which reason applied.
 
-**`size_bytes` is 0 whenever the response omits `Content-Length`.** The value is
-read from that header. Compressed HTTP/2 responses routinely omit it —
-`example.org` is one — and the `details.responseSize` fallback in the
-`onCompleted` handler does not help, because Firefox reports it as `0` there for
-ordinary uncached requests. So a `size_bytes` of 0 means "not known", not "empty
-response". `status_code`, `content_type`, `duration_ms` and the headers are
-reliable.
+**`size_bytes` is the whole body, even when `content` is not.** It counts the
+bytes Firefox delivered, so it is right for a body dropped for its content type
+and right for one cut short by `max_body_size`; `truncated` is what tells you
+the `content` you were given is short of `size_bytes`. It is not read from
+`Content-Length`, which compressed HTTP/2 responses routinely omit. `size_bytes` is `null` only when the response could
+not be tapped at all: monitoring did not ask for bodies, or Firefox refused the
+filter, which it does for a redirect and for a response served from its
+alternate-data cache.
 
-`requests_list_captured` is unaffected by the first limitation: request metadata
-comes from `webRequest` and is captured for every matching request.
+`requests_list_captured` is unaffected by any of this. Request metadata comes
+from `webRequest` and is captured for every matching request.
 
 ### Window Management
 - `list_windows(populate=True)` - List all browser windows with optional tab details

@@ -234,17 +234,16 @@ browser skips rather than fails when Firefox is unusable, so without that guard
 a broken runner would produce a green build of a suite that never opened a
 browser.
 
-### One test fails on CI and cannot pass yet
+### Test against the Firefox CI uses, not the one you have
 
-`test_response_body_capture_verification` asserts that response body capture
-either returns a body or reports a non-zero `size_bytes`. Neither holds — see
-[the limitations in `api-reference.md`](api-reference.md#what-response-body-capture-actually-delivers).
-It is not an environment problem and not load sensitivity: it fails on every
-local run against the same Firefox build CI uses.
+`test_response_body_capture_verification` passed on the maintainer's Nightly for
+months while failing on CI, because the two builds disagreed about
+`details.responseSize` on `onCompleted`: Nightly reported the transferred bytes,
+Developer Edition reported `0`. The test read that value, so it passed on one
+machine and failed on the other with no code difference at all.
 
-It passes on a developer machine where the extension fails to install, because
-then it skips. That is how it stayed hidden until CI existed, and it is the
-clearest illustration of why the skip guard is there.
+Set `FIREFOX_PATH` to a Developer Edition build before concluding that a browser
+test is fine.
 
 ## Release Process
 
