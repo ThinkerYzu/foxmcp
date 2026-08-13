@@ -300,23 +300,11 @@ class TestRequestMonitoringEndToEnd:
             })
             print(f"📄 Created tab: {create_result}")
 
-            # Wait for the initial page to load and content script to be enabled
+            # Wait for the initial page to load
             await asyncio.sleep(5.0)
 
-            # First, test if fetch interception is working
-            print("🔍 Testing fetch interception setup...")
-            test_result = await mcp_client.call_tool("content_execute_script", {
-                "tab_id": 2,
-                "code": """
-                // Check if fetch has been overridden
-                const isFetchOverridden = window.fetch.toString().includes('responseBodyCaptureEnabled');
-                console.log('Fetch override check:', isFetchOverridden);
-                `fetch_override_status:${isFetchOverridden}`;
-                """
-            })
-            print(f"🔍 Fetch override test: {test_result}")
-
-            # Now trigger a fresh fetch request from the page to capture response body
+            # Trigger a second request from the page, so the monitor sees one
+            # that is not the document load
             print("🔄 Triggering fetch request to capture response body...")
 
             # Execute JavaScript to make a fetch request that will be intercepted

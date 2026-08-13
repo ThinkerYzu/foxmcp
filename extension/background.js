@@ -405,24 +405,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
-
-  // Handle response body capture events from content scripts
-  if (request.type === 'response_body_captured') {
-    const responseData = request.data;
-    console.log(`📥 Response body captured: ${responseData.method} ${responseData.url} (${responseData.response_body.length} chars)`);
-
-    // Store captured response body data
-    capturedResponseBodies.set(responseData.request_id, responseData);
-
-    return true;
-  }
-
-  if (request.type === 'response_body_error') {
-    const errorData = request.data;
-    console.error(`❌ Response capture error: ${errorData.method} ${errorData.url} - ${errorData.error}`);
-
-    return true;
-  }
 });
 
 
@@ -916,6 +898,7 @@ const activeMonitors = new Map(); // monitor_id -> monitor config
 const capturedRequests = new Map(); // monitor_id -> array of requests
 const requestDetails = new Map(); // request_id -> full request details
 const capturedResponseBodies = new Map(); // request_id -> response body data
+const MAX_STORED_RESPONSE_BODIES = 200;
 
 // WebRequest listener functions
 let onBeforeRequestListener = null;
@@ -929,11 +912,7 @@ let onErrorOccurredListener = null;
 
 function startWebRequestMonitoring(monitor) {
   console.log(`🔍 Starting WebRequest monitoring for monitor ${monitor.id}`);
-
-  if (activeMonitors.size === 0) {
-    // First monitor - set up listeners
-    setupWebRequestListeners();
-  }
+  setupWebRequestListeners();
 }
 
 function setupWebRequestListeners() {
@@ -947,6 +926,7 @@ function setupWebRequestListeners() {
   // Before request - captures initial request data
   onBeforeRequestListener = function(details) {
     handleWebRequestEvent('onBeforeRequest', details);
+    captureResponseBody(details);
   };
 
   // Headers received - captures response headers and status
@@ -964,11 +944,14 @@ function setupWebRequestListeners() {
     handleWebRequestEvent('onErrorOccurred', details);
   };
 
-  // Register listeners with browser
+  // "blocking" is what makes captureResponseBody possible, not a wish to block
+  // anything: Firefox only lets filterResponseData reach a request whose
+  // extension registered a blocking listener for it. The listener returns
+  // nothing, so no request is delayed, cancelled or redirected.
   browser.webRequest.onBeforeRequest.addListener(
     onBeforeRequestListener,
     { urls: ["<all_urls>"] },
-    ["requestBody"]
+    ["requestBody", "blocking"]
   );
 
   browser.webRequest.onHeadersReceived.addListener(
@@ -1120,11 +1103,6 @@ function captureRequestEvent(monitorId, eventType, details) {
       request.completed = true;
       request.duration_ms = details.timeStamp - (request.events[0]?.timeStamp || details.timeStamp);
 
-      // Fall back to the bytes actually received when the response carried no
-      // Content-Length, which is the common case for compressed HTTP/2.
-      if (!request.response_content_length && details.responseSize > 0) {
-        request.response_content_length = details.responseSize;
-      }
       break;
 
     case 'onErrorOccurred':
@@ -1160,6 +1138,167 @@ function captureRequestEvent(monitorId, eventType, details) {
   }
 }
 
+// Keep a copy of one request's response body for requests.get_content.
+//
+// Call from onBeforeRequest only; the response stream can no longer be tapped
+// once it has started. Does nothing unless an active monitor matches the
+// request and asked for response bodies. What it keeps lands in
+// capturedResponseBodies under details.requestId, the same id
+// requests.list_captured reports.
+//
+// browser.webRequest.filterResponseData puts this code in the path of the bytes
+// on their way to the page, so every byte read here has to be written back or
+// the page gets a truncated response. That is why write() comes first and the
+// bookkeeping cannot throw past it. Firefox has already undone any
+// Content-Encoding by this point, so the bytes are the real body. Only the
+// first max_body_size of them are kept, but all of them are counted, so a body
+// kept in part -- or not at all, for its content type -- still reports its
+// full size.
+function captureResponseBody(details) {
+  let monitor = null;
+  for (const activeMonitor of activeMonitors.values()) {
+    if (activeMonitor.options?.capture_response_bodies &&
+        shouldCaptureRequest(activeMonitor, details)) {
+      monitor = activeMonitor;
+      break;
+    }
+  }
+
+  if (!monitor) {
+    return;
+  }
+
+  let filter;
+  try {
+    filter = browser.webRequest.filterResponseData(details.requestId);
+  } catch (error) {
+    // Not every request can be filtered - a cached alt-data response and a
+    // redirect both refuse. The request is still captured, just without a body.
+    console.log(`No response filter for ${details.url}: ${error.message}`);
+    return;
+  }
+
+  const maxSize = monitor.options.max_body_size || 50000;
+  const kept = [];
+  let totalBytes = 0;
+  let keptBytes = 0;
+  let truncated = false;
+
+  filter.ondata = (event) => {
+    filter.write(event.data);
+
+    try {
+      totalBytes += event.data.byteLength;
+
+      const room = maxSize - keptBytes;
+      if (room <= 0) {
+        truncated = true;
+        return;
+      }
+
+      const chunk = event.data.byteLength > room ? event.data.slice(0, room) : event.data;
+      if (chunk.byteLength < event.data.byteLength) {
+        truncated = true;
+      }
+      kept.push(chunk);
+      keptBytes += chunk.byteLength;
+    } catch (error) {
+      console.error(`Error buffering response body for ${details.url}: ${error.message}`);
+    }
+  };
+
+  filter.onstop = () => {
+    filter.close();
+
+    try {
+      storeResponseBody(details.requestId, monitor, kept, totalBytes, truncated);
+    } catch (error) {
+      console.error(`Error storing response body for ${details.url}: ${error.message}`);
+    }
+  };
+
+  filter.onerror = () => {
+    console.log(`Response filter for ${details.url} stopped: ${filter.error}`);
+  };
+}
+
+// Record what captureResponseBody read, as text when the content type allows it.
+//
+// size_bytes is the whole body even when content is null, so a caller that
+// cannot get the bytes still learns how many there were.
+//
+// Only the last MAX_STORED_RESPONSE_BODIES are kept. A monitor on "*" sees
+// every request the browser makes, and holding max_body_size for each of them
+// would grow without limit for as long as monitoring runs. The size recorded on
+// the request itself survives eviction, so an evicted request still reports how
+// large its body was.
+function storeResponseBody(requestId, monitor, chunks, totalBytes, truncated) {
+  const requestDetail = requestDetails.get(requestId);
+  const contentType = requestDetail?.response_content_type || '';
+
+  if (requestDetail) {
+    requestDetail.response_body_size = totalBytes;
+  }
+
+  const wanted = shouldCaptureContentType(contentType, monitor.options.content_types_to_capture);
+
+  capturedResponseBodies.set(requestId, {
+    content: wanted ? decodeResponseText(chunks, contentType) : null,
+    content_type: contentType || null,
+    size_bytes: totalBytes,
+    truncated: truncated
+  });
+
+  while (capturedResponseBodies.size > MAX_STORED_RESPONSE_BODIES) {
+    capturedResponseBodies.delete(capturedResponseBodies.keys().next().value);
+  }
+}
+
+// Whether a response's content type is one the monitor asked to capture.
+//
+// An empty captureTypes means every type. A response with no content type at
+// all matches nothing, since there is no way to tell what it holds.
+function shouldCaptureContentType(contentType, captureTypes) {
+  if (!captureTypes || captureTypes.length === 0) {
+    return true;
+  }
+  if (!contentType) {
+    return false;
+  }
+
+  return captureTypes.some(type => {
+    if (type.includes('*')) {
+      return contentType.startsWith(type.split('/')[0]);
+    }
+    return contentType.includes(type);
+  });
+}
+
+// Join response chunks into a string, or null if the body is not text.
+//
+// Honours the charset the response declared, falling back to UTF-8 when it
+// names one TextDecoder does not know.
+function decodeResponseText(chunks, contentType) {
+  if (!/^\s*(text\/|application\/(json|xml|javascript|xhtml\+xml))/i.test(contentType)) {
+    return null;
+  }
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(new Uint8Array(chunk), offset);
+    offset += chunk.byteLength;
+  }
+
+  const charset = /charset\s*=\s*["']?([\w-]+)/i.exec(contentType)?.[1] || 'utf-8';
+  try {
+    return new TextDecoder(charset).decode(body);
+  } catch (error) {
+    return new TextDecoder('utf-8').decode(body);
+  }
+}
+
 // Request monitoring handlers
 async function handleRequestsAction(id, action, data) {
   try {
@@ -1181,30 +1320,11 @@ async function handleRequestsAction(id, action, data) {
         // Debug: Check what options we received
         console.log(`📡 DEBUG: Monitor options received: ${JSON.stringify(monitor.options)}`);
 
-        // Enable response body capture if requested
-        if (monitor.options.capture_response_bodies) {
-          console.log(`📡 Response body capture enabled for monitoring session: ${monitor_id}`);
-          console.log(`📡 Monitor config for capture: ${JSON.stringify(monitor)}`);
-          console.log(`📡 About to enable response body capture for ${monitor_id}`);
-
-          try {
-            console.log('📡 About to await enableResponseBodyCapture()');
-            await enableResponseBodyCapture(monitor);
-            console.log('📡 enableResponseBodyCapture() call completed successfully');
-          } catch (error) {
-            console.error('📡 ERROR in enableResponseBodyCapture():', error);
-            console.error('📡 Error stack:', error.stack);
-          }
-        } else {
-          console.log('📡 Response body capture NOT enabled - flag not set');
-        }
-
-        // Start actual monitoring
-        startWebRequestMonitoring(monitor);
-
-        // Store monitor
+        // Register the monitor before the listeners go up, so the first request
+        // through onBeforeRequest can already find it and tap its body.
         activeMonitors.set(monitor_id, monitor);
         capturedRequests.set(monitor_id, []);
+        startWebRequestMonitoring(monitor);
 
         sendResponse(id, action, {
           monitor_id: monitor_id,
@@ -1230,12 +1350,6 @@ async function handleRequestsAction(id, action, data) {
 
         // Remove monitor
         activeMonitors.delete(data.monitor_id);
-
-        // Disable response body capture if it was enabled for this monitor
-        if (monitorToStop.options.capture_response_bodies) {
-          console.log('🔄 Disabling response body capture for stopped monitoring session:', data.monitor_id);
-          disableResponseBodyCapture();
-        }
 
         // Stop listeners if no more monitors
         if (activeMonitors.size === 0) {
@@ -1314,52 +1428,47 @@ async function handleRequestsAction(id, action, data) {
             saved_to_file: null
           },
           response_body: (() => {
-            // First check direct match by request_id
-            let capturedResponseData = capturedResponseBodies.get(data.request_id);
+            const capturedBody = capturedResponseBodies.get(data.request_id);
 
-            // If no direct match, try to correlate by URL, method, status, and timing
-            if (!capturedResponseData) {
-              const requestUrl = requestDetail.url;
-              const requestMethod = requestDetail.method || 'GET';
-              const responseStatus = requestDetail.response_status_code;
-
-              // Find matching response by correlation
-              for (const [contentRequestId, responseData] of capturedResponseBodies.entries()) {
-                if (responseData.url === requestUrl &&
-                    responseData.method === requestMethod &&
-                    responseData.status_code === responseStatus) {
-                  console.log(`📎 Correlating response body: WebRequest ${data.request_id} -> Content ${contentRequestId}`);
-                  capturedResponseData = responseData;
-                  // Also store this correlation for future direct lookups
-                  capturedResponseBodies.set(data.request_id, responseData);
-                  break;
-                }
-              }
-            }
-
-            if (capturedResponseData) {
+            if (capturedBody && capturedBody.content !== null) {
               return {
                 included: true,
-                content: capturedResponseData.response_body,
-                content_type: capturedResponseData.content_type || null,
+                content: capturedBody.content,
+                content_type: capturedBody.content_type,
                 encoding: 'utf-8',
-                size_bytes: capturedResponseData.response_body.length,
-                truncated: capturedResponseData.truncated || false,
+                size_bytes: capturedBody.size_bytes,
+                truncated: capturedBody.truncated,
                 saved_to_file: null,
-                note: "Response body captured via content script fetch/XHR interception"
-              };
-            } else {
-              return {
-                included: false,
-                content: null,
-                content_type: responseHeaders['content-type'] || requestDetail.response_content_type || null,
-                encoding: null,
-                size_bytes: requestDetail.response_content_length || 0,
-                truncated: false,
-                saved_to_file: null,
-                note: "Response body content not available via WebRequest API"
+                note: "Response body read from the response stream"
               };
             }
+
+            // No body to hand back, so say which of the reasons it was and give
+            // the size anyway. The measured size is the body Firefox actually
+            // delivered; Content-Length is only what the server claimed, and is
+            // absent from most compressed responses.
+            let note;
+            if (!capturedBody) {
+              note = "Response body not captured: monitoring did not ask for response bodies, or the response could not be filtered";
+            } else if (capturedBody.content_type) {
+              note = `Response body not captured: ${capturedBody.content_type} is not one of content_types_to_capture, or is not text`;
+            } else {
+              note = "Response body not captured: the response declared no content type";
+            }
+
+            const measured = requestDetail.response_body_size;
+            const declared = requestDetail.response_content_length;
+
+            return {
+              included: false,
+              content: null,
+              content_type: responseHeaders['content-type'] || requestDetail.response_content_type || null,
+              encoding: null,
+              size_bytes: measured !== undefined ? measured : (declared !== undefined ? declared : null),
+              truncated: false,
+              saved_to_file: null,
+              note: note
+            };
           })()
         });
         break;
@@ -1932,131 +2041,6 @@ async function initializeExtension() {
       initializeExtension();
     }, 1000);
   }
-}
-
-// Store current monitoring config for new tabs
-let currentMonitoringConfig = null;
-let tabPollingInterval = null;
-let enabledTabs = new Set(); // Track tabs that already have capture enabled
-
-// Response body capture management
-async function enableResponseBodyCapture(monitorConfig) {
-  console.log(`📡 Enabling response body capture for all tabs with config: ${JSON.stringify(monitorConfig)}`);
-
-  // Store config for new tabs
-  currentMonitoringConfig = monitorConfig;
-
-  // Send message to all existing content scripts to enable response capture
-  try {
-    const tabs = await browser.tabs.query({});
-    console.log(`📡 Found ${tabs.length} tabs to enable capture on`);
-    for (const tab of tabs) {
-      console.log(`📡 Tab ${tab.id}: ${tab.url}`);
-      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
-        enableCaptureOnTab(tab.id, monitorConfig);
-      } else {
-        console.log(`📡 Skipping tab ${tab.id} - not http/https: ${tab.url}`);
-      }
-    }
-  } catch (err) {
-    console.error(`📡 ERROR querying tabs: ${err.message}`);
-  }
-
-  // Set up polling for new tabs instead of event listeners (events weren't firing)
-  // Set up polling for new tabs
-  startTabPolling();
-}
-
-function enableCaptureOnTab(tabId, monitorConfig) {
-  console.log(`📡 Sending enable_response_capture to tab ${tabId}`);
-  browser.tabs.sendMessage(tabId, {
-    action: 'enable_response_capture',
-    data: {
-      monitor_config: monitorConfig
-    }
-  }).then(response => {
-    console.log(`📡 Tab ${tabId} response: ${JSON.stringify(response)}`);
-  }).catch(err => {
-    // Some tabs might not have content scripts loaded, that's OK
-    console.log(`Could not enable capture on tab ${tabId}: ${err.message}`);
-  });
-}
-
-function startTabPolling() {
-  // Clear any existing polling interval
-  if (tabPollingInterval) {
-    clearInterval(tabPollingInterval);
-  }
-
-  // Check for new tabs every 1 second
-  tabPollingInterval = setInterval(async () => {
-    if (!currentMonitoringConfig) {
-      return; // No monitoring active
-    }
-
-    try {
-      const tabs = await browser.tabs.query({});
-      for (const tab of tabs) {
-        // Skip if already enabled for this tab
-        if (enabledTabs.has(tab.id)) {
-          continue;
-        }
-
-        // Check if tab URL matches our monitoring patterns
-        if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
-          const urlPatterns = currentMonitoringConfig.url_patterns || [];
-          const matchesPattern = urlPatterns.some(pattern => {
-            // Convert glob pattern to regex
-            const regexPattern = pattern.replace(/\*/g, '.*');
-            const regex = new RegExp(`^${regexPattern}$`);
-            return regex.test(tab.url);
-          });
-
-          if (matchesPattern) {
-            console.log(`📡 Found new tab ${tab.id} that matches monitoring pattern: ${tab.url}`);
-            enableCaptureOnTab(tab.id, currentMonitoringConfig);
-            enabledTabs.add(tab.id);
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`📡 ERROR in tab polling: ${err.message}`);
-    }
-  }, 1000); // Poll every second
-}
-
-function stopTabPolling() {
-  if (tabPollingInterval) {
-    clearInterval(tabPollingInterval);
-    tabPollingInterval = null;
-  }
-  enabledTabs.clear();
-}
-
-
-function disableResponseBodyCapture() {
-  console.log('🔄 Disabling response body capture for all tabs');
-
-  // Clear the monitoring config
-  currentMonitoringConfig = null;
-
-  // Stop tab polling
-  stopTabPolling();
-
-
-  // Send message to all content scripts to disable response capture
-  browser.tabs.query({}).then(tabs => {
-    for (const tab of tabs) {
-      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
-        browser.tabs.sendMessage(tab.id, {
-          action: 'disable_response_capture'
-        }).catch(err => {
-          // Some tabs might not have content scripts loaded, that's OK
-          console.log(`Could not disable capture on tab ${tab.id}: ${err.message}`);
-        });
-      }
-    }
-  });
 }
 
 // Start initialization
