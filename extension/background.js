@@ -470,11 +470,6 @@ async function handleTabsAction(id, action, data) {
         });
         break;
 
-      case 'tabs.active':
-        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-        sendResponse(id, action, { tab: activeTab });
-        break;
-
       case 'tabs.create':
         const createTabOptions = {
           url: data.url,
@@ -610,7 +605,6 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 20
 async function handleContentAction(id, action, data) {
   try {
     switch (action) {
-      case 'content.text':
       case 'content.get_text':
         const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'
@@ -618,7 +612,6 @@ async function handleContentAction(id, action, data) {
         sendResponse(id, action, { text: textResult.text });
         break;
 
-      case 'content.html':
       case 'content.get_html':
         const htmlResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractHTML'
@@ -626,7 +619,6 @@ async function handleContentAction(id, action, data) {
         sendResponse(id, action, { html: htmlResult.html });
         break;
 
-      case 'content.execute':
       case 'content.execute_script':
         try {
           const executeResults = await browser.tabs.executeScript(data.tabId, {
@@ -655,7 +647,6 @@ async function handleContentAction(id, action, data) {
 async function handleNavigationAction(id, action, data) {
   try {
     switch (action) {
-      case 'navigation.go':
       case 'navigation.go_to_url':
         await browser.tabs.update(data.tabId, { url: data.url });
         sendResponse(id, action, { success: true });
@@ -771,7 +762,6 @@ async function handleBookmarksAction(id, action, data) {
         sendResponse(id, action, { bookmark: updatedBookmark });
         break;
 
-      case 'bookmarks.remove':
       case 'bookmarks.delete':
         await browser.bookmarks.remove(data.bookmarkId);
         sendResponse(id, action, { success: true });
@@ -1510,10 +1500,6 @@ async function handleTestAction(id, action, data) {
         await handleClearTestHistory(id, data);
         break;
         
-      case 'test.create_test_tabs':
-        await handleCreateTestTabs(id, data);
-        break;
-
 
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown test action: ${action}`);
@@ -1933,77 +1919,6 @@ async function handleClearTestHistory(id, data) {
     
   } catch (error) {
     sendError(id, 'CLEAR_HISTORY_ERROR', `Failed to clear test history: ${error.message}`);
-  }
-}
-
-// Test Helper: Create test tabs for testing tabs.list functionality
-async function handleCreateTestTabs(id, data) {
-  try {
-    const count = data.count || 3; // Default to 3 test tabs
-    const baseUrls = data.urls || [
-      'https://example.com',
-      'https://httpbin.org/html',
-      'https://httpbin.org/json'
-    ];
-    const closeExisting = data.closeExisting || false;
-    
-    // Close existing tabs if requested (except pinned tabs)
-    if (closeExisting) {
-      const existingTabs = await browser.tabs.query({});
-      const tabsToClose = existingTabs.filter(tab => !tab.pinned && tab.url !== 'about:blank');
-      
-      if (tabsToClose.length > 0) {
-        await browser.tabs.remove(tabsToClose.map(tab => tab.id));
-      }
-    }
-    
-    const createdTabs = [];
-    
-    // Create the specified number of test tabs
-    for (let i = 0; i < count; i++) {
-      const url = baseUrls[i % baseUrls.length];
-      const testUrl = `${url}?test=tab${i + 1}&timestamp=${Date.now()}`;
-      
-      try {
-        const tab = await browser.tabs.create({
-          url: testUrl,
-          active: i === 0 // Make first tab active
-        });
-        
-        createdTabs.push({
-          id: tab.id,
-          url: testUrl,
-          title: `Test Tab ${i + 1}`,
-          active: tab.active,
-          index: tab.index
-        });
-        
-        // Small delay between tab creation
-        if (i < count - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } catch (error) {
-        console.error(`Failed to create test tab ${i + 1}:`, error);
-      }
-    }
-    
-    // Wait a moment for tabs to load
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Get final tab count
-    const allTabs = await browser.tabs.query({});
-    
-    sendResponse(id, 'test.create_test_tabs', {
-      success: true,
-      message: `Successfully created ${createdTabs.length} test tabs`,
-      createdTabs: createdTabs,
-      totalTabsAfter: allTabs.length,
-      tabsCreated: createdTabs.length,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    sendError(id, 'CREATE_TABS_ERROR', `Failed to create test tabs: ${error.message}`);
   }
 }
 
