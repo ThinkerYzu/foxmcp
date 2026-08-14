@@ -37,7 +37,13 @@ def auto_dynamic_ports():
         from server.server import FoxMCPServer
         original_init = FoxMCPServer.__init__
 
-        def patched_init(self, host="localhost", port=None, mcp_port=None, start_mcp=True):
+        # **kwargs is forwarded untouched: this patch exists to take the ports away
+        # from the test, not to restate FoxMCPServer's signature. Spelling every
+        # argument out here meant that disabled_tool_groups, added later, could not
+        # be passed by any test at all — the patch swallowed the signature and the
+        # caller got an unexpected-keyword TypeError from a fixture it never wrote.
+        def patched_init(self, host="localhost", port=None, mcp_port=None, start_mcp=True,
+                         **kwargs):
             # ALWAYS allocate dynamic ports in test environment to prevent conflicts
             # This overrides any explicit port to ensure complete isolation
             if port is None or port == 8765:  # Override default port
@@ -53,7 +59,8 @@ def auto_dynamic_ports():
             print(f"🔧 Test server using WebSocket port: {port}, MCP port: {mcp_port}")
 
             # Call original init with dynamic ports
-            return original_init(self, host=host, port=port, mcp_port=mcp_port, start_mcp=start_mcp)
+            return original_init(self, host=host, port=port, mcp_port=mcp_port,
+                                 start_mcp=start_mcp, **kwargs)
 
         # Apply the patch
         with patch.object(FoxMCPServer, '__init__', patched_init):

@@ -17,6 +17,7 @@ import pytest
 
 import test_imports  # Automatic path setup
 from server.mcp_tools import FoxMCPTools
+from server.server import FoxMCPServer
 
 
 class StubWebSocketServer:
@@ -119,3 +120,28 @@ class TestUnknownGroupNames:
         """Partial application would disable less than the user asked for"""
         with pytest.raises(ValueError):
             FoxMCPTools(StubWebSocketServer(), disabled_groups=['bookmarks', 'nope'])
+
+
+class TestTheServerPassesTheOptionThrough:
+    """The tests above build FoxMCPTools directly; --disable-tools does not
+
+    What a user's command line reaches is FoxMCPServer(disabled_tool_groups=...),
+    and every step between the two is untested by the rest of this file. A
+    keyword that stopped being forwarded there would leave every group enabled
+    with no error to show for it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_group_disabled_on_the_server_is_not_registered(self):
+        """The flag's whole purpose: the group never reaches the client"""
+        server = FoxMCPServer(disabled_tool_groups=['bookmarks'], start_mcp=False)
+
+        registered = {tool.name for tool in await server.mcp_tools.mcp.list_tools()}
+
+        assert not {name for name in registered if name.startswith('bookmarks_')}
+        assert 'tabs_list' in registered
+
+    def test_the_server_refuses_an_unknown_group(self):
+        """main() turns this ValueError into argparse's usage message"""
+        with pytest.raises(ValueError):
+            FoxMCPServer(disabled_tool_groups=['nope'], start_mcp=False)
