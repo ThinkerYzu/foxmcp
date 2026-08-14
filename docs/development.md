@@ -66,7 +66,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 36 MCP tool definitions
+│   └── mcp_tools.py # The 35 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -184,7 +184,7 @@ make clean && make package && rm -rf dist/profile-cache/*
 
 ### Server
 
-The server takes `--host`, `--port`, `--mcp-port`, and `--no-mcp`:
+The server takes `--host`, `--port`, `--mcp-port`, `--no-mcp`, and `--disable-tools`:
 
 ```bash
 cd server && python server.py --port 8767

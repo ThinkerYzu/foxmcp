@@ -4,6 +4,14 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
+All 35 tools are offered by default. Each section below corresponds to a *group*
+that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
+client carries in its context. The group name is the tool-name prefix, not the
+heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
+Tools is `debug`. See
+[configuration.md](configuration.md#reducing-the-tool-surface) for the full list
+and what each group costs.
+
 ### Tab Management
 - `tabs_list(window_id=None)` - List open tabs, in every window or in one window
   - Each line ends with `[window {window_id}, index {index}]`; the index is the tab's
@@ -102,7 +110,6 @@ from `webRequest` and is captured for every matching request.
 - `list_windows(populate=True)` - List all browser windows with optional tab details
 - `get_window(window_id, populate=True)` - Get specific window information
 - `get_current_window(populate=True)` - Get current active window
-- `get_last_focused_window(populate=True)` - Get most recently focused window
 - `create_window(url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
 - `close_window(window_id)` - Close specific window
 - `focus_window(window_id)` - Bring window to front and focus it

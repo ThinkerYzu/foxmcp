@@ -23,8 +23,53 @@ Options:
   --port PORT          WebSocket port (default: 8765)
   --mcp-port MCP_PORT  MCP server port (default: 3000)
   --no-mcp             Disable MCP server
+  --disable-tools GROUP[,GROUP...]
+                       Tool groups to leave unregistered (default: none)
   -h, --help           Show help message
 ```
+
+## Reducing the Tool Surface
+
+Every tool's description sits in an MCP client's context for the whole session,
+whether or not the tool is ever called. The full set of 35 tools costs roughly
+4,700 tokens. `--disable-tools` leaves a group unregistered, so a client never
+sees it:
+
+```bash
+# A setup that only drives tabs and reads pages
+python server/server.py --disable-tools bookmarks,history,requests
+```
+
+The groups, and what each costs when enabled. The token figures estimate the
+serialized name, description and input schema of each tool at four characters per
+token, so treat them as proportions rather than exact counts:
+
+| Group | Tools | ~Tokens |
+|---|---|---|
+| `tabs` | list, create, close, switch, move, capture_screenshot | 1,195 |
+| `windows` | list, get, get_current, create, close, focus, update | 948 |
+| `bookmarks` | list, search, create, create_folder, update, delete | 703 |
+| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 693 |
+| `content` | get_text, get_html, execute_script, execute_predefined | 421 |
+| `navigation` | back, forward, reload, go_to_url | 380 |
+| `history` | query, get_recent, delete_item | 304 |
+| `debug` | websocket_status | 58 |
+
+All groups are on by default. An unrecognized group name is an error rather than
+a warning, so a typo cannot silently leave the group enabled.
+
+The same list can be set through the environment, for clients that launch the
+server through a wrapper whose arguments you do not control:
+
+```bash
+export FOXMCP_DISABLE_TOOLS=bookmarks,history
+```
+
+`--disable-tools` overrides `FOXMCP_DISABLE_TOOLS` when both are given.
+
+Disabling a group hides its tools; it does not restrict the extension, which
+still holds the same browser permissions. This is a context-size option, not a
+security boundary — see [architecture.md](architecture.md#security-architecture).
 
 ## Security Features
 
@@ -107,12 +152,15 @@ export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
 
 ### Optional Configuration
 
-`FOXMCP_EXT_SCRIPTS` is the only environment variable the server reads. It points at
-the directory holding predefined scripts:
+The server reads two environment variables. `FOXMCP_EXT_SCRIPTS` points at the
+directory holding predefined scripts:
 
 ```bash
 export FOXMCP_EXT_SCRIPTS=/path/to/predefined/
 ```
+
+`FOXMCP_DISABLE_TOOLS` names tool groups to leave unregistered — see
+[Reducing the Tool Surface](#reducing-the-tool-surface).
 
 Ports are set on the command line, not through the environment — see
 [Multiple Server Instances](#multiple-server-instances).
