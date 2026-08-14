@@ -2,6 +2,47 @@
 
 This document provides release notes and upgrade instructions for FoxMCP.
 
+For the full, entry-by-entry record of every release, see
+[CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
+generated from.
+
+## v1.2.0 - Security and Context (2026-08-14)
+
+### 🔒 Security Release
+
+**Upgrade if you run any earlier version.** Before v1.2.0 the extension WebSocket
+accepted any connection on its localhost port, and WebSocket handshakes are exempt
+from the same-origin policy — so any web page you visited could take the connection
+and answer browser requests on the extension's behalf. The server now accepts only
+`moz-extension://` origins.
+
+### ✨ What else is in it
+
+- **Response bodies are actually captured.** They never were: the old approach
+  overrode `window.fetch` from a content script, which Firefox silently refuses.
+  Bodies now come from the response stream, and cover the document load as well.
+- **`--disable-tools` shrinks the tool surface** your MCP client carries, one group
+  at a time — `windows`, `tabs`, `bookmarks`, `navigation`, `content`, `requests`,
+  `history`, `debug`. Every group stays on by default.
+- **`tabs_move`**, plus a `tabs_list` that can finally see other windows.
+- **Releases are built in public** by GitHub Actions and carry a signed provenance
+  attestation: `gh attestation verify 'foxmcp@codemud.org.xpi' --repo ThinkerYzu/foxmcp`.
+
+### ⚠️ Breaking
+
+`get_last_focused_window` is removed. It returned the same window as
+`get_current_window` in every case this extension can produce, so no behavior
+changes — but a client that names the old tool gets an error. Use
+`get_current_window`.
+
+### 📋 Upgrading
+
+Install the new XPI as you installed the old one, and restart the server. The
+extension asks for one new permission, `webRequestBlocking`, which is what Firefox
+requires before it will hand an extension the response stream; nothing blocks,
+cancels or rewrites a request. It has no description string in Gecko, so it raises
+no new install prompt.
+
 ## v1.1.0 - Enhanced Automation (2025-10-26)
 
 ### 🚀 Feature Release
@@ -337,7 +378,7 @@ The v1.0.0 release establishes a solid foundation for browser automation. Planne
 ### 💬 Feedback
 
 We welcome feedback and contributions! Please:
-- Report bugs via [GitHub Issues](https://github.com/foxmcp/foxmcp/issues)
+- Report bugs via [GitHub Issues](https://github.com/ThinkerYzu/foxmcp/issues)
 - Suggest features through issue discussions
 - Contribute code via pull requests
 - Share your use cases and success stories
