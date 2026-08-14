@@ -171,22 +171,22 @@ async def test_complete_mcp_to_firefox_chain():
                 await asyncio.sleep(2.0)
                 
                 # Test 3: Get history
-                print("\n3️⃣  Testing get_history...")
+                print("\n3️⃣  Testing history_query...")
                 try:
-                    result = await mcp_client.call_tool("get_history", {
+                    result = await mcp_client.call_tool("history_query", {
                         "query": "",
-                        "maxResults": 5
+                        "max_results": 5
                     })
-                    
+
                     if result["success"]:
-                        print("✅ get_history succeeded")
-                        test_results.append(("get_history", True))
+                        print("✅ history_query succeeded")
+                        test_results.append(("history_query", True))
                     else:
-                        print(f"❌ get_history failed: {result.get('error')}")
-                        test_results.append(("get_history", False))
+                        print(f"❌ history_query failed: {result.get('error')}")
+                        test_results.append(("history_query", False))
                 except Exception as e:
-                    print(f"❌ get_history exception: {e}")
-                    test_results.append(("get_history", False))
+                    print(f"❌ history_query exception: {e}")
+                    test_results.append(("history_query", False))
                 
                 # Report results
                 print("\n" + "="*60)
