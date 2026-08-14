@@ -4,14 +4,14 @@
   "description": "Firefox browser automation via Model Context Protocol (MCP)",
   "main": "server/server.py",
   "scripts": {
-    "start": "python server/server.py",
+    "start": "venv/bin/python server/server.py",
     "test": "make test",
     "build": "make build",
     "dev": "make dev"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/foxmcp/foxmcp.git"
+    "url": "https://github.com/ThinkerYzu/foxmcp.git"
   },
   "keywords": [
     "firefox",
@@ -26,10 +26,10 @@
   "author": "FoxMCP Project",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/foxmcp/foxmcp/issues"
+    "url": "https://github.com/ThinkerYzu/foxmcp/issues"
   },
-  "homepage": "https://github.com/foxmcp/foxmcp#readme",
+  "homepage": "https://github.com/ThinkerYzu/foxmcp#readme",
   "engines": {
-    "python": ">=3.8"
+    "python": ">=3.10"
   }
 }

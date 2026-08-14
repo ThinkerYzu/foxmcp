@@ -60,9 +60,22 @@ check_dependencies() {
     python_major=$(echo "$python_version" | cut -d. -f1)
     python_minor=$(echo "$python_version" | cut -d. -f2)
 
-    if [ "$python_major" -lt 3 ] || ([ "$python_major" -eq 3 ] && [ "$python_minor" -lt 8 ]); then
-        error "Python 3.8 or higher is required. Found Python $python_version"
+    # 3.10 is fastmcp 3's own floor. Below it, pip fails to resolve the server
+    # requirements with an error that says nothing about the Python version.
+    if [ "$python_major" -lt 3 ] || ([ "$python_major" -eq 3 ] && [ "$python_minor" -lt 10 ]); then
+        error "Python 3.10 or higher is required (fastmcp 3 needs it). Found Python $python_version"
     fi
+
+    # Debian and Ubuntu ship the venv module without ensurepip, so `python3 -m venv`
+    # fails on a stock machine even though python3 itself is there. Checking here
+    # costs a temporary directory; not checking it aborts the install later, after
+    # the release has been downloaded and unpacked into the user's directory.
+    venv_probe="$(mktemp -d)"
+    if ! python3 -m venv "$venv_probe" > /dev/null 2>&1; then
+        rm -rf "$venv_probe"
+        error "python3 cannot create virtual environments. On Debian or Ubuntu: sudo apt install python3-venv"
+    fi
+    rm -rf "$venv_probe"
 
     success "Dependencies check passed (Python $python_version)"
 }

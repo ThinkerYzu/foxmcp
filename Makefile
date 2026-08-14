@@ -150,9 +150,15 @@ package: build
 	@echo "  - dist/packages/foxmcp-server.zip"
 
 # Development and Running
+# Run the server out of the project venv, like every other target here.
+#
+# This used to be `cd server && python server.py`, which takes whatever `python`
+# is on PATH — the same mistake the pip calls above used to make. On a machine
+# where `python` is some other venv, or does not exist at all, the recipe failed
+# on an import that has been installed all along.
 run-server:
 	@echo "Starting FoxMCP WebSocket server..."
-	cd server && python server.py
+	$(VENV_BIN)/python server/server.py
 
 # Testing
 test: run-tests

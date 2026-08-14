@@ -48,11 +48,19 @@ After running the installation script, install the FoxMCP extension from Firefox
 git clone https://github.com/ThinkerYzu/foxmcp.git
 cd foxmcp
 
-# Create virtual environment and install dependencies
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# Create venv/ and install the server dependencies into it
+make install
 ```
+
+Python 3.10 or newer is required — `fastmcp` 3 does not install on anything older.
+Development and CI run 3.14, and 3.12 is verified. `make install` creates `venv/` and
+installs `server/requirements.txt` into it; use `make setup` instead if you also want
+to run the test suite, which adds `tests/requirements.txt`.
+
+You also need `make`, `zip` and Python's `venv` module, none of which a stock Ubuntu
+has: `sudo apt install make zip python3-venv`. Without `python3-venv`, `make install`
+stops at "The virtual environment was not created successfully"; without `zip`,
+`make package` cannot build the XPI.
 
 #### 2. Build & Install Extension
 
@@ -60,6 +68,14 @@ pip install -r requirements.txt
 # Build and package extension
 make package
 ```
+
+**Your Firefox channel decides which methods are available.** Release and Beta
+builds enforce extension signing and ignore `xpinstall.signatures.required`, so an
+unsigned XPI cannot be installed permanently on them — only Nightly, Developer
+Edition and unbranded builds honour that preference, which Methods 2 and 3 depend
+on. On Release or Beta, either install the signed copy from
+[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/), or use
+Method 1, which loads an unsigned XPI temporarily until Firefox restarts.
 
 **Install in Firefox (Method 1 - Temporary Add-on)**:
 1. Open Firefox
@@ -89,7 +105,13 @@ This script automatically:
 - Configures Firefox to allow unsigned extensions
 - Handles existing installations and preferences
 
-**Note**: Method 1 requires reinstalling after Firefox restarts. Method 2 requires manual preference changes. Method 3 is fully automated and provides the most seamless installation experience.
+**Then enable it by hand.** Start Firefox, open `about:addons`, and turn FoxMCP on.
+Firefox installs an extension dropped into a profile in the disabled state and
+requires a person to enable it — no script can do that step, and until you do, the
+extension is present, listed, and not running. Methods 1 and 2 install through the
+browser, so they do not need it.
+
+**Note**: Method 1 requires reinstalling after Firefox restarts. Method 2 requires manual preference changes. Method 3 is the least manual of the persistent options, on a channel that allows unsigned extensions — but it still needs that one click.
 
 ### 3. Start Server
 
@@ -101,15 +123,15 @@ This script automatically:
 
 **If you installed from source:**
 ```bash
-# Activate virtual environment (if not already active)
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
 # Start both WebSocket and MCP servers
 make run-server
 
-# Or manually:
-python server/server.py
+# Or the same thing by hand — note the interpreter, which is the one make uses
+venv/bin/python server/server.py
 ```
+
+Neither needs the virtual environment activated: both name `venv/bin/python`
+directly. Activating it first (`source venv/bin/activate`) is fine too.
 
 The server will start on:
 - **WebSocket**: `localhost:8765` (for Firefox extension)
@@ -166,9 +188,11 @@ Once connected, you can control Firefox through natural language:
 
 ### Web Request Monitoring
 - Monitor HTTP requests with URL pattern filtering
-- Capture request/response headers and bodies
-- Support for binary content (base64 encoding and file saving)
-- Graceful session management with data persistence
+- Capture response headers and bodies, including the document load
+- Text bodies come back as text — JSON and `text/*` by default, configurable per
+  monitor. A binary response reports its size, not its bytes
+- Start, list, read and stop; several monitors can run at once. Captured data lives
+  in the extension for as long as it runs, and nothing is written to disk
 
 ### Window Management
 - List, create, close, and focus windows
@@ -298,12 +322,19 @@ See [Development Guide](docs/development.md) for detailed instructions.
 ## Troubleshooting
 
 ### Extension Not Connecting
-1. Verify server is running: `curl http://localhost:8765`
+1. Verify the WebSocket server is running: `curl -i http://localhost:8765`.
+   A healthy answer is **426 Upgrade Required** — that is the WebSocket server
+   turning away a plain HTTP request. Connection refused means it is not running
 2. Check extension popup for connection status
 3. Review browser console for errors
 
+The server accepts WebSocket connections only from `moz-extension://` origins, so a
+handshake from anything but the extension is rejected with 403 and logged.
+
 ### MCP Client Issues
-1. Check MCP server: `curl http://localhost:3000`
+1. Check the MCP server: `curl -i http://localhost:3000/mcp/`. A **307** redirect to
+   `/mcp` means it is up; **connection refused** means it is not. A bare
+   `curl http://localhost:3000` answers 404, which also proves the port is live
 2. Verify client configuration matches server ports
 3. Run the server in the foreground and watch its log output
 
