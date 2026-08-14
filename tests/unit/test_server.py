@@ -94,3 +94,49 @@ class TestFoxMCPServer:
         result = await server.send_to_extension(message)
         
         assert result is False
+
+class TestConnectionDiagnostics:
+    """What debug_websocket_status reports, and when
+
+    It is the tool a user reaches for when nothing else works, and it used to
+    answer "WebSocket server doesn't track connected clients" in every case: it
+    looked for a `connected_clients` collection that FoxMCPServer has never had,
+    because the server holds one connection rather than a set. These tests pin the
+    three states it can actually be in.
+    """
+
+    @staticmethod
+    async def status(server):
+        """Call the tool by name, the way a client reaches it rather than as a function"""
+        result = await server.mcp_tools.mcp.call_tool("debug_websocket_status", {})
+        return result.content[0].text
+
+    @pytest.fixture
+    def server(self):
+        return FoxMCPServer(host="localhost", port=8765, start_mcp=False)
+
+    @pytest.mark.asyncio
+    async def test_reports_no_connection_before_the_extension_arrives(self, server):
+        assert "No browser extension is connected" in await self.status(server)
+
+    @pytest.mark.asyncio
+    async def test_reports_the_connection_and_where_it_came_from(self, server):
+        connection = Mock()
+        connection.close_code = None
+        connection.remote_address = ("127.0.0.1", 47322)
+        server.extension_connection = connection
+
+        report = await self.status(server)
+
+        assert "Browser extension connected" in report
+        assert "127.0.0.1:47322" in report
+
+    @pytest.mark.asyncio
+    async def test_a_closed_connection_is_not_a_connection(self, server):
+        """The attribute outlives the socket; the browser closing is the case that matters"""
+        connection = Mock()
+        connection.close_code = 1001
+        connection.remote_address = ("127.0.0.1", 47322)
+        server.extension_connection = connection
+
+        assert "No browser extension is connected" in await self.status(server)

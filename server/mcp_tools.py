@@ -1200,16 +1200,28 @@ class FoxMCPTools:
         async def debug_websocket_status() -> str:
             """Debug WebSocket connection status
 
-            Returns information about the browser extension connection
+            Says whether the browser extension is connected, and from where. Every
+            other tool fails with a timeout when it is not, so check here first.
             """
-            if not hasattr(self.websocket_server, 'connected_clients'):
-                return "WebSocket server doesn't track connected clients"
+            # The server holds one connection, not a set: an arriving extension
+            # closes the previous one. This used to look for a `connected_clients`
+            # collection, which FoxMCPServer has never had, so the tool answered
+            # "doesn't track connected clients" whether or not anything was
+            # connected -- an unhelpful answer from the tool you reach for when
+            # the connection is the thing in doubt.
+            connection = getattr(self.websocket_server, 'extension_connection', None)
 
-            try:
-                client_count = len(getattr(self.websocket_server, 'connected_clients', []))
-                return f"WebSocket status: {client_count} browser extension(s) connected"
-            except Exception as e:
-                return f"WebSocket status check failed: {e}"
+            if connection is None:
+                return "No browser extension is connected"
+
+            # close_code is None until the socket closes, which is the same
+            # liveness test the server itself makes before displacing a connection.
+            if getattr(connection, 'close_code', None) is not None:
+                return "No browser extension is connected (the last connection has closed)"
+
+            address = getattr(connection, 'remote_address', None)
+            where = f" from {address[0]}:{address[1]}" if address else ""
+            return f"Browser extension connected{where}"
 
     def _setup_navigation_tools(self):
         """Setup navigation tools"""
@@ -1667,11 +1679,12 @@ class FoxMCPTools:
             Args:
                 url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
                 options: Optional configuration for monitoring:
-                    - capture_request_bodies: bool (default: True)
                     - capture_response_bodies: bool (default: True)
-                    - max_body_size: int (default: 50000)
+                    - max_body_size: int (default: 50000) — bytes kept per body; the
+                      full size is reported either way
                     - content_types_to_capture: List[str] (default: ["application/json", "text/plain"])
-                    - sensitive_headers: List[str] (default: ["Authorization", "Cookie"])
+                      — a body comes back as text only if its content type matches one
+                      of these and is text to begin with
                 tab_id: Optional tab ID to monitor (if not provided, monitors all tabs)
 
             Returns:
@@ -1731,7 +1744,7 @@ class FoxMCPTools:
 
             Args:
                 monitor_id: ID of the monitoring session to stop
-                drain_timeout: Seconds to wait for in-flight requests (default: 5)
+                drain_timeout: Accepted and ignored; the monitor stops at once
 
             Returns:
                 JSON string with stop status and statistics
@@ -1805,12 +1818,16 @@ class FoxMCPTools:
             """
             Get full request/response content for a specific request
 
+            The response carries **response_body.included** and **note**: a body that
+            was not text, or not one of the monitored content types, comes back with
+            `content: null` and its size filled in. `request_headers` is always empty.
+
             Args:
                 monitor_id: ID of the monitoring session
                 request_id: ID of the specific request
-                include_binary: Whether to return binary content as base64 (default: False)
-                save_request_body_to: Optional file path to save request body
-                save_response_body_to: Optional file path to save response body
+                include_binary: Accepted and ignored; binary bodies never come back
+                save_request_body_to: Accepted and ignored; nothing is written to disk
+                save_response_body_to: Accepted and ignored; nothing is written to disk
 
             Returns:
                 JSON string with full request/response content
