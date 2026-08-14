@@ -94,6 +94,79 @@ jobs:
           path: tests/htmlcov/
           if-no-files-found: ignore
 
+  install:
+    name: Install from source
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Follows README's from-source instructions on a clean checkout, because the
+    # rest of CI does not: setup-python-env creates the venv itself and runs
+    # `make setup`, so `make install` — what the README tells a user to run — is
+    # never exercised. This job is also the only check that the server starts and
+    # serves tools to a client over HTTP, rather than to a test fixture.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: make install, as README says
+        run: make install
+
+      - name: Start the server, and ask it for its tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv/bin/python server/server.py --port 18765 --mcp-port 13000 &
+          server_pid=$!
+          trap 'kill $server_pid' EXIT
+
+          # A live MCP endpoint answers /mcp/ with a 307 to /mcp, which -f treats
+          # as success; -f fails only from 400 up, and a refused connection is a
+          # curl error either way.
+          for _ in $(seq 30); do
+            curl -sf -o /dev/null http://localhost:13000/mcp/ && break
+            sleep 1
+          done
+
+          venv/bin/python - <<'PY'
+          import asyncio
+          from fastmcp import Client
+
+          EXPECTED = 35
+
+          async def main():
+              async with Client("http://localhost:13000/mcp/") as client:
+                  names = sorted(tool.name for tool in await client.list_tools())
+                  print(f"{len(names)} tools: {', '.join(names)}")
+                  assert len(names) == EXPECTED, f"expected {EXPECTED} tools, got {len(names)}"
+
+          asyncio.run(main())
+          PY
+
+      - name: A disabled group must not reach the client
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv/bin/python server/server.py --port 18766 --mcp-port 13001 \
+            --disable-tools bookmarks,history &
+          server_pid=$!
+          trap 'kill $server_pid' EXIT
+          sleep 5
+
+          venv/bin/python - <<'PY'
+          import asyncio
+          from fastmcp import Client
+
+          async def main():
+              async with Client("http://localhost:13001/mcp/") as client:
+                  names = {tool.name for tool in await client.list_tools()}
+                  assert len(names) == 26, f"expected 26 tools, got {len(names)}"
+                  assert not [n for n in names if n.startswith(("bookmarks_", "history_"))]
+                  assert "tabs_list" in names
+
+          asyncio.run(main())
+          PY
+
   package:
     name: Build packages
     runs-on: ubuntu-latest

@@ -3,16 +3,16 @@ description: >
   Create venv/ and install the server and test dependencies into it, with pip's
   download cache carried between runs.
 
-  The Makefile runs everything out of venv/bin but never creates venv/ itself, so
-  `make setup` on a fresh checkout fails on a missing venv/bin/pip. This action
-  creates it first.
+  The venv is created here rather than left to `make setup`, so that it is built
+  from the interpreter actions/setup-python just installed rather than from
+  whatever `python3` resolves to on the runner.
 
 inputs:
   python-version:
     description: >
       Python version to install. Matches the venv the suite is green on locally.
-      Note that docs/venv-setup.md and docs/files.md still claim 3.13.3, and
-      package.json claims ">=3.8"; both are stale.
+      The project floor is 3.10, which is fastmcp 3's own; nothing is tested below
+      this version.
     required: false
     default: '3.14'
 
