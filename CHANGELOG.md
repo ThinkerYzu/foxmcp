@@ -5,6 +5,14 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`--disable-tools` leaves a tool group unregistered, to keep it out of an MCP client's context.** Every tool description a client is offered stays in its context for the whole session whether or not the tool is ever called, and the full set costs roughly 4,700 tokens — the concern raised in [issue #4](https://github.com/ThinkerYzu/foxmcp/issues/4). The groups are `windows`, `tabs`, `bookmarks`, `navigation`, `content`, `requests`, `history` and `debug`, and all of them remain on by default, so nothing changes for an existing setup. `python server/server.py --disable-tools bookmarks,history` drops nine tools and about 1,000 tokens; `FOXMCP_DISABLE_TOOLS` does the same for clients that launch the server through a wrapper whose arguments you cannot control. An unrecognized group name is an error rather than a warning, because a typo that quietly left the group enabled would defeat the point. See [`docs/configuration.md`](docs/configuration.md#reducing-the-tool-surface) for the per-group cost.
+
+### Fixed
+- **`debug_websocket_status` was registered by the history group.** Nothing depended on this while every tool was always registered, but it meant the tool you reach for when the connection looks wrong would have disappeared along with an unrelated group. It has its own group now.
+
 ## [1.2.0] - 2026-08-13
 
 ### Security

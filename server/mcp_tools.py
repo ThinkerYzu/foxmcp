@@ -70,21 +70,63 @@ class TabsListResponse(TypedDict):
 class FoxMCPTools:
     """MCP tools that communicate with Firefox extension via WebSocket"""
 
-    def __init__(self, websocket_server):
-        """Initialize with reference to WebSocket server"""
+    # The tool groups a user can turn off, mapped to the method that registers each.
+    #
+    # Every tool description an MCP client is offered sits in that client's context
+    # for the whole session, whether or not it is ever called, so a user who never
+    # touches bookmarks pays for them on every request. The keys are the names
+    # --disable-tools accepts; docs/configuration.md lists what each group costs.
+    #
+    # This is also the only route by which a tool gets registered, so a new tool
+    # added to any _setup_* method below is disableable without further work.
+    TOOL_GROUPS = {
+        'windows': '_setup_window_tools',
+        'tabs': '_setup_tab_tools',
+        'history': '_setup_history_tools',
+        'bookmarks': '_setup_bookmark_tools',
+        'navigation': '_setup_navigation_tools',
+        'content': '_setup_content_tools',
+        'requests': '_setup_request_monitoring_tools',
+        'debug': '_setup_debug_tools',
+    }
+
+    def __init__(self, websocket_server, disabled_groups=None):
+        """Initialize with reference to WebSocket server
+
+        disabled_groups names tool groups to leave unregistered, so their
+        descriptions never reach a client's context - see TOOL_GROUPS for the
+        names. Raises ValueError on a name that is not a group, because a typo
+        that silently registered everything would defeat the point of the option.
+        """
         self.websocket_server = websocket_server
+        self.disabled_groups = self._validate_groups(disabled_groups)
         self.mcp = FastMCP("FoxMCP")
         self._setup_tools()
 
+    @classmethod
+    def _validate_groups(cls, disabled_groups):
+        """Check requested group names against TOOL_GROUPS, returning them as a set
+
+        Raises ValueError naming both the unknown groups and the valid ones. The
+        message reaches a user through server.py's --disable-tools, so it carries
+        the whole list rather than telling them where to look it up.
+        """
+        groups = set(disabled_groups or ())
+        unknown = sorted(groups - set(cls.TOOL_GROUPS))
+        if unknown:
+            raise ValueError(
+                f"Unknown tool group(s): {', '.join(unknown)}. "
+                f"Valid groups: {', '.join(sorted(cls.TOOL_GROUPS))}"
+            )
+        return groups
+
     def _setup_tools(self):
-        """Set up all MCP tool definitions"""
-        self._setup_window_tools()
-        self._setup_tab_tools()
-        self._setup_history_tools()
-        self._setup_bookmark_tools()
-        self._setup_navigation_tools()
-        self._setup_content_tools()
-        self._setup_request_monitoring_tools()
+        """Set up all MCP tool definitions, minus any disabled group"""
+        for group, setup_method in self.TOOL_GROUPS.items():
+            if group in self.disabled_groups:
+                logger.info(f"Tool group '{group}' disabled - not registering its tools")
+                continue
+            getattr(self, setup_method)()
 
     def _setup_window_tools(self):
         """Setup window management tools"""
@@ -849,22 +891,6 @@ class FoxMCPTools:
 
             return f"Unable to query history for: {query}"
 
-        # WebSocket Connection Status Tool (for debugging)
-        @self.mcp.tool()
-        async def debug_websocket_status() -> str:
-            """Debug WebSocket connection status
-
-            Returns information about the browser extension connection
-            """
-            if not hasattr(self.websocket_server, 'connected_clients'):
-                return "WebSocket server doesn't track connected clients"
-
-            try:
-                client_count = len(getattr(self.websocket_server, 'connected_clients', []))
-                return f"WebSocket status: {client_count} browser extension(s) connected"
-            except Exception as e:
-                return f"WebSocket status check failed: {e}"
-
         # Get Recent History Tool
         @self.mcp.tool()
         async def history_get_recent(count: int = 10) -> str:
@@ -1197,6 +1223,24 @@ class FoxMCPTools:
                 return f"Failed to delete bookmark: {error_msg}"
 
             return f"Unable to delete bookmark {bookmark_id}"
+
+    def _setup_debug_tools(self):
+        """Setup connection diagnostics tools"""
+
+        @self.mcp.tool()
+        async def debug_websocket_status() -> str:
+            """Debug WebSocket connection status
+
+            Returns information about the browser extension connection
+            """
+            if not hasattr(self.websocket_server, 'connected_clients'):
+                return "WebSocket server doesn't track connected clients"
+
+            try:
+                client_count = len(getattr(self.websocket_server, 'connected_clients', []))
+                return f"WebSocket status: {client_count} browser extension(s) connected"
+            except Exception as e:
+                return f"WebSocket status check failed: {e}"
 
     def _setup_navigation_tools(self):
         """Setup navigation tools"""

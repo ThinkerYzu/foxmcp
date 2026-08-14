@@ -77,7 +77,8 @@ def find_available_port(start_port=3000, max_attempts=100):
     raise RuntimeError(f"Could not find available port starting from {start_port}")
 
 class FoxMCPServer:
-    def __init__(self, host: str = "localhost", port: int = 8765, mcp_port: int = None, start_mcp: bool = True):
+    def __init__(self, host: str = "localhost", port: int = 8765, mcp_port: int = None, start_mcp: bool = True,
+                 disabled_tool_groups=None):
         self.host = host
         self.port = port
 
@@ -115,7 +116,7 @@ class FoxMCPServer:
         self._connection_waiters = []  # List of futures waiting for connection
 
         # Initialize MCP tools
-        self.mcp_tools = FoxMCPTools(self)
+        self.mcp_tools = FoxMCPTools(self, disabled_groups=disabled_tool_groups)
         self.mcp_app = self.mcp_tools.get_mcp_app()
         self.mcp_server_task = None
         self.mcp_thread = None
@@ -695,8 +696,30 @@ async def main():
                         help='MCP server port (default: 3000, dynamic allocation in tests)')
     parser.add_argument('--no-mcp', action='store_true',
                         help='Disable MCP server')
+    parser.add_argument('--disable-tools', default=None, metavar='GROUP[,GROUP...]',
+                        help='Comma-separated tool groups to leave unregistered, so their '
+                             'descriptions never reach the client. Groups: '
+                             f"{', '.join(sorted(FoxMCPTools.TOOL_GROUPS))}. "
+                             'Overrides FOXMCP_DISABLE_TOOLS.')
 
     args = parser.parse_args()
+
+    # FOXMCP_DISABLE_TOOLS is the same setting for a client that launches the server
+    # through a wrapper: an MCP client config names the command and sets the
+    # environment, but the arguments in between are often not the user's to edit.
+    group_list = args.disable_tools
+    if group_list is None:
+        group_list = os.environ.get('FOXMCP_DISABLE_TOOLS', '')
+    disabled_tool_groups = [g.strip() for g in group_list.split(',') if g.strip()]
+
+    # FoxMCPTools validates these again in its constructor, which is what enforces
+    # the rule; checking here is what turns the ValueError into argparse's usage
+    # message, so a mistyped group name reads as a command-line error rather than a
+    # traceback from server startup.
+    try:
+        FoxMCPTools._validate_groups(disabled_tool_groups)
+    except ValueError as e:
+        parser.error(str(e))
 
     # Ensure localhost-only binding for security
     if args.host != 'localhost' and args.host != '127.0.0.1':
@@ -707,7 +730,8 @@ async def main():
         host=args.host,
         port=args.port,
         mcp_port=args.mcp_port,
-        start_mcp=not args.no_mcp
+        start_mcp=not args.no_mcp,
+        disabled_tool_groups=disabled_tool_groups
     )
     await server.start_server()
 
