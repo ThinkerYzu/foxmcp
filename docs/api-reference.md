@@ -66,17 +66,22 @@ and what each group costs.
   - `options`: Optional configuration dict with capture settings
   - `tab_id`: Optional tab ID to monitor (if not provided, monitors all tabs)
   - Returns JSON with `monitor_id` and monitoring status
-- `requests_stop_monitoring(monitor_id, drain_timeout=5)` - Stop monitoring with graceful drainage
+- `requests_stop_monitoring(monitor_id, drain_timeout=5)` - Stop monitoring
   - `monitor_id`: ID of the monitoring session to stop
-  - `drain_timeout`: Seconds to wait for in-flight requests
+  - `drain_timeout`: **ignored** — the monitor stops immediately
   - Returns JSON with stop status and statistics
+  - Captured data outlives the monitor: the two tools below still answer afterwards
 - `requests_list_captured(monitor_id)` - List captured request summaries
   - Returns JSON with array of request summaries (metadata only, no full content)
 - `requests_get_content(monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
-  - `include_binary`: Whether to return binary content as base64 (default: False)
-  - `save_request_body_to`: Optional file path to save request body
-  - `save_response_body_to`: Optional file path to save response body
-  - Returns JSON with full headers and content
+  - `include_binary`: **ignored** — non-text bodies never come back as content, only as a size
+  - `save_request_body_to`, `save_response_body_to`: **ignored** — `saved_to_file` is always `null`
+  - Returns JSON with response headers and both bodies. `request_headers` is always
+    empty: no listener collects them
+
+See [web-request-monitoring.md](web-request-monitoring.md) for the options, the
+pattern syntax, where captured data lives, and the full list of parameters that are
+accepted and ignored.
 
 #### What response body capture actually delivers
 

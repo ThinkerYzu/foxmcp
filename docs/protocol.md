@@ -877,6 +877,184 @@ private window and a non-private one.
 }
 ```
 
+### 7. Web Request Monitoring
+
+Four actions, shipped in v1.1.0 and undocumented here until 2026-08-14. The
+behaviour behind them — pattern matching, which options are honoured, how long
+captured data lives — is in
+[`web-request-monitoring.md`](web-request-monitoring.md); this section is the wire
+format only.
+
+#### Start Monitoring
+**Request:**
+```json
+{
+  "id": "req_020",
+  "type": "request",
+  "action": "requests.start_monitoring",
+  "data": {
+    "url_patterns": ["https://example.org/*"],
+    "options": {
+      "capture_response_bodies": true,
+      "max_body_size": 50000,
+      "content_types_to_capture": ["application/json", "text/plain"]
+    },
+    "tab_id": 7
+  },
+  "timestamp": "2026-08-14T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_020",
+  "type": "response",
+  "action": "requests.start_monitoring",
+  "data": {
+    "monitor_id": "mon_1755205412345",
+    "status": "active",
+    "started_at": "2026-08-14T12:00:00.000Z",
+    "url_patterns": ["https://example.org/*"],
+    "options": {}
+  },
+  "timestamp": "2026-08-14T12:00:00.100Z"
+}
+```
+
+`tab_id` is optional; without it the monitor watches every tab. The `options` echoed
+back are the ones the server sent, including any the extension does not read.
+
+#### List Captured
+**Request:**
+```json
+{
+  "id": "req_021",
+  "type": "request",
+  "action": "requests.list_captured",
+  "data": {
+    "monitor_id": "mon_1755205412345"
+  },
+  "timestamp": "2026-08-14T12:01:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_021",
+  "type": "response",
+  "action": "requests.list_captured",
+  "data": {
+    "monitor_id": "mon_1755205412345",
+    "total_requests": 1,
+    "requests": [
+      {
+        "request_id": "1234",
+        "url": "https://example.org/api/items",
+        "method": "GET",
+        "status_code": 200,
+        "duration_ms": 118,
+        "timestamp": "2026-08-14T12:00:31.221Z",
+        "tab_id": 7,
+        "type": "xmlhttprequest"
+      }
+    ]
+  },
+  "timestamp": "2026-08-14T12:01:00.100Z"
+}
+```
+
+#### Get Content
+**Request:**
+```json
+{
+  "id": "req_022",
+  "type": "request",
+  "action": "requests.get_content",
+  "data": {
+    "monitor_id": "mon_1755205412345",
+    "request_id": "1234",
+    "include_binary": false
+  },
+  "timestamp": "2026-08-14T12:01:30.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_022",
+  "type": "response",
+  "action": "requests.get_content",
+  "data": {
+    "request_id": "1234",
+    "request_headers": {},
+    "response_headers": {"content-type": "application/json"},
+    "request_body": {
+      "included": false,
+      "content": null,
+      "size_bytes": 0,
+      "truncated": false,
+      "saved_to_file": null
+    },
+    "response_body": {
+      "included": true,
+      "content": "{\"items\":[]}",
+      "content_type": "application/json",
+      "encoding": "utf-8",
+      "size_bytes": 12,
+      "truncated": false,
+      "saved_to_file": null,
+      "note": "Response body read from the response stream"
+    }
+  },
+  "timestamp": "2026-08-14T12:01:30.100Z"
+}
+```
+
+An unknown `request_id` is answered with `REQUEST_NOT_FOUND`. `request_headers` is
+always `{}`, and `saved_to_file` is always `null`; both are described in the
+reference above.
+
+#### Stop Monitoring
+**Request:**
+```json
+{
+  "id": "req_023",
+  "type": "request",
+  "action": "requests.stop_monitoring",
+  "data": {
+    "monitor_id": "mon_1755205412345",
+    "drain_timeout": 5
+  },
+  "timestamp": "2026-08-14T12:02:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_023",
+  "type": "response",
+  "action": "requests.stop_monitoring",
+  "data": {
+    "monitor_id": "mon_1755205412345",
+    "status": "stopped",
+    "stopped_at": "2026-08-14T12:02:00.050Z",
+    "total_requests_captured": 1,
+    "statistics": {
+      "duration_seconds": 120.05,
+      "requests_per_second": 0.008,
+      "total_data_size": 0
+    }
+  },
+  "timestamp": "2026-08-14T12:02:00.100Z"
+}
+```
+
+An unknown `monitor_id` is answered with `MONITOR_NOT_FOUND`.
+
 ## Error Messages
 
 **Error Response:**
@@ -916,6 +1094,9 @@ private window and a non-private one.
 - `INVALID_JSON` - Script arguments contain malformed JSON
 - `INVALID_SCRIPT_ARGS` - Script arguments must be JSON array of strings or empty string
 - `CAPTURE_ERROR` - Failed to capture screenshot of the visible tab
+- `MONITOR_NOT_FOUND` - No monitoring session with the given `monitor_id`
+- `REQUEST_NOT_FOUND` - No captured request with the given `request_id`
+- `API_ERROR` - A `browser.*` call raised while handling a `requests.*` action
 
 ## Test Helper Messages
 
