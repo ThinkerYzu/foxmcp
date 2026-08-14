@@ -113,7 +113,10 @@ then:
 ```
 
 The script installs the XPI, sets `xpinstall.signatures.required = false` in `user.js`,
-and fixes permissions.
+and fixes permissions. **Then enable the extension in `about:addons`** — Firefox
+installs a profile-side extension disabled and waits for a person to turn it on. The
+test suite gets around this by editing `extensions.json` directly, which is why the
+suite never needed the click and a hand install does.
 
 ### Layout
 
@@ -219,7 +222,25 @@ There is no JavaScript linting or formatting configured.
 ## Continuous Integration
 
 `.github/workflows/ci.yml` runs on every push to master and every pull request:
-lint, unit tests, the full suite against a real Firefox, and a package build.
+lint, unit tests, the full suite against a real Firefox, an install from source,
+and a package build.
+
+The install job is the one that follows README rather than the test harness. It
+runs `make install` on a clean checkout — which nothing else does, since the other
+jobs create the venv themselves — then starts the server and asks it for its tools
+over HTTP as a real MCP client would, checking the count with every group enabled
+and with two groups disabled. To do the same by hand:
+
+```bash
+venv/bin/python server/server.py --port 18765 --mcp-port 13000 &
+venv/bin/python -c "
+import asyncio
+from fastmcp import Client
+async def main():
+    async with Client('http://localhost:13000/mcp/') as c:
+        print(len(await c.list_tools()))
+asyncio.run(main())"
+```
 
 The suite job installs Firefox Developer Edition rather than release. The tests
 drop an unsigned XPI into the profile, which needs
@@ -267,7 +288,10 @@ To rehearse without releasing anything, run the workflow by hand from the
 Actions tab and give it a version. It verifies and builds; it publishes nothing
 and never touches AMO.
 
-`release-commands.sh` predates all of this and is no longer the release path.
+There is no release script to run. `release-commands.sh` used to sit in the
+repository root and was deleted in 1.2.0; if you find a copy, it is not the
+release path and running it would commit your working tree under a v1.1.0
+message.
 
 ## Troubleshooting
 
