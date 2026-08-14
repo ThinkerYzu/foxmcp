@@ -210,16 +210,21 @@ class FoxMCPTools:
 
             return f"Unable to retrieve window {window_id}"
 
+        # There is no get_last_focused_window tool because it could not have differed
+        # from this one.
+        #
+        # ext-windows.js reads `context.currentWindow || windowTracker.topWindow` for
+        # getCurrent and plain `windowTracker.topWindow` for getLastFocused, and
+        # ExtensionParent.sys.mjs returns undefined for `currentWindow` whenever the
+        # context's viewType is "background" - which is the only context this
+        # extension has. So both calls evaluate the same expression. A separate tool
+        # shipped until 1.2.0 and always returned the same window as this one.
         @self.mcp.tool()
         async def get_current_window(populate: bool = True) -> str:
-            """
-            Get the current active window
-            
+            """Get the current active window, which is also the last focused window
+
             Args:
                 populate: Whether to include tab information
-                
-            Returns:
-                String containing current window details
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -245,42 +250,6 @@ class FoxMCPTools:
                 return f"Current window (ID {window_data.get('id')}): {window_data.get('type', 'normal')} window, {state_info}, {size_info}, {tabs_count} tabs"
 
             return "Unable to retrieve current window"
-
-        @self.mcp.tool()
-        async def get_last_focused_window(populate: bool = True) -> str:
-            """
-            Get the last focused window
-            
-            Args:
-                populate: Whether to include tab information
-                
-            Returns:
-                String containing last focused window details
-            """
-            request = {
-                "id": str(uuid.uuid4()),
-                "type": "request",
-                "action": "windows.get_last_focused",
-                "data": {"populate": populate},
-                "timestamp": datetime.now().isoformat()
-            }
-
-            response = await self.websocket_server.send_request_and_wait(request)
-
-            if "error" in response:
-                return f"Error getting last focused window: {response['error']}"
-
-            if response.get("type") == "response" and "data" in response:
-                window_data = response["data"].get("window", {})
-                if not window_data:
-                    return "No last focused window found"
-
-                state_info = f"state: {window_data.get('state', 'unknown')}"
-                size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
-                tabs_count = len(window_data.get('tabs', [])) if populate else '?'
-                return f"Last focused window (ID {window_data.get('id')}): {window_data.get('type', 'normal')} window, {state_info}, {size_info}, {tabs_count} tabs"
-
-            return "Unable to retrieve last focused window"
 
         @self.mcp.tool()
         async def create_window(

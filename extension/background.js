@@ -815,13 +815,6 @@ async function handleWindowsAction(id, action, data) {
         sendResponse(id, action, { window: currentWindow });
         break;
 
-      case 'windows.get_last_focused':
-        const lastFocusedWindow = await browser.windows.getLastFocused({
-          populate: data.populate !== false
-        });
-        sendResponse(id, action, { window: lastFocusedWindow });
-        break;
-
       case 'windows.create':
         const createOptions = {};
         if (data.url) createOptions.url = data.url;

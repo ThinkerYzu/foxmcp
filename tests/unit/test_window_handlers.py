@@ -164,7 +164,6 @@ class TestWindowHandlers:
             "windows.list",
             "windows.get", 
             "windows.get_current",
-            "windows.get_last_focused",
             "windows.create",
             "windows.close",
             "windows.focus",
