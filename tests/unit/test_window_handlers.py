@@ -5,7 +5,6 @@ Unit tests for window management handlers
 import pytest
 import json
 import asyncio
-import re
 from unittest.mock import AsyncMock, Mock, patch, MagicMock
 import sys
 import os
@@ -157,24 +156,6 @@ class TestWindowHandlers:
         
         # Action should be window-related
         assert parsed["action"].startswith("windows.")
-
-    def test_window_action_names(self):
-        """Test that all window actions follow naming convention"""
-        expected_actions = [
-            "windows.list",
-            "windows.get", 
-            "windows.get_current",
-            "windows.create",
-            "windows.close",
-            "windows.focus",
-            "windows.update"
-        ]
-        
-        for action in expected_actions:
-            # All should start with windows.
-            assert action.startswith("windows.")
-            # Should contain only letters, dots, and underscores
-            assert all(c.isalnum() or c in "._" for c in action)
 
     @pytest.mark.asyncio
     async def test_invalid_window_action(self, server):

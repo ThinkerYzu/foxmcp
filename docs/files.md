@@ -48,7 +48,8 @@ foxmcp/
     │   ├── test_protocol.py    # Protocol message tests
     │   ├── test_ping_pong.py   # Ping-pong functionality tests
     │   ├── test_window_handlers.py # Window management message and MCP tool tests
-    │   └── test_tab_move.py    # Tab moving, and the window scoping on tabs_list
+    │   ├── test_tab_move.py    # Tab moving, and the window scoping on tabs_list
+    │   └── test_protocol_pairing.py # Every action the server sends has a handler, and back
     ├── integration/   # Integration tests
     │   ├── test_websocket_communication.py # WebSocket communication tests
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests

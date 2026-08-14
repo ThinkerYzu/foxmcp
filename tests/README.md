@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**247 collected, 0 skipped** — 95 unit and 152 integration.
+**259 collected, 0 skipped** — 107 unit and 152 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,11 +42,11 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 247. Run them by hand if you need them.
+and are **not** part of the 259. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 95 | no |
+| `unit/` | 107 | no |
 | `integration/` | 152 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
@@ -288,7 +288,7 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 247 must pass.
+- **Run the suite before committing.** All 259 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem
