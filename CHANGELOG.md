@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `tabs_group` groups existing tabs and optionally sets a title and colour without activating tabs or focusing windows. Requires Firefox 139+ and the new `tabGroups` extension permission; existing tab creation behaviour is unchanged.
+
 ### Fixed
 - **A request monitor started while an older one is running no longer reads zero.** The extension keeps one record per request id, shared by every monitor that matches it, and a single flag on that record meant the first monitor to match claimed the request outright. Every later monitor listed nothing for as long as the older one stayed active, and a monitor only goes away when `requests_stop_monitoring` names it. What a client sees is a monitor that captures nothing, and since the natural response is to start another one, it then captures nothing however many times it retries. Each monitor now tracks the requests it has listed for itself, so a request matching three monitors appears in all three, which is what [`docs/web-request-monitoring.md`](docs/web-request-monitoring.md#url-patterns) already described. Reported in [issue #7](https://github.com/ThinkerYzu/foxmcp/issues/7).
 - **`<all_urls>` as a URL pattern now matches every request instead of none.** Patterns here are globs, not WebExtensions match patterns, so `<all_urls>` carried no wildcard and was tested against each URL as the literal string it is. It is the spelling anyone who has written a WebExtension reaches for first, and it failed silently: a monitor that starts, reports itself active, and never captures anything. It is special-cased alongside the bare `*` now.

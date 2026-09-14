@@ -8,6 +8,7 @@
   "license": "MIT",
   "permissions": [
     "tabs",
+    "tabGroups",
     "windows",
     "history",
     "bookmarks",

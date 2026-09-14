@@ -523,6 +523,47 @@ async function handleTabsAction(id, action, data) {
         sendResponse(id, action, { success: true });
         break;
 
+      case 'tabs.group': {
+        // Check both APIs before mutating: grouping arrived in 138, styling in 139.
+        if (typeof browser.tabs.group !== 'function' ||
+            typeof browser.tabGroups?.update !== 'function') {
+          sendError(id, 'UNSUPPORTED_API', 'Tab grouping requires Firefox 139+ and the tabGroups permission');
+          return;
+        }
+        const colours = ['blue', 'cyan', 'grey', 'green', 'orange', 'pink', 'purple', 'red', 'yellow'];
+        if (!Array.isArray(data.tabIds) || data.tabIds.length === 0 ||
+            !data.tabIds.every(tabId => Number.isInteger(tabId) && tabId >= 0) ||
+            (data.groupId !== undefined && (!Number.isInteger(data.groupId) || data.groupId < 0)) ||
+            (data.title !== undefined && typeof data.title !== 'string') ||
+            (data.color !== undefined && !colours.includes(data.color))) {
+          sendError(id, 'INVALID_PARAMETER', 'Provide non-empty tabIds, an optional non-negative groupId, string title and valid color');
+          return;
+        }
+        const groupOptions = { tabIds: data.tabIds };
+        if (data.groupId !== undefined) {
+          groupOptions.groupId = data.groupId;
+        } else {
+          // Do not move background work into whichever window happens to be current.
+          const firstTab = await browser.tabs.get(data.tabIds[0]);
+          groupOptions.createProperties = { windowId: firstTab.windowId };
+        }
+        const groupId = await browser.tabs.group(groupOptions);
+        const properties = {};
+        if (data.title !== undefined) properties.title = data.title;
+        if (data.color !== undefined) properties.color = data.color;
+        if (Object.keys(properties).length) {
+          try {
+            await browser.tabGroups.update(groupId, properties);
+          } catch (error) {
+            // Grouping has already succeeded; never imply that retrying is harmless.
+            sendError(id, 'PARTIAL_SUCCESS', `Tabs grouped into group ${groupId}, but title/colour update failed: ${error.message}`);
+            return;
+          }
+        }
+        sendResponse(id, action, { groupId });
+        break;
+      }
+
       case 'tabs.move':
         if (data.tabIds === undefined || data.tabIds === null) {
           sendError(id, 'INVALID_PARAMETER', 'tabIds is required for tabs.move');

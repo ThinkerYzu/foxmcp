@@ -692,6 +692,72 @@ class FoxMCPTools:
 
             return f"Unable to switch to tab {tab_id}"
 
+        @self._tool()
+        async def tabs_group(
+            tab_ids: Union[int, str, List[Union[int, str]]],
+            group_id: Optional[Union[int, str]] = None,
+            title: Optional[str] = None,
+            color: Optional[str] = None
+        ) -> str:
+            """Group existing tabs without activating a tab or focusing a window.
+
+            Requires Firefox 139+ and an extension with the tabGroups permission.
+            These are native tab groups, not cookie-isolated containers. Omit group_id
+            to create a group in the first tab's window; supply a returned ID to add
+            tabs to that group. Firefox
+            enforces restrictions such as pinned tabs and compatible windows.
+            If styling fails after grouping, the error reports the group ID: grouping
+            is not rolled back, so do not blindly retry creating another group.
+
+            Args:
+                tab_ids: One tab ID, a list of IDs, or a JSON string of IDs.
+                group_id: Existing group ID; omitted creates a new group.
+                title: Optional group title; an empty string clears the title.
+                color: Optional blue, cyan, grey, green, orange, pink, purple, red
+                    or yellow. Omitted title and colour preserve browser defaults
+                    or the existing group's properties.
+            """
+            try:
+                ids = json.loads(tab_ids) if isinstance(tab_ids, str) else tab_ids
+                ids = ids if isinstance(ids, list) else [ids]
+
+                def normalise_id(value):
+                    if isinstance(value, bool) or not isinstance(value, (int, str)):
+                        raise ValueError("IDs must be non-negative integers")
+                    value = int(value)
+                    if value < 0:
+                        raise ValueError("IDs must be non-negative integers")
+                    return value
+
+                if not ids:
+                    raise ValueError("Provide at least one tab ID")
+                data = {"tabIds": [normalise_id(value) for value in ids]}
+                if group_id is not None:
+                    data["groupId"] = normalise_id(group_id)
+                if title is not None:
+                    if not isinstance(title, str):
+                        raise ValueError("title must be a string")
+                    data["title"] = title
+                if color is not None:
+                    if color not in ("blue", "cyan", "grey", "green", "orange",
+                                     "pink", "purple", "red", "yellow"):
+                        raise ValueError("Invalid group color")
+                    data["color"] = color
+            except (ValueError, TypeError) as error:
+                return f"Error: {error}"
+
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()), "type": "request", "action": "tabs.group",
+                "data": data, "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Error grouping tabs: {response['error']}"
+            if response.get("type") == "error":
+                return f"Failed to group tabs: {response.get('data', {}).get('message', 'Unknown error')}"
+            if response.get("type") == "response" and "groupId" in response.get("data", {}):
+                return f"Tabs grouped into group {response['data']['groupId']}"
+            return "Unable to group tabs"
+
         # Tab Move Tool
         @self._tool()
         async def tabs_move(

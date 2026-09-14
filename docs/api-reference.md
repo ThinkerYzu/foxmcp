@@ -252,3 +252,32 @@ await client.call_tool("focus_window", {"window_id": 456})
 ```
 
 For WebSocket protocol details, see [protocol.md](protocol.md).
+### Native tab groups
+
+`tabs_group(tab_ids, group_id=None, title=None, color=None)` groups existing tabs
+without requesting tab activation or window focus. For example:
+
+```python
+tabs_group(tab_ids=[12, 15], title="Research", color="blue")
+# Tabs grouped into group 3
+tabs_group(tab_ids=18, group_id=3)
+```
+
+Omitting `group_id` creates a new group in the first tab's window, not the
+currently focused window. Omitted title/colour leave the browser
+defaults or existing properties unchanged; `title=""` clears a title. Colours are
+`blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red`, `yellow`.
+This tool belongs to the `tabs` tool group and honours its enable/disable settings.
+No tabs are automatically grouped, and existing tools retain their behaviour.
+Groups organise tabs in ordinary browser sessions: they do not create containers
+or change cookie isolation. Firefox enforces group/window and pinned-tab rules.
+
+Requires Firefox **139+**, and matching server/extension versions containing this
+feature. The extension requests the `tabGroups` permission. Although
+[`tabs.group`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/group)
+arrived in Firefox 138,
+[`tabGroups.update`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabGroups/update)
+arrived in 139. Missing APIs are reported before any grouping. A browser API
+rejection is returned as an error. If grouping succeeds but styling fails, the
+error includes the new group ID: grouping is not rolled back. Do not blindly
+retry without that ID. An older extension reports an unknown action.
