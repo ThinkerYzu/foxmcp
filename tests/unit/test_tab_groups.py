@@ -10,8 +10,11 @@ call just created.
 These tests stub the WebSocket server, so they check the request each tool
 builds and the answer it renders — not real Firefox grouping behaviour, which
 Firefox enforces in ways no stub can reproduce (pinned tabs, incompatible
-windows, the actual rollback of a half-styled group). That belongs to an
-integration test against a real browser; none exists yet for this feature.
+windows, the actual rollback of a half-styled group). That belongs to
+tests/integration/test_tab_groups_end_to_end.py, which runs these tools against
+a real Firefox. The rollback is the one path neither suite reaches: nothing a
+caller can pass makes a freshly created group's styling call fail, so it is
+covered here by the error branch the extension reports, not by a real failure.
 """
 
 import json
