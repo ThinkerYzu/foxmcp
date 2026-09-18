@@ -313,12 +313,3 @@ Reports land in `tests/htmlcov/`.
 | `AttributeError: ... '_tool_manager'` | Private attribute, gone in 3.x | Use `get_tool()` |
 | Extension change has no effect | Stale cached profile | `make clean && make package && rm -rf dist/profile-cache/*` |
 | Import errors | Missing symlinks | `make setup-test-imports` |
-
-### Tab-group handler tests
-
-The unit suite also runs `tests/unit/tab_groups.test.cjs` through Node.js
-(18+ required; no npm packages). It evaluates only the tab handler in a VM with
-mocked browser APIs: it does not start Firefox, connect a WebSocket, or read a
-browser profile. Run it directly with `node --test tests/unit/tab_groups.test.cjs`
-from the repository root. The Python tests cover MCP registration and requests.
-These mocks do not replace real Firefox validation of native grouping behaviour.

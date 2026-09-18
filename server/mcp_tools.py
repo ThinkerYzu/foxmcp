@@ -52,6 +52,27 @@ def format_script_args_for_log(args_list):
             rendered.append(repr(arg))
     return ", ".join(rendered)
 
+
+# Colours accepted by tabGroups' `color` field. Shared by every tool that
+# validates one, rather than repeated in each.
+TAB_GROUP_COLORS = ("blue", "cyan", "grey", "green", "orange", "pink", "purple", "red", "yellow")
+
+
+def normalise_id(value):
+    """Coerce a tab or group ID to a non-negative int, or raise ValueError
+
+    Shared by every tabs/tabGroups tool that takes IDs, so a bool (which passes
+    isinstance(value, int) in Python) or a negative number is rejected the same
+    way everywhere rather than slipping through one tool and not another.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError("IDs must be non-negative integers")
+    value = int(value)
+    if value < 0:
+        raise ValueError("IDs must be non-negative integers")
+    return value
+
+
 class TabInfo(TypedDict):
     """Type definition for tab information from browser extension"""
     url: str
@@ -703,11 +724,14 @@ class FoxMCPTools:
 
             Requires Firefox 139+ and an extension with the tabGroups permission.
             These are native tab groups, not cookie-isolated containers. Omit group_id
-            to create a group in the first tab's window; supply a returned ID to add
-            tabs to that group. Firefox
-            enforces restrictions such as pinned tabs and compatible windows.
-            If styling fails after grouping, the error reports the group ID: grouping
-            is not rolled back, so do not blindly retry creating another group.
+            to create a group in the first tab's window; supply a returned ID from
+            tab_groups_query to add tabs to that group. Firefox enforces restrictions
+            such as pinned tabs and compatible windows. If a newly created group's
+            title/colour update fails, the group is rolled back rather than left
+            half-styled — there is no group left to name in that case. Adding tabs to
+            an existing group is not rolled back on the same failure, since the group
+            predates this call; the error names the group so you can retry the styling
+            with tab_groups_update instead.
 
             Args:
                 tab_ids: One tab ID, a list of IDs, or a JSON string of IDs.
@@ -720,15 +744,6 @@ class FoxMCPTools:
             try:
                 ids = json.loads(tab_ids) if isinstance(tab_ids, str) else tab_ids
                 ids = ids if isinstance(ids, list) else [ids]
-
-                def normalise_id(value):
-                    if isinstance(value, bool) or not isinstance(value, (int, str)):
-                        raise ValueError("IDs must be non-negative integers")
-                    value = int(value)
-                    if value < 0:
-                        raise ValueError("IDs must be non-negative integers")
-                    return value
-
                 if not ids:
                     raise ValueError("Provide at least one tab ID")
                 data = {"tabIds": [normalise_id(value) for value in ids]}
@@ -739,8 +754,7 @@ class FoxMCPTools:
                         raise ValueError("title must be a string")
                     data["title"] = title
                 if color is not None:
-                    if color not in ("blue", "cyan", "grey", "green", "orange",
-                                     "pink", "purple", "red", "yellow"):
+                    if color not in TAB_GROUP_COLORS:
                         raise ValueError("Invalid group color")
                     data["color"] = color
             except (ValueError, TypeError) as error:
@@ -757,6 +771,153 @@ class FoxMCPTools:
             if response.get("type") == "response" and "groupId" in response.get("data", {}):
                 return f"Tabs grouped into group {response['data']['groupId']}"
             return "Unable to group tabs"
+
+        @self._tool()
+        async def tabs_ungroup(
+            tab_ids: Union[int, str, List[Union[int, str]]]
+        ) -> str:
+            """Remove tabs from their tab group, without activating a tab or focusing a window.
+
+            Requires Firefox 138+, where tabs.ungroup arrived; the tabGroups tools
+            alongside it need 139+. A group left with no tabs afterwards is removed
+            by Firefox on its own; the tabs themselves are otherwise unaffected.
+
+            Args:
+                tab_ids: One tab ID, a list of IDs, or a JSON string of IDs.
+            """
+            try:
+                ids = json.loads(tab_ids) if isinstance(tab_ids, str) else tab_ids
+                ids = ids if isinstance(ids, list) else [ids]
+                if not ids:
+                    raise ValueError("Provide at least one tab ID")
+                data = {"tabIds": [normalise_id(value) for value in ids]}
+            except (ValueError, TypeError) as error:
+                return f"Error: {error}"
+
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()), "type": "request", "action": "tabs.ungroup",
+                "data": data, "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Error ungrouping tabs: {response['error']}"
+            if response.get("type") == "error":
+                return f"Failed to ungroup tabs: {response.get('data', {}).get('message', 'Unknown error')}"
+            if response.get("type") == "response" and response.get("data", {}).get("success"):
+                return f"Ungrouped {len(data['tabIds'])} tab(s)"
+            return "Unable to ungroup tabs"
+
+        @self._tool()
+        async def tab_groups_update(
+            group_id: Union[int, str],
+            title: Optional[str] = None,
+            color: Optional[str] = None,
+            collapsed: Optional[bool] = None
+        ) -> str:
+            """Change a tab group's title, colour or collapsed state, without touching its tabs.
+
+            Requires Firefox 139+ and an extension with the tabGroups permission. Use
+            tabs_group to create a group or add tabs to one; use this to restyle an
+            existing group — including one tabs_group already created — without
+            regrouping anything.
+
+            Args:
+                group_id: The group to update (see tab_groups_query for IDs).
+                title: New title; an empty string clears it.
+                color: blue, cyan, grey, green, orange, pink, purple, red or yellow.
+                collapsed: Whether the group should be collapsed.
+            """
+            try:
+                data = {"groupId": normalise_id(group_id)}
+                if title is not None:
+                    if not isinstance(title, str):
+                        raise ValueError("title must be a string")
+                    data["title"] = title
+                if color is not None:
+                    if color not in TAB_GROUP_COLORS:
+                        raise ValueError("Invalid group color")
+                    data["color"] = color
+                if collapsed is not None:
+                    if not isinstance(collapsed, bool):
+                        raise ValueError("collapsed must be a boolean")
+                    data["collapsed"] = collapsed
+                if len(data) == 1:
+                    raise ValueError("Provide at least one of title, color or collapsed")
+            except (ValueError, TypeError) as error:
+                return f"Error: {error}"
+
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()), "type": "request", "action": "tabGroups.update",
+                "data": data, "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Error updating group: {response['error']}"
+            if response.get("type") == "error":
+                return f"Failed to update group: {response.get('data', {}).get('message', 'Unknown error')}"
+            if response.get("type") == "response" and "group" in response.get("data", {}):
+                group = response["data"]["group"]
+                return f"Updated group {group.get('id', data['groupId'])}"
+            return "Unable to update group"
+
+        @self._tool()
+        async def tab_groups_query(
+            window_id: Optional[Union[int, str]] = None,
+            title: Optional[str] = None,
+            color: Optional[str] = None,
+            collapsed: Optional[bool] = None
+        ) -> str:
+            """List tab groups and their IDs, across every window or filtered by property.
+
+            Requires Firefox 139+ and an extension with the tabGroups permission. This
+            is how to discover a group's ID for tabs_group or tab_groups_update —
+            grouping tools return the ID at creation, but nothing else surfaces it
+            afterwards.
+
+            Args:
+                window_id: Restrict to this window (optional, accepts int or string).
+                title: Restrict to groups with this exact title.
+                color: Restrict to groups of this colour.
+                collapsed: Restrict to collapsed (True) or expanded (False) groups.
+            """
+            try:
+                data = {}
+                if window_id is not None:
+                    data["windowId"] = normalise_id(window_id)
+                if title is not None:
+                    if not isinstance(title, str):
+                        raise ValueError("title must be a string")
+                    data["title"] = title
+                if color is not None:
+                    if color not in TAB_GROUP_COLORS:
+                        raise ValueError("Invalid group color")
+                    data["color"] = color
+                if collapsed is not None:
+                    if not isinstance(collapsed, bool):
+                        raise ValueError("collapsed must be a boolean")
+                    data["collapsed"] = collapsed
+            except (ValueError, TypeError) as error:
+                return f"Error: {error}"
+
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()), "type": "request", "action": "tabGroups.query",
+                "data": data, "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Error listing groups: {response['error']}"
+            if response.get("type") == "error":
+                return f"Failed to list groups: {response.get('data', {}).get('message', 'Unknown error')}"
+            if response.get("type") == "response" and "groups" in response.get("data", {}):
+                groups = response["data"]["groups"]
+                if not groups:
+                    return "No tab groups found"
+                result = f"Tab groups ({len(groups)} found):\n"
+                for group in groups:
+                    collapsed_info = " (collapsed)" if group.get("collapsed") else ""
+                    result += (
+                        f"- ID {group.get('id')}: {group.get('title') or 'Untitled'} - "
+                        f"{group.get('color')}{collapsed_info} [window {group.get('windowId')}]\n"
+                    )
+                return result
+            return "Unable to list groups"
 
         # Tab Move Tool
         @self._tool()

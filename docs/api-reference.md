@@ -251,7 +251,6 @@ window = await client.call_tool("create_window", {
 await client.call_tool("focus_window", {"window_id": 456})
 ```
 
-For WebSocket protocol details, see [protocol.md](protocol.md).
 ### Native tab groups
 
 `tabs_group(tab_ids, group_id=None, title=None, color=None)` groups existing tabs
@@ -267,17 +266,47 @@ Omitting `group_id` creates a new group in the first tab's window, not the
 currently focused window. Omitted title/colour leave the browser
 defaults or existing properties unchanged; `title=""` clears a title. Colours are
 `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red`, `yellow`.
-This tool belongs to the `tabs` tool group and honours its enable/disable settings.
-No tabs are automatically grouped, and existing tools retain their behaviour.
-Groups organise tabs in ordinary browser sessions: they do not create containers
-or change cookie isolation. Firefox enforces group/window and pinned-tab rules.
+These four tools belong to the `tabs` tool group and honour its enable/disable
+settings. No tabs are automatically grouped, and existing tools retain their
+behaviour. Groups organise tabs in ordinary browser sessions: they do not create
+containers or change cookie isolation. Firefox enforces group/window and
+pinned-tab rules.
 
-Requires Firefox **139+**, and matching server/extension versions containing this
-feature. The extension requests the `tabGroups` permission. Although
+If grouping succeeds but styling a newly created group fails, the group is
+rolled back with `tabs.ungroup` rather than left half-styled — the error reports
+no group ID, because there is no longer a group to name. Adding tabs to an
+*existing* group is not rolled back on the same failure, since that group
+predates the call; the error names the group so the caller can retry the
+styling with `tab_groups_update` instead of regrouping the tabs. If the
+rollback itself fails, the error falls back to naming the group ID, since the
+state genuinely is partial at that point. Rollback removes the new group rather
+than restoring whatever came before it: a tab that belonged to another group
+when `tabs_group` was called is left in no group, not put back in its old one.
+
+`tabs_ungroup(tab_ids)` removes tabs from whatever group they are in, leaving
+the tabs themselves untouched. A group left with no tabs is removed by Firefox
+automatically.
+
+`tab_groups_update(group_id, title=None, color=None, collapsed=None)` changes a
+group's title, colour or collapsed state without adding or removing tabs — the
+counterpart to `tabs_group` for restyling a group that already exists. At least
+one of `title`, `color` or `collapsed` is required.
+
+`tab_groups_query(window_id=None, title=None, color=None, collapsed=None)` lists
+tab groups and their IDs, optionally filtered by any of its arguments. Grouping
+tools return a group's ID only when they create it, so this is how a caller
+recovers the ID of a group it did not just create.
+
+Missing APIs are reported before any mutation. A browser API rejection is
+returned as an error. An older extension reports an unknown action.
+
+Requires Firefox **139+**, and matching server/extension versions containing
+this feature. The extension requests the `tabGroups` permission. Although
 [`tabs.group`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/group)
+and [`tabs.ungroup`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/ungroup)
 arrived in Firefox 138,
 [`tabGroups.update`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabGroups/update)
-arrived in 139. Missing APIs are reported before any grouping. A browser API
-rejection is returned as an error. If grouping succeeds but styling fails, the
-error includes the new group ID: grouping is not rolled back. Do not blindly
-retry without that ID. An older extension reports an unknown action.
+and [`tabGroups.query`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabGroups/query)
+arrived in 139, so 139+ remains the stated requirement.
+
+For WebSocket protocol details, see [protocol.md](protocol.md).
