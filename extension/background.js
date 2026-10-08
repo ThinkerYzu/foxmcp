@@ -374,6 +374,55 @@ function sendDebugLog(message, level = 'log') {
   websocket.send(JSON.stringify(debugMessage));
 }
 
+// Display and copy the ID of the right-clicked tab, including background tabs.
+const TAB_ID_MENU_ID = 'foxmcp-copy-tab-id';
+let tabIdMenuInstance = 0;
+
+// Firefox does not persist menus for persistent background pages.
+browser.menus.create({
+  id: TAB_ID_MENU_ID,
+  title: '当前标签tab_id（点击复制）',
+  contexts: ['tab'],
+  enabled: false
+}, () => {
+  if (browser.runtime.lastError) {
+    console.error('Failed to create tab ID menu:', browser.runtime.lastError.message);
+  }
+});
+
+browser.menus.onShown.addListener(async (info, tab) => {
+  if (!info.menuIds.includes(TAB_ID_MENU_ID)) return;
+
+  const menuInstance = ++tabIdMenuInstance;
+  const hasTabId = Number.isInteger(tab?.id) && tab.id >= 0;
+  try {
+    await browser.menus.update(TAB_ID_MENU_ID, {
+      title: hasTabId ? `当前标签tab_id = ${tab.id}（点击复制）` : '当前标签tab_id 不可用',
+      enabled: hasTabId
+    });
+    // A different menu may have opened while update() was pending.
+    if (menuInstance === tabIdMenuInstance) {
+      await browser.menus.refresh();
+    }
+  } catch (error) {
+    console.error('Failed to update tab ID menu:', error);
+  }
+});
+
+browser.menus.onHidden.addListener(() => {
+  ++tabIdMenuInstance;
+});
+
+browser.menus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== TAB_ID_MENU_ID || !Number.isInteger(tab?.id) || tab.id < 0) return;
+
+  try {
+    await navigator.clipboard.writeText(`tab_id = ${tab.id}`);
+  } catch (error) {
+    console.error('Failed to copy tab ID:', error);
+  }
+});
+
 // Handle popup requests for connection status
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
