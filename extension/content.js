@@ -77,8 +77,10 @@ function findTarget({ ref, selector }) {
 
 // Sites listen on pointerdown or mousedown as often as on click (Google Drive's
 // menus open on mousedown), so the whole sequence is dispatched at the element's
-// centre rather than calling el.click().
-function clickElement(el) {
+// centre rather than calling el.click(). A double click repeats the sequence
+// with the click count in `detail` and ends with dblclick, which is what opens
+// a folder in Google Drive; a lone dblclick event is ignored there.
+function clickElement(el, clicks = 1) {
   el.scrollIntoView({ block: 'center', inline: 'center' });
   const rect = el.getBoundingClientRect();
   const init = {
@@ -87,12 +89,17 @@ function clickElement(el) {
   };
   el.dispatchEvent(new PointerEvent('pointerover', init));
   el.dispatchEvent(new MouseEvent('mouseover', init));
-  el.dispatchEvent(new PointerEvent('pointerdown', { ...init, buttons: 1 }));
-  el.dispatchEvent(new MouseEvent('mousedown', { ...init, buttons: 1 }));
-  if (typeof el.focus === 'function') el.focus();
-  el.dispatchEvent(new PointerEvent('pointerup', init));
-  el.dispatchEvent(new MouseEvent('mouseup', init));
-  el.dispatchEvent(new MouseEvent('click', init));
+  for (let detail = 1; detail <= clicks; detail++) {
+    el.dispatchEvent(new PointerEvent('pointerdown', { ...init, detail, buttons: 1 }));
+    el.dispatchEvent(new MouseEvent('mousedown', { ...init, detail, buttons: 1 }));
+    if (typeof el.focus === 'function') el.focus();
+    el.dispatchEvent(new PointerEvent('pointerup', { ...init, detail }));
+    el.dispatchEvent(new MouseEvent('mouseup', { ...init, detail }));
+    el.dispatchEvent(new MouseEvent('click', { ...init, detail }));
+  }
+  if (clicks === 2) {
+    el.dispatchEvent(new MouseEvent('dblclick', { ...init, detail: 2 }));
+  }
 }
 
 // insertText goes through the editor's own input path, so frameworks that track
@@ -167,7 +174,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       case 'click': {
         const el = findTarget(data);
-        clickElement(el);
+        clickElement(el, data.doubleClick ? 2 : 1);
         sendResponse({ clicked: describe(el) });
         break;
       }

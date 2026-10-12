@@ -1841,7 +1841,10 @@ class FoxMCPTools:
         # Click Tool
         @self._tool()
         async def content_click(
-            tab_id: int, ref: Optional[str] = None, selector: Optional[str] = None
+            tab_id: int,
+            ref: Optional[str] = None,
+            selector: Optional[str] = None,
+            double_click: bool = False
         ) -> str:
             """Click an element, dispatching the pointer and mouse events a real click fires
 
@@ -1849,13 +1852,16 @@ class FoxMCPTools:
                 tab_id: ID of the tab
                 ref: Element ref from content_snapshot, such as "r12"
                 selector: CSS selector, used when no ref is given
+                double_click: Double-click instead, as opening a file or folder
+                    in a file list usually needs (default: False)
             """
-            data, error = await page_request(
-                {"action": "content.click", "data": target(tab_id, ref, selector)}
-            )
+            data, error = await page_request({
+                "action": "content.click",
+                "data": {**target(tab_id, ref, selector), "doubleClick": double_click}
+            })
             if error:
                 return f"Failed to click: {error}"
-            return f"Clicked {data.get('clicked')}"
+            return f"{'Double-clicked' if double_click else 'Clicked'} {data.get('clicked')}"
 
         # Type Tool
         @self._tool()

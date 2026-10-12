@@ -67,8 +67,18 @@ class TestClick:
         result = await call_tool("content_click", tab_id=4, ref="r2")
 
         assert stub_server.sent_request["action"] == "content.click"
-        assert stub_server.sent_request["data"] == {"tabId": 4, "ref": "r2", "selector": None}
+        assert stub_server.sent_request["data"] == {
+            "tabId": 4, "ref": "r2", "selector": None, "doubleClick": False}
         assert result == 'Clicked [r2] button "Save"'
+
+    @pytest.mark.asyncio
+    async def test_double_click(self, call_tool, stub_server):
+        stub_server.response = {"type": "response", "data": {"clicked": '[r9] row "Characters"'}}
+
+        result = await call_tool("content_click", tab_id=4, ref="r9", double_click=True)
+
+        assert stub_server.sent_request["data"]["doubleClick"] is True
+        assert result == 'Double-clicked [r9] row "Characters"'
 
     @pytest.mark.asyncio
     async def test_requires_a_target(self, call_tool, stub_server):
