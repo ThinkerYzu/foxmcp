@@ -1,20 +1,13 @@
 """
-Tests for the native tab-group tools: tabs_group, tabs_ungroup, tab_groups_update
-and tab_groups_query
+Tests for the native tab-group tools: tabs_group, tabs_ungroup, tabs_groups_update
+and tabs_groups_query
 
-These are the minimal set the maintainer asked for so an agent can move tabs
-between groups freely: create/join a group, leave one, restyle one without
-regrouping its tabs, and discover a group's ID once it is no longer the one a
-call just created.
-
-These tests stub the WebSocket server, so they check the request each tool
-builds and the answer it renders — not real Firefox grouping behaviour, which
-Firefox enforces in ways no stub can reproduce (pinned tabs, incompatible
-windows, the actual rollback of a half-styled group). That belongs to
-tests/integration/test_tab_groups_end_to_end.py, which runs these tools against
-a real Firefox. The rollback is the one path neither suite reaches: nothing a
-caller can pass makes a freshly created group's styling call fail, so it is
-covered here by the error branch the extension reports, not by a real failure.
+These stub the WebSocket server, so they check the request each tool builds and
+the answer it renders. What Firefox does with the request - pinned tabs, windows,
+group IDs - is tests/integration/test_tab_groups_end_to_end.py's job. The one
+reply only these tests reach is a group whose title/colour could not be set:
+nothing a caller can pass makes Firefox refuse the styling of a group it just
+created.
 """
 
 import json
@@ -172,18 +165,30 @@ class TestGroupResult:
 
     @pytest.mark.asyncio
     async def test_extension_error_is_surfaced(self, call_tool, stub_server):
-        """Covers both the ordinary API_ERROR and the rollback message the extension
-        sends when styling a newly created group fails — this tool only relays it,
-        the rollback itself happens in the extension."""
         stub_server.response = {
             "type": "error",
-            "data": {"message": "Tab grouping failed and was rolled back: Group removed"},
+            "data": {"message": "Tab grouping API error: Invalid tab ID: 999"},
+        }
+
+        result = await call_tool("tabs_group", tab_ids=999)
+
+        assert "Failed to group tabs" in result
+        assert "Invalid tab ID: 999" in result
+
+    @pytest.mark.asyncio
+    async def test_styling_failure_still_names_the_group(self, call_tool, stub_server):
+        """The tabs are grouped even though the title/colour step failed, so the
+        result must say so and give the ID, not read as a failed grouping"""
+        stub_server.response = {
+            "type": "response",
+            "data": {"groupId": 3, "styleError": "Invalid color"},
         }
 
         result = await call_tool("tabs_group", tab_ids=12, color="blue")
 
-        assert "Failed to group tabs" in result
-        assert "rolled back" in result
+        assert result.startswith("Tabs grouped into group 3")
+        assert "Invalid color" in result
+        assert "tabs_groups_update" in result
 
     @pytest.mark.asyncio
     async def test_unexpected_shape_falls_back(self, call_tool, stub_server):
@@ -279,32 +284,32 @@ class TestUngroupResult:
 
 
 class TestGroupsUpdateRequest:
-    """What tab_groups_update puts on the wire"""
+    """What tabs_groups_update puts on the wire"""
 
     @pytest.mark.asyncio
     async def test_group_id_is_required_on_the_wire(self, call_tool, stub_server):
-        await call_tool("tab_groups_update", group_id=3, title="Research")
+        await call_tool("tabs_groups_update", group_id=3, title="Research")
 
         assert stub_server.sent_request["action"] == "tabGroups.update"
         assert stub_server.sent_request["data"] == {"groupId": 3, "title": "Research"}
 
     @pytest.mark.asyncio
     async def test_group_id_string_is_coerced(self, call_tool, stub_server):
-        await call_tool("tab_groups_update", group_id="3", color="blue")
+        await call_tool("tabs_groups_update", group_id="3", color="blue")
 
         assert stub_server.sent_request["data"]["groupId"] == 3
 
     @pytest.mark.asyncio
     async def test_collapsed_false_is_sent_not_dropped(self, call_tool, stub_server):
         """False is falsy, so a truthiness check here would silently omit it"""
-        await call_tool("tab_groups_update", group_id=3, collapsed=False)
+        await call_tool("tabs_groups_update", group_id=3, collapsed=False)
 
         assert stub_server.sent_request["data"]["collapsed"] is False
 
     @pytest.mark.asyncio
     async def test_all_three_properties_are_forwarded_together(self, call_tool, stub_server):
         await call_tool(
-            "tab_groups_update", group_id=3, title="Research", color="blue", collapsed=True
+            "tabs_groups_update", group_id=3, title="Research", color="blue", collapsed=True
         )
 
         assert stub_server.sent_request["data"] == {
@@ -325,20 +330,20 @@ class TestGroupsUpdateRejectsBadArguments:
         {"group_id": 3, "collapsed": "yes"},
     ])
     async def test_invalid_input_does_not_send(self, call_tool, stub_server, kwargs):
-        result = await call_tool("tab_groups_update", **kwargs)
+        result = await call_tool("tabs_groups_update", **kwargs)
 
         assert result.startswith("Error:")
         assert stub_server.sent_request is None
 
 
 class TestGroupsUpdateResult:
-    """What tab_groups_update reports back"""
+    """What tabs_groups_update reports back"""
 
     @pytest.mark.asyncio
     async def test_success_names_the_group(self, call_tool, stub_server):
         stub_server.response = {"type": "response", "data": {"group": group(3)}}
 
-        result = await call_tool("tab_groups_update", group_id=3, title="Research")
+        result = await call_tool("tabs_groups_update", group_id=3, title="Research")
 
         assert result == "Updated group 3"
 
@@ -346,7 +351,7 @@ class TestGroupsUpdateResult:
     async def test_timeout_is_surfaced(self, call_tool, stub_server):
         stub_server.response = {"error": "Request timed out after 30 seconds"}
 
-        result = await call_tool("tab_groups_update", group_id=3, title="Research")
+        result = await call_tool("tabs_groups_update", group_id=3, title="Research")
 
         assert "Error updating group" in result
 
@@ -354,7 +359,7 @@ class TestGroupsUpdateResult:
     async def test_extension_error_is_surfaced(self, call_tool, stub_server):
         stub_server.response = {"type": "error", "data": {"message": "No group with id 3"}}
 
-        result = await call_tool("tab_groups_update", group_id=3, title="Research")
+        result = await call_tool("tabs_groups_update", group_id=3, title="Research")
 
         assert "Failed to update group" in result
         assert "No group with id 3" in result
@@ -363,37 +368,37 @@ class TestGroupsUpdateResult:
     async def test_unexpected_shape_falls_back(self, call_tool, stub_server):
         stub_server.response = {"type": "response", "data": {}}
 
-        result = await call_tool("tab_groups_update", group_id=3, title="Research")
+        result = await call_tool("tabs_groups_update", group_id=3, title="Research")
 
         assert result == "Unable to update group"
 
 
 class TestGroupsQueryRequest:
-    """What tab_groups_query puts on the wire — only the filters actually given"""
+    """What tabs_groups_query puts on the wire: only the filters actually given"""
 
     @pytest.mark.asyncio
     async def test_no_filters_sends_an_empty_query(self, call_tool, stub_server):
-        await call_tool("tab_groups_query")
+        await call_tool("tabs_groups_query")
 
         assert stub_server.sent_request["action"] == "tabGroups.query"
         assert stub_server.sent_request["data"] == {}
 
     @pytest.mark.asyncio
     async def test_window_id_string_is_coerced(self, call_tool, stub_server):
-        await call_tool("tab_groups_query", window_id="7")
+        await call_tool("tabs_groups_query", window_id="7")
 
         assert stub_server.sent_request["data"]["windowId"] == 7
 
     @pytest.mark.asyncio
     async def test_collapsed_false_is_sent_not_dropped(self, call_tool, stub_server):
-        await call_tool("tab_groups_query", collapsed=False)
+        await call_tool("tabs_groups_query", collapsed=False)
 
         assert stub_server.sent_request["data"]["collapsed"] is False
 
     @pytest.mark.asyncio
     async def test_every_filter_together(self, call_tool, stub_server):
         await call_tool(
-            "tab_groups_query", window_id=7, title="Research", color="blue", collapsed=True
+            "tabs_groups_query", window_id=7, title="Research", color="blue", collapsed=True
         )
 
         assert stub_server.sent_request["data"] == {
@@ -413,24 +418,24 @@ class TestGroupsQueryRejectsBadArguments:
         {"collapsed": "yes"},
     ])
     async def test_invalid_input_does_not_send(self, call_tool, stub_server, kwargs):
-        result = await call_tool("tab_groups_query", **kwargs)
+        result = await call_tool("tabs_groups_query", **kwargs)
 
         assert result.startswith("Error:")
         assert stub_server.sent_request is None
 
 
 class TestGroupsQueryResult:
-    """What tab_groups_query reports back — IDs must be easy to read out"""
+    """What tabs_groups_query reports back: IDs must be easy to read out"""
 
     @pytest.mark.asyncio
     async def test_group_ids_are_readable_in_the_listing(self, call_tool, stub_server):
-        """Discovering IDs is the whole point of this tool, per the maintainer's request"""
+        """Finding a group's ID is what this tool is for"""
         stub_server.response = {
             "type": "response",
             "data": {"groups": [group(3, title="Research", color="blue", window_id=1)]},
         }
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert "ID 3" in result
         assert "Research" in result
@@ -442,7 +447,7 @@ class TestGroupsQueryResult:
         """Mirrors the `ID (\\d+):` convention tabs_list uses, for the same reason"""
         stub_server.response = {"type": "response", "data": {"groups": [group(3)]}}
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert re.search(r"ID (\d+):", result).group(1) == "3"
 
@@ -453,7 +458,7 @@ class TestGroupsQueryResult:
             "data": {"groups": [group(3, collapsed=True)]},
         }
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert "(collapsed)" in result
 
@@ -464,7 +469,7 @@ class TestGroupsQueryResult:
             "data": {"groups": [group(3, title="")]},
         }
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert "Untitled" in result
 
@@ -472,7 +477,7 @@ class TestGroupsQueryResult:
     async def test_no_groups_found(self, call_tool, stub_server):
         stub_server.response = {"type": "response", "data": {"groups": []}}
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert result == "No tab groups found"
 
@@ -480,7 +485,7 @@ class TestGroupsQueryResult:
     async def test_timeout_is_surfaced(self, call_tool, stub_server):
         stub_server.response = {"error": "Request timed out after 30 seconds"}
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert "Error listing groups" in result
 
@@ -488,7 +493,7 @@ class TestGroupsQueryResult:
     async def test_extension_error_is_surfaced(self, call_tool, stub_server):
         stub_server.response = {"type": "error", "data": {"message": "Unsupported API"}}
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert "Failed to list groups" in result
         assert "Unsupported API" in result
@@ -503,7 +508,7 @@ class TestGroupsQueryResult:
         reporting "No tab groups found" for it would invent a fact about the browser"""
         stub_server.response = response
 
-        result = await call_tool("tab_groups_query")
+        result = await call_tool("tabs_groups_query")
 
         assert result == "Unable to list groups"
 

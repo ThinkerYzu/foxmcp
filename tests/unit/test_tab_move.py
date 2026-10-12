@@ -137,6 +137,15 @@ class TestMoveRejectsBadArguments:
         assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("tab_id", [1.5, -1, True])
+    async def test_tab_id_that_is_not_a_whole_non_negative_number(self, call_tool, stub_server, tab_id):
+        """1.5 would otherwise be truncated to tab 1, and True counts as 1 in Python"""
+        result = await call_tool("tabs_move", tab_ids=[12, tab_id])
+
+        assert "Invalid tab ID" in result
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
     async def test_empty_list(self, call_tool, stub_server):
         result = await call_tool("tabs_move", tab_ids=[])
 

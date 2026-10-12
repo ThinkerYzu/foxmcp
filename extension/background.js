@@ -465,10 +465,34 @@ async function handleHistoryAction(id, action, data) {
   }
 }
 
-// Colours accepted by tabGroups.update's `color` field, and by the styling step
-// of tabs.group. One list, so the three handlers that validate a colour cannot
-// drift from each other.
+// Colours Firefox accepts for a tab group.
 const TAB_GROUP_COLORS = ['blue', 'cyan', 'grey', 'green', 'orange', 'pink', 'purple', 'red', 'yellow'];
+
+function isBrowserId(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+// The tab group properties a request sets, out of title, color and collapsed
+//
+// Fields the request leaves out are left out here too, so Firefox keeps the
+// group's current value for them. Returns null when a field has the wrong type or
+// names a colour Firefox does not offer.
+function readGroupProperties(data) {
+  const properties = {};
+  if (data.title !== undefined) {
+    if (typeof data.title !== 'string') return null;
+    properties.title = data.title;
+  }
+  if (data.color !== undefined) {
+    if (!TAB_GROUP_COLORS.includes(data.color)) return null;
+    properties.color = data.color;
+  }
+  if (data.collapsed !== undefined) {
+    if (typeof data.collapsed !== 'boolean') return null;
+    properties.collapsed = data.collapsed;
+  }
+  return properties;
+}
 
 // Tabs handlers
 async function handleTabsAction(id, action, data) {
@@ -538,53 +562,30 @@ async function handleTabsAction(id, action, data) {
           sendError(id, 'UNSUPPORTED_API', 'Tab grouping requires Firefox 139+ and the tabGroups permission');
           return;
         }
+        const properties = readGroupProperties(data);
         if (!Array.isArray(data.tabIds) || data.tabIds.length === 0 ||
-            !data.tabIds.every(tabId => Number.isInteger(tabId) && tabId >= 0) ||
-            (data.groupId !== undefined && (!Number.isInteger(data.groupId) || data.groupId < 0)) ||
-            (data.title !== undefined && typeof data.title !== 'string') ||
-            (data.color !== undefined && !TAB_GROUP_COLORS.includes(data.color))) {
+            !data.tabIds.every(isBrowserId) ||
+            (data.groupId !== undefined && !isBrowserId(data.groupId)) ||
+            properties === null) {
           sendError(id, 'INVALID_PARAMETER', 'Provide non-empty tabIds, an optional non-negative groupId, string title and valid color');
           return;
         }
-        // Whether we are creating the group ourselves decides who owns it below:
-        // only a group this call created is ours to roll back on a styling failure.
-        const creatingGroup = data.groupId === undefined;
         const groupOptions = { tabIds: data.tabIds };
-        if (creatingGroup) {
-          // Do not move background work into whichever window happens to be current.
+        if (data.groupId === undefined) {
+          // Without a window, Firefox creates the group in the focused one.
           const firstTab = await browser.tabs.get(data.tabIds[0]);
           groupOptions.createProperties = { windowId: firstTab.windowId };
         } else {
           groupOptions.groupId = data.groupId;
         }
         const groupId = await browser.tabs.group(groupOptions);
-        const properties = {};
-        if (data.title !== undefined) properties.title = data.title;
-        if (data.color !== undefined) properties.color = data.color;
         if (Object.keys(properties).length) {
+          // The tabs are grouped by now, and nothing undoes that, so a styling
+          // failure is reported alongside the group ID rather than as an error.
           try {
             await browser.tabGroups.update(groupId, properties);
           } catch (error) {
-            if (!creatingGroup) {
-              // The group pre-existed; it is not ours to destroy. Point the caller
-              // at tabGroups.update instead of a tabs.group retry, which would
-              // regroup tabs that are already exactly where they should be.
-              sendError(id, 'API_ERROR',
-                `Tabs joined group ${groupId}, but title/colour update failed: ${error.message}. Retry styling with tabGroups.update instead of tabs.group.`);
-              return;
-            }
-            // This call created the group, so a half-styled group is its mess to
-            // clean up: undo the grouping rather than leave the caller holding a
-            // group ID it never asked for.
-            try {
-              await browser.tabs.ungroup(data.tabIds);
-              sendError(id, 'API_ERROR', `Tab grouping failed and was rolled back: ${error.message}`);
-            } catch (rollbackError) {
-              // Rollback failed too, so the state really is partial and the caller
-              // needs the group ID to deal with it directly.
-              sendError(id, 'PARTIAL_SUCCESS',
-                `Tabs grouped into group ${groupId}, but title/colour update failed and rollback also failed: ${rollbackError.message}`);
-            }
+            sendResponse(id, action, { groupId, styleError: error.message });
             return;
           }
         }
@@ -598,7 +599,7 @@ async function handleTabsAction(id, action, data) {
           return;
         }
         if (!Array.isArray(data.tabIds) || data.tabIds.length === 0 ||
-            !data.tabIds.every(tabId => Number.isInteger(tabId) && tabId >= 0)) {
+            !data.tabIds.every(isBrowserId)) {
           sendError(id, 'INVALID_PARAMETER', 'Provide a non-empty array of non-negative tabIds');
           return;
         }
@@ -669,18 +670,12 @@ async function handleTabGroupsAction(id, action, data) {
           sendError(id, 'UNSUPPORTED_API', 'tabGroups.update requires Firefox 139+ and the tabGroups permission');
           return;
         }
-        if (!Number.isInteger(data.groupId) || data.groupId < 0 ||
-            (data.title !== undefined && typeof data.title !== 'string') ||
-            (data.color !== undefined && !TAB_GROUP_COLORS.includes(data.color)) ||
-            (data.collapsed !== undefined && typeof data.collapsed !== 'boolean') ||
-            (data.title === undefined && data.color === undefined && data.collapsed === undefined)) {
+        const properties = readGroupProperties(data);
+        if (!isBrowserId(data.groupId) || properties === null ||
+            Object.keys(properties).length === 0) {
           sendError(id, 'INVALID_PARAMETER', 'Provide a non-negative groupId and at least one of title, color or collapsed');
           return;
         }
-        const properties = {};
-        if (data.title !== undefined) properties.title = data.title;
-        if (data.color !== undefined) properties.color = data.color;
-        if (data.collapsed !== undefined) properties.collapsed = data.collapsed;
         const group = await browser.tabGroups.update(data.groupId, properties);
         sendResponse(id, action, { group });
         break;
@@ -691,21 +686,14 @@ async function handleTabGroupsAction(id, action, data) {
           sendError(id, 'UNSUPPORTED_API', 'tabGroups.query requires Firefox 139+ and the tabGroups permission');
           return;
         }
-        if ((data.windowId !== undefined && (!Number.isInteger(data.windowId) || data.windowId < 0)) ||
-            (data.title !== undefined && typeof data.title !== 'string') ||
-            (data.color !== undefined && !TAB_GROUP_COLORS.includes(data.color)) ||
-            (data.collapsed !== undefined && typeof data.collapsed !== 'boolean')) {
+        const queryInfo = readGroupProperties(data);
+        if ((data.windowId !== undefined && !isBrowserId(data.windowId)) || queryInfo === null) {
           sendError(id, 'INVALID_PARAMETER', 'windowId must be a non-negative integer, title a string, color valid and collapsed a boolean');
           return;
         }
-        const queryInfo = {};
         if (data.windowId !== undefined) queryInfo.windowId = data.windowId;
-        if (data.title !== undefined) queryInfo.title = data.title;
-        if (data.color !== undefined) queryInfo.color = data.color;
-        if (data.collapsed !== undefined) queryInfo.collapsed = data.collapsed;
         const groups = await browser.tabGroups.query(queryInfo);
-        // id is the point of this tool - the maintainer asked for it specifically
-        // so agents can discover group IDs - so it is never left out below.
+        // Always include id: callers need it for tabs.group and tabGroups.update.
         sendResponse(id, action, {
           groups: groups.map(group => ({
             id: group.id,

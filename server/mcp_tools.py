@@ -53,24 +53,69 @@ def format_script_args_for_log(args_list):
     return ", ".join(rendered)
 
 
-# Colours accepted by tabGroups' `color` field. Shared by every tool that
-# validates one, rather than repeated in each.
+# Colours Firefox accepts for a tab group.
 TAB_GROUP_COLORS = ("blue", "cyan", "grey", "green", "orange", "pink", "purple", "red", "yellow")
 
 
-def normalise_id(value):
-    """Coerce a tab or group ID to a non-negative int, or raise ValueError
+def parse_id(value, name):
+    """A browser ID given as an int or a numeric string, as a non-negative int
 
-    Shared by every tabs/tabGroups tool that takes IDs, so a bool (which passes
-    isinstance(value, int) in Python) or a negative number is rejected the same
-    way everywhere rather than slipping through one tool and not another.
+    Raises ValueError naming the argument when the value is not one. A bool is
+    refused even though Python counts it as an int, and so is a float, which int()
+    would otherwise truncate to some other tab's ID.
     """
-    if isinstance(value, bool) or not isinstance(value, (int, str)):
-        raise ValueError("IDs must be non-negative integers")
-    value = int(value)
-    if value < 0:
-        raise ValueError("IDs must be non-negative integers")
-    return value
+    try:
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise ValueError
+        parsed = int(value)
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid {name} '{value}'. Must be a non-negative integer.")
+    if parsed < 0:
+        raise ValueError(f"Invalid {name} '{value}'. Must be a non-negative integer.")
+    return parsed
+
+
+def parse_tab_ids(tab_ids):
+    """The tab IDs a tool's tab_ids argument names, as a non-empty list of ints
+
+    tab_ids is one ID, a list of them, or a JSON string of either; the string form
+    is how MCP clients that cannot send arrays pass a list, the same convention
+    content_execute_predefined uses for its arguments. Raises ValueError with a
+    message fit to return to the client.
+    """
+    if isinstance(tab_ids, str):
+        try:
+            tab_ids = json.loads(tab_ids)
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid tab_ids '{tab_ids}'. Must be an integer or a JSON list of integers.")
+
+    requested_ids = tab_ids if isinstance(tab_ids, list) else [tab_ids]
+    if not requested_ids:
+        raise ValueError("tab_ids is empty. Provide at least one tab ID.")
+    return [parse_id(tab_id, "tab ID") for tab_id in requested_ids]
+
+
+def parse_group_properties(title=None, color=None, collapsed=None):
+    """The tab group properties a caller gave, keyed as Firefox names them
+
+    Arguments left as None are omitted, so Firefox keeps the group's current value
+    for them. An empty title is kept: it clears the title. Raises ValueError on a
+    colour Firefox does not offer.
+    """
+    properties = {}
+    if title is not None:
+        if not isinstance(title, str):
+            raise ValueError("title must be a string")
+        properties["title"] = title
+    if color is not None:
+        if color not in TAB_GROUP_COLORS:
+            raise ValueError(f"Invalid color '{color}'. Must be one of: {', '.join(TAB_GROUP_COLORS)}.")
+        properties["color"] = color
+    if collapsed is not None:
+        if not isinstance(collapsed, bool):
+            raise ValueError("collapsed must be a boolean")
+        properties["collapsed"] = collapsed
+    return properties
 
 
 class TabInfo(TypedDict):
@@ -121,7 +166,7 @@ class FoxMCPTools:
         names. enabled_tools names individual tools to register anyway, for when
         one tool out of a disabled group is the one that is wanted: disabling
         'tabs' while enabling 'tabs_capture_screenshot' offers the screenshot
-        without the five tab tools around it.
+        without the nine tab tools around it.
 
         Raises ValueError on a name that is not a group, or an enabled_tools name
         that is not a tool: a typo that silently registered everything - or that
@@ -720,44 +765,32 @@ class FoxMCPTools:
             title: Optional[str] = None,
             color: Optional[str] = None
         ) -> str:
-            """Group existing tabs without activating a tab or focusing a window.
+            """Group existing tabs, optionally setting the group's title and colour
 
-            Requires Firefox 139+ and an extension with the tabGroups permission.
-            These are native tab groups, not cookie-isolated containers. Omit group_id
-            to create a group in the first tab's window; supply a returned ID from
-            tab_groups_query to add tabs to that group. Firefox enforces restrictions
-            such as pinned tabs and compatible windows. If a newly created group's
-            title/colour update fails, the group is rolled back rather than left
-            half-styled — there is no group left to name in that case. Adding tabs to
-            an existing group is not rolled back on the same failure, since the group
-            predates this call; the error names the group so you can retry the styling
-            with tab_groups_update instead.
+            Never activates a tab or focuses a window. Requires Firefox 139+. Omit
+            group_id to create a group in the first tab's window, which moves tabs from
+            other windows into it; pass a group_id from tabs_groups_query to add tabs
+            to that group instead. Firefox unpins a pinned tab before grouping it, and
+            refuses to mix private and non-private tabs.
+
+            Grouping and styling are separate steps in Firefox. If the tabs were
+            grouped but the title or colour could not be set, the result still names
+            the group, and tabs_groups_update can retry the styling.
 
             Args:
-                tab_ids: One tab ID, a list of IDs, or a JSON string of IDs.
-                group_id: Existing group ID; omitted creates a new group.
-                title: Optional group title; an empty string clears the title.
-                color: Optional blue, cyan, grey, green, orange, pink, purple, red
-                    or yellow. Omitted title and colour preserve browser defaults
-                    or the existing group's properties.
+                tab_ids: Tab ID, or several as a list (`[12, 15]`) or a JSON string
+                    (`"[12, 15]"`).
+                group_id: Group to add the tabs to; omit it to create a new group.
+                title: Group title; an empty string clears it. Omit to leave as is.
+                color: blue, cyan, grey, green, orange, pink, purple, red or yellow.
+                    Omit to leave as is.
             """
             try:
-                ids = json.loads(tab_ids) if isinstance(tab_ids, str) else tab_ids
-                ids = ids if isinstance(ids, list) else [ids]
-                if not ids:
-                    raise ValueError("Provide at least one tab ID")
-                data = {"tabIds": [normalise_id(value) for value in ids]}
+                data = {"tabIds": parse_tab_ids(tab_ids)}
                 if group_id is not None:
-                    data["groupId"] = normalise_id(group_id)
-                if title is not None:
-                    if not isinstance(title, str):
-                        raise ValueError("title must be a string")
-                    data["title"] = title
-                if color is not None:
-                    if color not in TAB_GROUP_COLORS:
-                        raise ValueError("Invalid group color")
-                    data["color"] = color
-            except (ValueError, TypeError) as error:
+                    data["groupId"] = parse_id(group_id, "group_id")
+                data.update(parse_group_properties(title=title, color=color))
+            except ValueError as error:
                 return f"Error: {error}"
 
             response = await self.websocket_server.send_request_and_wait({
@@ -768,30 +801,31 @@ class FoxMCPTools:
                 return f"Error grouping tabs: {response['error']}"
             if response.get("type") == "error":
                 return f"Failed to group tabs: {response.get('data', {}).get('message', 'Unknown error')}"
-            if response.get("type") == "response" and "groupId" in response.get("data", {}):
-                return f"Tabs grouped into group {response['data']['groupId']}"
+            reply = response.get("data", {})
+            if response.get("type") == "response" and "groupId" in reply:
+                if reply.get("styleError"):
+                    return (f"Tabs grouped into group {reply['groupId']}, but its title/colour "
+                            f"could not be set: {reply['styleError']}. "
+                            f"Retry the styling with tabs_groups_update.")
+                return f"Tabs grouped into group {reply['groupId']}"
             return "Unable to group tabs"
 
         @self._tool()
         async def tabs_ungroup(
             tab_ids: Union[int, str, List[Union[int, str]]]
         ) -> str:
-            """Remove tabs from their tab group, without activating a tab or focusing a window.
+            """Remove tabs from their tab group
 
-            Requires Firefox 138+, where tabs.ungroup arrived; the tabGroups tools
-            alongside it need 139+. A group left with no tabs afterwards is removed
-            by Firefox on its own; the tabs themselves are otherwise unaffected.
+            Never activates a tab or focuses a window. Requires Firefox 138+. Firefox
+            deletes a group once its last tab leaves it.
 
             Args:
-                tab_ids: One tab ID, a list of IDs, or a JSON string of IDs.
+                tab_ids: Tab ID, or several as a list (`[12, 15]`) or a JSON string
+                    (`"[12, 15]"`).
             """
             try:
-                ids = json.loads(tab_ids) if isinstance(tab_ids, str) else tab_ids
-                ids = ids if isinstance(ids, list) else [ids]
-                if not ids:
-                    raise ValueError("Provide at least one tab ID")
-                data = {"tabIds": [normalise_id(value) for value in ids]}
-            except (ValueError, TypeError) as error:
+                data = {"tabIds": parse_tab_ids(tab_ids)}
+            except ValueError as error:
                 return f"Error: {error}"
 
             response = await self.websocket_server.send_request_and_wait({
@@ -807,42 +841,30 @@ class FoxMCPTools:
             return "Unable to ungroup tabs"
 
         @self._tool()
-        async def tab_groups_update(
+        async def tabs_groups_update(
             group_id: Union[int, str],
             title: Optional[str] = None,
             color: Optional[str] = None,
             collapsed: Optional[bool] = None
         ) -> str:
-            """Change a tab group's title, colour or collapsed state, without touching its tabs.
+            """Change a tab group's title, colour or collapsed state
 
-            Requires Firefox 139+ and an extension with the tabGroups permission. Use
-            tabs_group to create a group or add tabs to one; use this to restyle an
-            existing group — including one tabs_group already created — without
-            regrouping anything.
+            Leaves the group's tabs where they are. Requires Firefox 139+. Give at
+            least one of title, color or collapsed.
 
             Args:
-                group_id: The group to update (see tab_groups_query for IDs).
+                group_id: The group to change, from tabs_group or tabs_groups_query.
                 title: New title; an empty string clears it.
                 color: blue, cyan, grey, green, orange, pink, purple, red or yellow.
                 collapsed: Whether the group should be collapsed.
             """
             try:
-                data = {"groupId": normalise_id(group_id)}
-                if title is not None:
-                    if not isinstance(title, str):
-                        raise ValueError("title must be a string")
-                    data["title"] = title
-                if color is not None:
-                    if color not in TAB_GROUP_COLORS:
-                        raise ValueError("Invalid group color")
-                    data["color"] = color
-                if collapsed is not None:
-                    if not isinstance(collapsed, bool):
-                        raise ValueError("collapsed must be a boolean")
-                    data["collapsed"] = collapsed
-                if len(data) == 1:
+                data = {"groupId": parse_id(group_id, "group_id")}
+                properties = parse_group_properties(title=title, color=color, collapsed=collapsed)
+                if not properties:
                     raise ValueError("Provide at least one of title, color or collapsed")
-            except (ValueError, TypeError) as error:
+                data.update(properties)
+            except ValueError as error:
                 return f"Error: {error}"
 
             response = await self.websocket_server.send_request_and_wait({
@@ -859,42 +881,29 @@ class FoxMCPTools:
             return "Unable to update group"
 
         @self._tool()
-        async def tab_groups_query(
+        async def tabs_groups_query(
             window_id: Optional[Union[int, str]] = None,
             title: Optional[str] = None,
             color: Optional[str] = None,
             collapsed: Optional[bool] = None
         ) -> str:
-            """List tab groups and their IDs, across every window or filtered by property.
+            """List tab groups with their IDs, in every window or filtered
 
-            Requires Firefox 139+ and an extension with the tabGroups permission. This
-            is how to discover a group's ID for tabs_group or tab_groups_update —
-            grouping tools return the ID at creation, but nothing else surfaces it
-            afterwards.
+            Requires Firefox 139+. tabs_group reports a group's ID only when it creates
+            the group, so this is how to find the ID of any other group.
 
             Args:
-                window_id: Restrict to this window (optional, accepts int or string).
-                title: Restrict to groups with this exact title.
-                color: Restrict to groups of this colour.
-                collapsed: Restrict to collapsed (True) or expanded (False) groups.
+                window_id: Only groups in this window (optional, accepts int or string).
+                title: Only groups with exactly this title.
+                color: Only groups of this colour.
+                collapsed: Only collapsed (True) or expanded (False) groups.
             """
             try:
                 data = {}
                 if window_id is not None:
-                    data["windowId"] = normalise_id(window_id)
-                if title is not None:
-                    if not isinstance(title, str):
-                        raise ValueError("title must be a string")
-                    data["title"] = title
-                if color is not None:
-                    if color not in TAB_GROUP_COLORS:
-                        raise ValueError("Invalid group color")
-                    data["color"] = color
-                if collapsed is not None:
-                    if not isinstance(collapsed, bool):
-                        raise ValueError("collapsed must be a boolean")
-                    data["collapsed"] = collapsed
-            except (ValueError, TypeError) as error:
+                    data["windowId"] = parse_id(window_id, "window_id")
+                data.update(parse_group_properties(title=title, color=color, collapsed=collapsed))
+            except ValueError as error:
                 return f"Error: {error}"
 
             response = await self.websocket_server.send_request_and_wait({
@@ -958,24 +967,10 @@ class FoxMCPTools:
                 FastMCP does not expose this section to clients — anything a caller must
                 know belongs in the description above or on the arguments.
             """
-            # A JSON string is how MCP clients that cannot send arrays pass a list, the same
-            # convention content_execute_predefined uses for its arguments.
-            if isinstance(tab_ids, str):
-                try:
-                    tab_ids = json.loads(tab_ids)
-                except json.JSONDecodeError:
-                    return f"Error: Invalid tab_ids '{tab_ids}'. Must be an integer or a JSON list of integers."
-
-            requested_ids = tab_ids if isinstance(tab_ids, list) else [tab_ids]
-            if not requested_ids:
-                return "Error: tab_ids is empty. Provide at least one tab ID."
-
-            normalized_ids: List[int] = []
-            for tab_id in requested_ids:
-                try:
-                    normalized_ids.append(int(tab_id))
-                except (ValueError, TypeError):
-                    return f"Error: Invalid tab ID '{tab_id}'. Must be a valid integer."
+            try:
+                normalized_ids = parse_tab_ids(tab_ids)
+            except ValueError as error:
+                return f"Error: {error}"
 
             # Convert window_id to int if it's a string (for MCP client compatibility)
             if window_id is not None and isinstance(window_id, str):
