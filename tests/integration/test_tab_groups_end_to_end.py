@@ -1,15 +1,10 @@
 """
 Native tab groups, against real Firefox
 
-Tab groups are Firefox's own browser.tabGroups API (shipped in 139), not the
-add-on's stub or a mock of the WebExtensions surface. The whole point of this
-suite is to find out what the real browser does with these calls rather than
-what our handlers assume it does: whether browser.tabGroups exists at all in
-this ESR build, whether tabGroups.update really hands back a group object and
-tabGroups.query really hands back the array of {id, title, color, collapsed,
-windowId} the handlers expect, and whether grouping tabs genuinely leaves the
-active tab and focused window untouched, as the PR claims. None of that can
-be trusted from a stub.
+Checks what Firefox does with these calls rather than what the handlers assume:
+that tabGroups.update hands back a group object, that tabGroups.query hands back
+the {id, title, color, collapsed, windowId} records the handlers read, and that
+grouping leaves the active tab and the focused window alone.
 """
 
 import re
@@ -48,8 +43,18 @@ def active_tab_id(listing):
     return None
 
 
+def focused_window_id(listing):
+    """Return the ID of the window marked (focused) in a list_windows listing, or None"""
+    for line in listing.split("\n"):
+        if "(focused)" in line:
+            match = re.search(r'ID (\d+):', line)
+            if match:
+                return int(match.group(1))
+    return None
+
+
 def group_line(listing, group_id):
-    """Return the tab_groups_query line for one group ID, or None if absent"""
+    """Return the tabs_groups_query line for one group ID, or None if absent"""
     for line in listing.split("\n"):
         if re.search(rf'ID {group_id}:', line):
             return line
@@ -57,16 +62,14 @@ def group_line(listing, group_id):
 
 
 class TestGroupCreationAndQuery:
-    """tabs_group creates a group; tab_groups_query is the only way to find its ID again"""
+    """tabs_group creates a group; tabs_groups_query is the only way to find its ID again"""
 
     @pytest.mark.asyncio
     async def test_group_id_round_trips_through_query(self, server_with_extension):
-        """The ID tabs_group returns must be the same ID tab_groups_query lists.
+        """The ID tabs_group returns must be the same ID tabs_groups_query lists.
 
-        This is the round trip the maintainer specifically asked for: grouping
-        tools return an ID at creation, but nothing else surfaces it afterwards
-        except tab_groups_query, so if the two disagree the whole discovery
-        story is broken.
+        tabs_group reports an ID only when it creates the group, so
+        tabs_groups_query is the only way to find it again.
         """
         setup = server_with_extension
         client = DirectMCPTestClient(setup['server'].mcp_tools)
@@ -88,11 +91,11 @@ class TestGroupCreationAndQuery:
             assert id_match, f"tabs_group should report the new group's ID: {group_content}"
             group_id = int(id_match.group(1))
 
-            query_content = await call(client, "tab_groups_query")
+            query_content = await call(client, "tabs_groups_query")
             line = group_line(query_content, group_id)
             assert line is not None, (
                 f"Group {group_id} returned by tabs_group should be listed by "
-                f"tab_groups_query, got:\n{query_content}"
+                f"tabs_groups_query, got:\n{query_content}"
             )
         finally:
             if group_id is not None:
@@ -123,7 +126,7 @@ class TestGroupCreationAndQuery:
             assert id_match, f"tabs_group should report the new group's ID: {group_content}"
             group_id = int(id_match.group(1))
 
-            query_content = await call(client, "tab_groups_query")
+            query_content = await call(client, "tabs_groups_query")
             line = group_line(query_content, group_id)
             assert line is not None, f"Group {group_id} should be listed:\n{query_content}"
             assert "Research" in line, f"Title should appear in the listing: {line}"
@@ -136,7 +139,7 @@ class TestGroupCreationAndQuery:
 
 
 class TestUpdateRestylesWithoutRegrouping:
-    """tab_groups_update must change style/collapsed state without touching membership"""
+    """tabs_groups_update must change style/collapsed state without touching membership"""
 
     @pytest.mark.asyncio
     async def test_update_changes_title_colour_and_collapsed_in_place(self, server_with_extension):
@@ -162,13 +165,13 @@ class TestUpdateRestylesWithoutRegrouping:
             assert id_match, f"tabs_group should report the new group's ID: {group_content}"
             group_id = int(id_match.group(1))
 
-            update_content = await call(client, "tab_groups_update", {
+            update_content = await call(client, "tabs_groups_update", {
                 "group_id": group_id, "title": "After", "color": "green", "collapsed": True,
             })
             assert f"Updated group {group_id}" in update_content, \
-                f"tab_groups_update should confirm the group it changed: {update_content}"
+                f"tabs_groups_update should confirm the group it changed: {update_content}"
 
-            query_content = await call(client, "tab_groups_query")
+            query_content = await call(client, "tabs_groups_query")
             line = group_line(query_content, group_id)
             assert line is not None, (
                 f"The group must still exist under the same ID after an update, "
@@ -217,7 +220,7 @@ class TestUngroupRemovesTabsAndEmptyGroupsVanish:
             assert id_match, f"tabs_group should report the new group's ID: {group_content}"
             group_id = int(id_match.group(1))
 
-            query_before = await call(client, "tab_groups_query")
+            query_before = await call(client, "tabs_groups_query")
             assert group_line(query_before, group_id) is not None, \
                 f"Group {group_id} should exist before ungrouping:\n{query_before}"
 
@@ -225,7 +228,7 @@ class TestUngroupRemovesTabsAndEmptyGroupsVanish:
             assert "Ungrouped" in ungroup_content, \
                 f"tabs_ungroup should confirm the removal: {ungroup_content}"
 
-            query_after = await call(client, "tab_groups_query")
+            query_after = await call(client, "tabs_groups_query")
             assert group_line(query_after, group_id) is None, (
                 f"A group left with no tabs should be removed by Firefox and no "
                 f"longer listed, but group {group_id} is still present:\n{query_after}"
@@ -290,7 +293,7 @@ class TestAddingATabToAnExistingGroup:
                 f"{group_id}, got: {add_content}"
             )
 
-            query_content = await call(client, "tab_groups_query")
+            query_content = await call(client, "tabs_groups_query")
             line = group_line(query_content, group_id)
             assert line is not None, f"Group {group_id} should still be listed:\n{query_content}"
             assert "Growing" in line, \
@@ -317,7 +320,7 @@ class TestAddingATabToAnExistingGroup:
 
 
 class TestQueryFiltersByWindow:
-    """tab_groups_query's window_id filter must actually exclude other windows' groups"""
+    """tabs_groups_query's window_id filter must actually exclude other windows' groups"""
 
     @pytest.mark.asyncio
     async def test_window_filter_excludes_other_windows_groups(self, server_with_extension):
@@ -372,7 +375,7 @@ class TestQueryFiltersByWindow:
             assert id_match, f"tabs_group should report the new group's ID: {other_group_content}"
             other_group_id = int(id_match.group(1))
 
-            scoped = await call(client, "tab_groups_query", {"window_id": origin_window_id})
+            scoped = await call(client, "tabs_groups_query", {"window_id": origin_window_id})
             assert group_line(scoped, origin_group_id) is not None, \
                 f"The origin window's own group should be listed:\n{scoped}"
             assert group_line(scoped, other_group_id) is None, (
@@ -380,7 +383,7 @@ class TestQueryFiltersByWindow:
                 f"window's group {other_group_id}:\n{scoped}"
             )
 
-            scoped_other = await call(client, "tab_groups_query", {"window_id": created_window_id})
+            scoped_other = await call(client, "tabs_groups_query", {"window_id": created_window_id})
             assert group_line(scoped_other, other_group_id) is not None, \
                 f"The other window's own group should be listed:\n{scoped_other}"
             assert group_line(scoped_other, origin_group_id) is None, (
@@ -399,14 +402,11 @@ class TestQueryFiltersByWindow:
 
 
 class TestGroupingNeverActivatesOrFocuses:
-    """The PR's key promise: none of these operations touches the active tab or window focus"""
+    """None of these operations changes the active tab or which window has focus"""
 
     @pytest.mark.asyncio
     async def test_grouping_operations_leave_the_active_tab_unchanged(self, server_with_extension):
-        """Record the active tab before grouping, ungrouping and updating, and
-        confirm it is unchanged afterwards. This is the behaviour the whole PR
-        claims and it has never before been checked against a real browser.
-        """
+        """Grouping, restyling and ungrouping must not activate a tab"""
         setup = server_with_extension
         client = DirectMCPTestClient(setup['server'].mcp_tools)
         await client.connect()
@@ -445,10 +445,10 @@ class TestGroupingNeverActivatesOrFocuses:
                 f"after: {active_tab_id(after_group_listing)}"
             )
 
-            await call(client, "tab_groups_update", {"group_id": group_id, "collapsed": True})
+            await call(client, "tabs_groups_update", {"group_id": group_id, "collapsed": True})
             after_update_listing = await call(client, "tabs_list")
             assert active_tab_id(after_update_listing) == active_before, (
-                f"tab_groups_update must not change the active tab. Before: "
+                f"tabs_groups_update must not change the active tab. Before: "
                 f"{active_before}, after: {active_tab_id(after_update_listing)}"
             )
 
@@ -464,6 +464,74 @@ class TestGroupingNeverActivatesOrFocuses:
                 await client.call_tool("tabs_ungroup", {"tab_ids": created_tab_ids})
             for tab_id in created_tab_ids:
                 await client.call_tool("tabs_close", {"tab_id": tab_id})
+
+    @pytest.mark.asyncio
+    async def test_grouping_in_a_background_window_leaves_focus_alone(self, server_with_extension):
+        """Grouping tabs in an unfocused window must not focus that window
+
+        A new group is created in its first tab's window, so the tabs are put in a
+        window opened without focus: that is where focusing would show up.
+        """
+        setup = server_with_extension
+        client = DirectMCPTestClient(setup['server'].mcp_tools)
+        await client.connect()
+
+        background_window_id = None
+        created_tab_ids = []
+        group_id = None
+        try:
+            focused_before = focused_window_id(await call(client, "list_windows"))
+            assert focused_before is not None, "Some window should have focus before the test"
+
+            # Firefox focuses a new window even when asked not to, so hand focus back.
+            window_content = await call(client, "create_window", {"url": "about:blank"})
+            id_match = re.search(r'ID (\d+)', window_content)
+            assert id_match, f"create_window should report the new window's ID: {window_content}"
+            background_window_id = int(id_match.group(1))
+            await call(client, "focus_window", {"window_id": focused_before})
+
+            listing = await call(client, "list_windows")
+            assert focused_window_id(listing) == focused_before, (
+                f"Focus did not return to window {focused_before}, so this test "
+                f"cannot tell whether grouping moves it:\n{listing}"
+            )
+
+            for _ in range(2):
+                content = await call(client, "tabs_create", {
+                    "url": "https://example.org/groups/background-window",
+                    "active": False, "window_id": background_window_id,
+                })
+                match = re.search(r'ID (\d+)', content)
+                assert match, f"tabs_create should report the new tab's ID: {content}"
+                created_tab_ids.append(int(match.group(1)))
+
+            group_content = await call(client, "tabs_group", {
+                "tab_ids": created_tab_ids, "title": "Background", "color": "cyan",
+            })
+            id_match = re.search(r'group (\d+)', group_content)
+            assert id_match, f"tabs_group should report the new group's ID: {group_content}"
+            group_id = int(id_match.group(1))
+
+            for step, tool, args in [
+                ("tabs_group", None, None),
+                ("tabs_groups_update", "tabs_groups_update", {"group_id": group_id, "collapsed": True}),
+                ("tabs_ungroup", "tabs_ungroup", {"tab_ids": created_tab_ids}),
+            ]:
+                if tool:
+                    await call(client, tool, args)
+                listing = await call(client, "list_windows")
+                assert focused_window_id(listing) == focused_before, (
+                    f"{step} must not change which window has focus. Before: "
+                    f"{focused_before}, after: {focused_window_id(listing)}\n{listing}"
+                )
+            group_id = None
+        finally:
+            if group_id is not None:
+                await client.call_tool("tabs_ungroup", {"tab_ids": created_tab_ids})
+            for tab_id in created_tab_ids:
+                await client.call_tool("tabs_close", {"tab_id": tab_id})
+            if background_window_id is not None:
+                await client.call_tool("close_window", {"window_id": background_window_id})
 
 
 if __name__ == "__main__":
