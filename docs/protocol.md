@@ -724,6 +724,12 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
 ```
 
 #### Create New Window
+
+Firefox focuses every new window and ignores `"focused": false`. With `false`, the
+extension hands focus back to the window that had it, and the response's
+`window.focused` reports where focus ended up. If no Firefox window had focus, the
+new one keeps it.
+
 **Request:**
 ```json
 {

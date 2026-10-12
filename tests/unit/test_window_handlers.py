@@ -225,3 +225,70 @@ class TestWindowMCPTools:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+class StubWebSocketServer:
+    """Records the request a tool sends and replays a canned extension response"""
+
+    def __init__(self):
+        self.sent_request = None
+        self.response = {"type": "response", "data": {}}
+
+    async def send_request_and_wait(self, request):
+        self.sent_request = request
+        return self.response
+
+
+@pytest.fixture
+def stub_server():
+    return StubWebSocketServer()
+
+
+@pytest.fixture
+def call_tool(stub_server):
+    """Return a callable that invokes a named MCP tool against the stub server"""
+    from server.mcp_tools import FoxMCPTools
+    tools = FoxMCPTools(stub_server)
+
+    async def call(name, **kwargs):
+        tool = await tools.mcp.get_tool(name)
+        return await tool.fn(**kwargs)
+
+    return call
+
+
+class TestWindowFocus:
+    """Firefox cannot open a window unfocused or take focus away from one"""
+
+    @pytest.mark.asyncio
+    async def test_create_window_reports_whether_the_new_window_has_focus(self, call_tool, stub_server):
+        stub_server.response = {"type": "response", "data": {
+            "window": {"id": 7, "width": 800, "height": 600, "focused": True}}}
+
+        result = await call_tool("create_window", url="https://example.org/")
+
+        assert result.endswith("(focused)")
+
+    @pytest.mark.asyncio
+    async def test_create_window_in_the_background_says_nothing_about_focus(self, call_tool, stub_server):
+        stub_server.response = {"type": "response", "data": {
+            "window": {"id": 7, "width": 800, "height": 600, "focused": False}}}
+
+        result = await call_tool("create_window", url="https://example.org/", focused=False)
+
+        assert stub_server.sent_request["data"]["focused"] is False
+        assert "(focused)" not in result
+
+    @pytest.mark.asyncio
+    async def test_update_window_refuses_focused_false(self, call_tool, stub_server):
+        """Firefox's windows.update ignores focused: false, so it must not look like it worked"""
+        result = await call_tool("update_window", window_id=7, focused=False)
+
+        assert result.startswith("Error:")
+        assert "focus_window" in result
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_update_window_still_accepts_focused_true(self, call_tool, stub_server):
+        await call_tool("update_window", window_id=7, focused=True)
+
+        assert stub_server.sent_request["data"]["focused"] is True

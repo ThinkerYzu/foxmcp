@@ -130,9 +130,13 @@ from `webRequest` and is captured for every matching request.
 - `get_window(window_id, populate=True)` - Get specific window information
 - `get_current_window(populate=True)` - Get current active window
 - `create_window(url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
+  - Firefox always focuses a new window; with `focused=False`, focus goes back to the
+    window that had it. The result ends in `(focused)` if the new window has focus
 - `close_window(window_id)` - Close specific window
 - `focus_window(window_id)` - Bring window to front and focus it
 - `update_window(window_id, state=None, focused=None, width=None, height=None, top=None, left=None)` - Update window properties
+  - `focused=False` is refused: Firefox cannot take focus away from a window. Call
+    `focus_window` on the window that should have it
 
 ### Debugging Tools
 - `debug_websocket_status()` - Check browser extension connection status

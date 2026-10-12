@@ -957,21 +957,30 @@ async function handleWindowsAction(id, action, data) {
         sendResponse(id, action, { window: currentWindow });
         break;
 
-      case 'windows.create':
+      case 'windows.create': {
         const createOptions = {};
         if (data.url) createOptions.url = data.url;
         if (data.type) createOptions.type = data.type;
         if (data.state) createOptions.state = data.state;
-        if (data.focused !== undefined) createOptions.focused = data.focused;
         if (data.width) createOptions.width = data.width;
         if (data.height) createOptions.height = data.height;
         if (data.top) createOptions.top = data.top;
         if (data.left) createOptions.left = data.left;
         if (data.incognito !== undefined) createOptions.incognito = data.incognito;
-        
-        const newWindow = await browser.windows.create(createOptions);
+
+        // Firefox always focuses a new window: its schema marks `focused: false` as
+        // "Opening inactive windows is not supported" and ignores it. So for a
+        // background window, hand focus back to the window that had it. If no
+        // Firefox window had focus, there is nothing of ours to hand it back to.
+        const previous = data.focused === false ? await browser.windows.getLastFocused() : null;
+        let newWindow = await browser.windows.create(createOptions);
+        if (previous?.focused) {
+          await browser.windows.update(previous.id, { focused: true });
+          newWindow = await browser.windows.get(newWindow.id, { populate: true });
+        }
         sendResponse(id, action, { window: newWindow });
         break;
+      }
 
       case 'windows.close':
         if (!data.windowId) {

@@ -483,17 +483,17 @@ class TestGroupingNeverActivatesOrFocuses:
             focused_before = focused_window_id(await call(client, "list_windows"))
             assert focused_before is not None, "Some window should have focus before the test"
 
-            # Firefox focuses a new window even when asked not to, so hand focus back.
-            window_content = await call(client, "create_window", {"url": "about:blank"})
+            window_content = await call(client, "create_window", {
+                "url": "about:blank", "focused": False,
+            })
             id_match = re.search(r'ID (\d+)', window_content)
             assert id_match, f"create_window should report the new window's ID: {window_content}"
             background_window_id = int(id_match.group(1))
-            await call(client, "focus_window", {"window_id": focused_before})
 
             listing = await call(client, "list_windows")
             assert focused_window_id(listing) == focused_before, (
-                f"Focus did not return to window {focused_before}, so this test "
-                f"cannot tell whether grouping moves it:\n{listing}"
+                f"create_window(focused=False) took focus, so this test cannot "
+                f"tell whether grouping moves it:\n{listing}"
             )
 
             for _ in range(2):

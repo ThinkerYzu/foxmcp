@@ -1064,5 +1064,45 @@ class TestWindowManagementEndToEnd:
             raise
 
 
+    @pytest.mark.asyncio
+    async def test_create_window_unfocused_leaves_focus_where_it_was(self, server_with_extension):
+        """create_window(focused=False) must leave focus on the window that had it
+
+        Firefox focuses every new window whatever focused says, so this checks the
+        extension's hand-back rather than Firefox.
+        """
+        client = DirectMCPTestClient(server_with_extension['server'].mcp_tools)
+        await client.connect()
+
+        def focused_window_id(listing):
+            match = re.search(r'ID (\d+):[^\n]*\(focused\)', listing)
+            return int(match.group(1)) if match else None
+
+        new_window_id = None
+        try:
+            before = await client.call_tool("list_windows", {"populate": False})
+            focused_before = focused_window_id(before.get("content", ""))
+            assert focused_before is not None, f"Some window should have focus:\n{before}"
+
+            created = await client.call_tool("create_window", {
+                "url": "https://example.org/background", "focused": False,
+            })
+            created_content = created.get("content", "")
+            match = re.search(r'ID (\d+)', created_content)
+            assert match, f"create_window should report the new window's ID: {created_content}"
+            new_window_id = int(match.group(1))
+            assert "(focused)" not in created_content, \
+                f"The new window should not report focus: {created_content}"
+
+            after = await client.call_tool("list_windows", {"populate": False})
+            assert focused_window_id(after.get("content", "")) == focused_before, (
+                f"create_window(focused=False) moved focus from window {focused_before}:\n"
+                f"{after.get('content', '')}"
+            )
+        finally:
+            if new_window_id is not None:
+                await client.call_tool("close_window", {"window_id": new_window_id})
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

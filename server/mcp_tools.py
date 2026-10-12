@@ -413,7 +413,10 @@ class FoxMCPTools:
                 url: URL to load in the new window
                 window_type: Type of window ("normal", "popup", "panel", "detached_panel")
                 state: Window state ("normal", "minimized", "maximized", "fullscreen")
-                focused: Whether to focus the new window
+                focused: Whether the new window takes focus. Firefox always focuses a
+                    new window, so with False the extension hands focus back to the
+                    window that had it; the result says "(focused)" if the new window
+                    kept it anyway.
                 width: Window width in pixels
                 height: Window height in pixels  
                 top: Window top position in pixels
@@ -449,7 +452,8 @@ class FoxMCPTools:
                     window_id = window_data.get('id')
                     window_url = url or "about:blank"
                     size_info = f"{window_data.get('width', '?')}x{window_data.get('height', '?')}"
-                    return f"Created {window_type} window (ID {window_id}): {window_url}, {size_info}"
+                    focused_info = " (focused)" if window_data.get("focused") else ""
+                    return f"Created {window_type} window (ID {window_id}): {window_url}, {size_info}{focused_info}"
 
             return "Window created but unable to retrieve details"
 
@@ -533,7 +537,9 @@ class FoxMCPTools:
             Args:
                 window_id: The ID of the window to update
                 state: New window state ("normal", "minimized", "maximized", "fullscreen")
-                focused: Whether to focus the window
+                focused: True brings the window to the front. False is refused:
+                    Firefox cannot take focus away from a window, so call
+                    focus_window on the window that should have it instead.
                 width: New window width in pixels
                 height: New window height in pixels
                 top: New window top position in pixels
@@ -542,6 +548,12 @@ class FoxMCPTools:
             Returns:
                 String containing updated window details
             """
+            # Firefox's windows.update ignores focused: false without an error.
+            if focused is False:
+                return ("Error: focused=False is not supported; Firefox cannot take focus "
+                        "away from a window. Call focus_window on the window that should "
+                        "have focus instead.")
+
             data = {'windowId': window_id}
             if state: data['state'] = state
             if focused is not None: data['focused'] = focused
