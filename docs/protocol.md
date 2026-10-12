@@ -605,6 +605,31 @@ afterwards. A stale ref is an error naming the ref.
 Each answers with the element it acted on, described as in a snapshot:
 `{"clicked": "[r3] button \"Next\""}`, `{"typed": ...}`, `{"pressed": "Escape"}`.
 
+#### Upload Files
+`content_upload_files` reads a file, or every file in a folder, from the server's
+disk and sends it in four steps. Each chunk is a separate request that waits for
+its answer, so a large file never becomes one huge message.
+
+```json
+{"action": "content.upload_begin", "data": {"uploadId": "u1", "files": [{"name": "a.txt", "relativePath": "Assets/a.txt"}]}}
+{"action": "content.upload_chunk", "data": {"uploadId": "u1", "fileIndex": 0, "data": "<base64, at most 512 KB decoded>"}}
+{"action": "content.upload_finish", "data": {"uploadId": "u1", "tabId": 123, "ref": "r4", "selector": null}}
+```
+
+`content.upload_finish` answers with the count and the first few paths:
+`{"count": 1, "paths": ["Assets/a.txt"], "target": "[r4] input \"Folder\" (type=file)"}`.
+Relative paths are only applied on an input that picks folders (`webkitdirectory`),
+as a browser would; a plain file input gets the files flat.
+
+Pages that open the dialog from a button instead of showing an input are handled
+with `content.capture_file_input` first. While it is armed, the page's
+`HTMLInputElement.click()` and `showPicker()` hand the next file input back instead
+of opening the native dialog, and the answer is that input's ref:
+
+```json
+{"action": "content.capture_file_input", "data": {"tabId": 123, "triggerRef": "r7", "triggerSelector": null}}
+```
+
 ### 4. Navigation
 
 #### Navigate Back
