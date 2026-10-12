@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 # when the server restarts.
 MAX_LOGGED_ARG_LENGTH = 120
 
+# File bytes per upload message, about 700 KB once base64-encoded. Each chunk
+# waits for the extension's answer, so a large file never queues up as one
+# message several hundred megabytes long.
+UPLOAD_CHUNK_BYTES = 512 * 1024
+
 
 def format_script_args_for_log(args_list):
     """Render predefined-script arguments as a single line for the log
@@ -1913,6 +1918,92 @@ class FoxMCPTools:
             if error:
                 return f"Failed to press {key}: {error}"
             return f"Pressed {data.get('pressed')}"
+
+        # Upload Files Tool
+        @self._tool()
+        async def content_upload_files(
+            tab_id: int,
+            path: str,
+            ref: Optional[str] = None,
+            selector: Optional[str] = None,
+            trigger_ref: Optional[str] = None,
+            trigger_selector: Optional[str] = None
+        ) -> str:
+            """Put a local file, or every file in a local folder, on a page's file input
+
+            Folders keep their structure on inputs that pick folders, so a site
+            that rebuilds the tree (a cloud drive's folder upload) gets the
+            subfolders; on a plain file input the files arrive flat.
+
+            Pages that open the file dialog from a button or menu item instead
+            of showing an input: pass that element as trigger_ref or
+            trigger_selector, and the input it would open is filled instead of
+            the dialog appearing.
+
+            Args:
+                tab_id: ID of the tab
+                path: Local file or folder path
+                ref: Ref of the <input type=file> from content_snapshot
+                selector: CSS selector of the <input type=file>
+                trigger_ref: Ref of the element that opens the file dialog
+                trigger_selector: CSS selector of the element that opens the file dialog
+            """
+            if not os.path.exists(path):
+                return f"Failed to upload: {path} does not exist"
+            if os.path.isdir(path):
+                root = os.path.basename(os.path.normpath(path))
+                files = []
+                for dirpath, dirnames, filenames in os.walk(path):
+                    dirnames.sort()
+                    for name in sorted(filenames):
+                        full = os.path.join(dirpath, name)
+                        relative = os.path.relpath(full, path).replace(os.sep, "/")
+                        files.append((full, f"{root}/{relative}"))
+                if not files:
+                    return f"Failed to upload: {path} contains no files"
+            else:
+                files = [(path, "")]
+
+            if trigger_ref or trigger_selector:
+                captured, error = await page_request({
+                    "action": "content.capture_file_input",
+                    "data": {"tabId": tab_id, "triggerRef": trigger_ref,
+                             "triggerSelector": trigger_selector}
+                })
+                if error:
+                    return f"Failed to open the file input: {error}"
+                ref, selector = captured["ref"], None
+            input_target = target(tab_id, ref, selector)
+
+            upload_id = str(uuid.uuid4())
+            _, error = await page_request({
+                "action": "content.upload_begin",
+                "data": {"uploadId": upload_id, "files": [
+                    {"name": os.path.basename(full), "relativePath": relative}
+                    for full, relative in files]}
+            })
+            if error:
+                return f"Failed to upload: {error}"
+            for index, (full, _) in enumerate(files):
+                with open(full, "rb") as handle:
+                    while chunk := handle.read(UPLOAD_CHUNK_BYTES):
+                        _, error = await page_request({
+                            "action": "content.upload_chunk",
+                            "data": {"uploadId": upload_id, "fileIndex": index,
+                                     "data": base64.b64encode(chunk).decode("ascii")}
+                        })
+                        if error:
+                            return f"Failed to upload {full}: {error}"
+            data, error = await page_request({
+                "action": "content.upload_finish",
+                "data": {**input_target, "uploadId": upload_id}
+            })
+            if error:
+                return f"Failed to upload: {error}"
+            shown = ", ".join(data.get("paths", []))
+            more = data["count"] - len(data.get("paths", []))
+            return (f"Set {data['count']} file(s) on {data.get('target')}: {shown}"
+                    + (f" and {more} more" if more > 0 else ""))
 
         # Execute Predefined Script Tool
         @self._tool()

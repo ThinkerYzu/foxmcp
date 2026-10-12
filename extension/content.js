@@ -135,6 +135,74 @@ function pressKey(el, key) {
   }
 }
 
+// Many sites (Google Drive among them) open the file dialog by calling click()
+// on an <input type=file> they create on the spot, and a native dialog is not
+// something an extension can fill in. While armed, this swaps the page's own
+// click() and showPicker() so the next file input is handed back here instead
+// of opening the dialog. It goes through wrappedJSObject because the page's
+// prototypes are invisible from the content script's side.
+function captureNextFileInput(timeoutMs) {
+  const proto = window.wrappedJSObject.HTMLInputElement.prototype;
+  const originalClick = proto.click;
+  const originalShowPicker = proto.showPicker;
+  return new Promise((resolve, reject) => {
+    const restore = () => {
+      proto.click = originalClick;
+      proto.showPicker = originalShowPicker;
+    };
+    const timer = setTimeout(() => {
+      restore();
+      reject(new Error('The trigger did not open a file dialog'));
+    }, timeoutMs);
+    const intercept = exportFunction(function () {
+      if (this.type !== 'file') {
+        return originalClick.call(this);
+      }
+      clearTimeout(timer);
+      restore();
+      // Inputs created just for the dialog are often never attached, and a
+      // detached element cannot be found again by ref.
+      if (!this.isConnected) {
+        this.hidden = true;
+        document.body.appendChild(this);
+      }
+      resolve(this);
+    }, window);
+    proto.click = intercept;
+    proto.showPicker = intercept;
+  });
+}
+
+// webkitRelativePath is what tells a page the files came from a folder (and
+// which subfolder each sits in), so it is set where the page reads it.
+function setInputFiles(el, files, relativePaths) {
+  if (el.tagName !== 'INPUT' || el.type !== 'file') {
+    throw new Error('Target must be an <input type=file>');
+  }
+  // Files built in the extension belong to it, and the page gets "Permission
+  // denied" reading them. Cloned into the page and set through the page's own
+  // DataTransfer, they are ordinary files as far as the page can tell.
+  const transfer = new window.wrappedJSObject.DataTransfer();
+  for (const file of files) {
+    transfer.items.add(cloneInto(file, window));
+  }
+  el.wrappedJSObject.files = transfer.files;
+  const pageFiles = el.wrappedJSObject.files;
+  // A browser only reports folder paths for inputs that pick folders, so a
+  // folder given to a plain file input arrives as loose files, as it would.
+  for (let i = 0; i < pageFiles.length; i++) {
+    if (el.webkitdirectory && relativePaths[i]) {
+      Object.defineProperty(pageFiles[i], 'webkitRelativePath', {
+        value: relativePaths[i], configurable: true
+      });
+    }
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return Array.from({ length: pageFiles.length },
+    (_, i) => pageFiles[i].webkitRelativePath || pageFiles[i].name);
+}
+
 // Overlay shown while an agent acts on the tab: a glowing border, a label and a
 // cursor that moves to each element before it is clicked or typed into. It is
 // purely visual (pointer-events: none) and fades once the agent goes quiet, so
@@ -276,6 +344,26 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         showOverlay();
         pressKey(el, data.key);
         sendResponse({ pressed: data.key });
+        break;
+      }
+
+      case 'captureFileInput': {
+        const trigger = findTarget({ ref: data.triggerRef, selector: data.triggerSelector });
+        showOverlay();
+        const captured = captureNextFileInput(data.timeoutMs || 3000);
+        moveCursorTo(trigger, true)
+          .then(() => clickElement(trigger))
+          .then(() => captured)
+          .then(input => sendResponse({ ref: refFor(input), multiple: input.multiple, directory: input.webkitdirectory }))
+          .catch(error => sendResponse({ error: error.message }));
+        break;
+      }
+
+      case 'setFiles': {
+        const el = findTarget(data);
+        showOverlay();
+        const paths = setInputFiles(el, data.files, data.relativePaths || []);
+        sendResponse({ count: paths.length, paths: paths.slice(0, 5), target: describe(el) });
         break;
       }
 

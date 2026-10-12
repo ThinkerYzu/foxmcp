@@ -8,10 +8,12 @@ are exercised against real Firefox, where a stub could not tell a click that
 opens a mousedown menu from one that does not.
 """
 
+import base64
+
 import pytest
 
 import test_imports  # Automatic path setup
-from server.mcp_tools import FoxMCPTools
+from server.mcp_tools import FoxMCPTools, UPLOAD_CHUNK_BYTES
 
 
 class StubWebSocketServer:
@@ -122,3 +124,91 @@ class TestPressKey:
         assert stub_server.sent_request["data"] == {
             "tabId": 4, "key": "Escape", "ref": None, "selector": None}
         assert result == "Pressed Escape"
+
+
+class RecordingWebSocketServer:
+    """Records every request; answers capture and finish the way the extension does"""
+
+    def __init__(self):
+        self.requests = []
+
+    async def send_request_and_wait(self, request):
+        self.requests.append(request)
+        if request["action"] == "content.capture_file_input":
+            return {"type": "response", "data": {"ref": "r7", "multiple": False, "directory": True}}
+        if request["action"] == "content.upload_finish":
+            return {"type": "response", "data": {
+                "count": 2, "paths": ["Assets/a.txt", "Assets/sub/b.bin"], "target": "[r7] input"}}
+        return {"type": "response", "data": {"ok": True}}
+
+    def actions(self):
+        return [r["action"] for r in self.requests]
+
+
+class TestUploadFiles:
+
+    @pytest.fixture
+    def recorder(self):
+        return RecordingWebSocketServer()
+
+    @pytest.fixture
+    def upload(self, recorder):
+        tools = FoxMCPTools(recorder)
+
+        async def call(**kwargs):
+            tool = await tools.mcp.get_tool("content_upload_files")
+            return await tool.fn(**kwargs)
+
+        return call
+
+    @pytest.fixture
+    def folder(self, tmp_path):
+        root = tmp_path / "Assets"
+        (root / "sub").mkdir(parents=True)
+        (root / "a.txt").write_text("alpha")
+        (root / "sub" / "b.bin").write_bytes(b"\x00" * (UPLOAD_CHUNK_BYTES + 10))
+        return root
+
+    @pytest.mark.asyncio
+    async def test_folder_files_keep_paths_under_the_folder_name(self, upload, recorder, folder):
+        await upload(tab_id=4, path=str(folder), ref="r2")
+
+        begin = recorder.requests[0]
+        assert begin["action"] == "content.upload_begin"
+        assert begin["data"]["files"] == [
+            {"name": "a.txt", "relativePath": "Assets/a.txt"},
+            {"name": "b.bin", "relativePath": "Assets/sub/b.bin"}]
+
+    @pytest.mark.asyncio
+    async def test_large_files_are_split_into_chunks(self, upload, recorder, folder):
+        await upload(tab_id=4, path=str(folder), ref="r2")
+
+        chunks = [r["data"] for r in recorder.requests if r["action"] == "content.upload_chunk"]
+        assert [c["fileIndex"] for c in chunks] == [0, 1, 1]
+        sizes = [len(base64.b64decode(c["data"])) for c in chunks]
+        assert sizes == [5, UPLOAD_CHUNK_BYTES, 10]
+        finish = recorder.requests[-1]
+        assert finish["action"] == "content.upload_finish"
+        assert finish["data"]["ref"] == "r2"
+
+    @pytest.mark.asyncio
+    async def test_trigger_fills_the_input_it_opens(self, upload, recorder, folder):
+        result = await upload(tab_id=4, path=str(folder), trigger_ref="r5")
+
+        assert recorder.actions()[0] == "content.capture_file_input"
+        assert recorder.requests[0]["data"]["triggerRef"] == "r5"
+        assert recorder.requests[-1]["data"]["ref"] == "r7"
+        assert result.startswith("Set 2 file(s) on [r7] input")
+
+    @pytest.mark.asyncio
+    async def test_single_file_has_no_relative_path(self, upload, recorder, folder):
+        await upload(tab_id=4, path=str(folder / "a.txt"), selector="#plain")
+
+        assert recorder.requests[0]["data"]["files"] == [{"name": "a.txt", "relativePath": ""}]
+
+    @pytest.mark.asyncio
+    async def test_missing_path_sends_nothing(self, upload, recorder, tmp_path):
+        result = await upload(tab_id=4, path=str(tmp_path / "nope"), ref="r2")
+
+        assert result.endswith("does not exist")
+        assert recorder.requests == []
