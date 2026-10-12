@@ -195,6 +195,8 @@ Once connected, you can control Firefox through natural language:
 - List a page's interactive elements, then click, double-click, type into and press keys on them
 - Execute JavaScript in pages
 - Run custom predefined scripts
+- A border, a label and a cursor show on a tab while an agent acts on it, so a person
+  watching can follow along; they fade after six seconds and stay out of screenshots
 
 ### Navigation
 - Back, forward, reload pages
