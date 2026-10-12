@@ -159,8 +159,8 @@ claude mcp add --scope project foxmcp -- $PWD/venv/bin/python \
 The extension connects the same way it always does, but two costs come with this
 mode. Only one server can serve the extension, and under stdio every client
 launches its own, so two `claude` sessions at once means the second one gets no
-browser tools. And the server lives only as long as your client, while the
-extension stops trying to reconnect after about four minutes without one.
+browser tools. And the server lives only as long as your client, so after four
+minutes without one the extension checks for it only every 30 seconds.
 
 If you run several clients, or short terminal sessions through the day, HTTP mode
 is the easier setup. Read [One session at a

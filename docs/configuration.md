@@ -120,21 +120,18 @@ five-second retry cycle and has not connected yet. A tool call in that window
 returns `No extension connection available` immediately rather than waiting for
 the browser. Run it again.
 
-**The extension gives up after about four minutes without a server.** It retries
-50 times and then stops for good. That limit is fixed in the extension and the
-**Max Retries** setting does not lift it: setting -1 (unlimited) still stops at
-50. At the default five-second Retry Interval that is 250 seconds.
-
-The four minutes is the part that bites, because it is not a race you usually
-win or lose. It is the normal outcome of leaving Firefox open and your editor
-closed. Close the editor at lunch, come back, and the extension has been done
-trying for an hour:
+**The extension slows down without a server, but does not give up.** It retries
+every Retry Interval for 50 attempts, about four minutes at the default five
+seconds, and then every 30 seconds for as long as the server stays away. Leaving
+Firefox open and your editor closed is the normal case, so a server that comes
+back is picked up on the next attempt:
 
 ```
 12:00  editor exits, server dies
 12:00  extension starts retrying, every 5s
-12:04  50 attempts spent, extension stops trying
-13:00  editor starts, server comes back, nothing connects to it
+12:04  50 attempts spent, extension retries every 30s
+13:00  editor starts, server comes back
+13:00  extension connects on its next attempt, within 30s
 ```
 
 **A request monitor does not survive the gap.** The extension clears every monitor
@@ -473,11 +470,11 @@ A timeout returns an error dict rather than raising, so callers must check for
 `retryInterval` (5000 ms) and `maxRetries` (`-1`). Both are also editable from the
 extension popup. Changing the source values requires a rebuild.
 
-`-1` means "no limit of my own", not "retry forever". `MAX_ABSOLUTE_RETRIES` in the
-same file caps every setting at 50 attempts, after which the extension stops until
-you press **Reconnect** in the popup or restart it. At the default interval that is
-about four minutes of downtime. This matters most under `--stdio`, where the server
-comes and goes with your client: see [The reconnect gap](#the-reconnect-gap).
+`-1` retries forever: 50 attempts at `retryInterval`, then one every 30 seconds
+(`FAST_RETRIES` and `SLOW_RETRY_INTERVAL` in the same file). A positive value stops
+after that many attempts, until you press **Reconnect** in the popup or restart the
+extension. This matters most under `--stdio`, where the server comes and goes with
+your client: see [The reconnect gap](#the-reconnect-gap).
 
 ## Troubleshooting Configuration
 

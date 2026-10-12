@@ -201,7 +201,7 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 ### 1. Connection Management
 - **Single Extension Connection**: One extension connection at a time. When a new one arrives, the server closes the existing connection first, which prevents connection races between two browsers or a stale socket.
 - **MCP Clients**: Served by FastMCP. There is no per-client state — all clients share the one extension connection, and requests from different clients interleave.
-- **Reconnection Logic**: The extension retries every `retryInterval` (5000 ms by default) and reconnects when settings change. `maxRetries: -1` removes the configured limit but not `MAX_ABSOLUTE_RETRIES`, a hard ceiling of 50 attempts in `background.js`; past it the extension stays down until **Reconnect** in the popup resets the counter.
+- **Reconnection Logic**: The extension retries every `retryInterval` (5000 ms by default) and reconnects when settings change. `maxRetries: -1` retries forever, slowing from `retryInterval` to every 30 seconds after 50 attempts (`FAST_RETRIES` and `SLOW_RETRY_INTERVAL` in `background.js`); a positive `maxRetries` stops after that many attempts until **Reconnect** in the popup resets the counter.
 
 ### 2. Request Handling
 - **Async Processing**: All operations are asynchronous
