@@ -182,8 +182,8 @@ outliving every client and every session, with no port to contend for.
 ## Reducing the Tool Surface
 
 Every tool's description sits in an MCP client's context for the whole session,
-whether or not the tool is ever called. The full set of 39 tools costs roughly
-5,850 tokens. `--disable-tools` leaves a group unregistered, so a client never
+whether or not the tool is ever called. The full set of 43 tools costs roughly
+6,530 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -198,11 +198,11 @@ token, so treat them as proportions rather than exact counts:
 | Group | Tools | ~Tokens |
 |---|---|---|
 | `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,166 |
+| `content` | get_text, get_html, execute_script, execute_predefined, snapshot, click, type, press_key | 1,101 |
 | `windows` | list, get, get_current, create, close, focus, update | 949 |
 | `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 795 |
 | `bookmarks` | list, search, create, create_folder, update, delete | 703 |
 | `navigation` | back, forward, reload, go_to_url | 430 |
-| `content` | get_text, get_html, execute_script, execute_predefined | 421 |
 | `history` | query, get_recent, delete_item | 304 |
 | `debug` | websocket_status | 78 |
 

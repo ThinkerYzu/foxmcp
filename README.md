@@ -192,6 +192,7 @@ Once connected, you can control Firefox through natural language:
 
 ### Content Interaction
 - Extract page text and HTML
+- List a page's interactive elements, then click, double-click, type into and press keys on them
 - Execute JavaScript in pages
 - Run custom predefined scripts
 
@@ -244,7 +245,7 @@ python server/server.py --disable-tools bookmarks,history
 python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
 ```
 
-All 39 tools are offered by default, costing an MCP client roughly 5,850 tokens of
+All 43 tools are offered by default, costing an MCP client roughly 6,530 tokens of
 context. `--disable-tools` leaves a group unregistered: `windows`, `tabs`,
 `bookmarks`, `navigation`, `content`, `requests`, `history`, `debug`.
 `--enable-tools` names individual tools to register anyway, for when one tool out

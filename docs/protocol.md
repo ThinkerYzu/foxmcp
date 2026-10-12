@@ -553,6 +553,58 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
 }
 ```
 
+#### Snapshot Interactive Elements
+Lists the visible interactive elements of a page. Each gets a ref, written to the
+element as a `data-foxmcp-ref` attribute, that `content.click`, `content.type` and
+`content.press_key` accept in place of a selector. A ref stays on its element
+across snapshots, so it still works after other parts of the page re-render.
+
+**Request:**
+```json
+{
+  "id": "req_010c",
+  "type": "request",
+  "action": "content.snapshot",
+  "data": {
+    "tabId": 123,
+    "maxElements": 300
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_010c",
+  "type": "response",
+  "action": "content.snapshot",
+  "data": {
+    "snapshot": "[r1] h1 \"Sign in\"\n[r2] input \"Email\" (type=email)\n[r3] button \"Next\"",
+    "url": "https://example.org/login",
+    "title": "Sign in"
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Click, Type and Press a Key
+`content.click`, `content.type` and `content.press_key` take a `ref` from a
+snapshot or a CSS `selector`. A click dispatches the pointer and mouse sequence at
+the element's centre; `doubleClick: true` repeats it with the click count in
+`detail` and ends with `dblclick`. Typing goes through `insertText`, so inputs
+whose value a framework tracks see the change, and `submit: true` presses Enter
+afterwards. A stale ref is an error naming the ref.
+
+```json
+{"action": "content.click", "data": {"tabId": 123, "ref": "r3", "selector": null, "doubleClick": false}}
+{"action": "content.type", "data": {"tabId": 123, "ref": "r2", "selector": null, "text": "dor@example.org", "clear": true, "submit": false}}
+{"action": "content.press_key", "data": {"tabId": 123, "key": "Escape", "ref": null, "selector": null}}
+```
+
+Each answers with the element it acted on, described as in a snapshot:
+`{"clicked": "[r3] button \"Next\""}`, `{"typed": ...}`, `{"pressed": "Escape"}`.
+
 ### 4. Navigation
 
 #### Navigate Back
