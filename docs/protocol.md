@@ -280,6 +280,127 @@ and the response is still a success. Moves that do fail outright return an `API_
 an unknown tab ID, a target window that is not a normal window, or a move between a
 private window and a non-private one.
 
+#### Group Tabs
+
+Puts tabs into a tab group: a new one when `groupId` is absent, created in the
+window of the first tab in `tabIds`, or the existing group `groupId`. `title` and
+`color` are optional and are applied after grouping. Requires Firefox 139+.
+
+**Request:**
+```json
+{
+  "id": "req_007b",
+  "type": "request",
+  "action": "tabs.group",
+  "data": {
+    "tabIds": [123, 124],
+    "title": "Research",
+    "color": "blue"
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_007b",
+  "type": "response",
+  "action": "tabs.group",
+  "data": {
+    "groupId": 1789744400280043
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+If the tabs were grouped but `tabGroups.update` refused the title or colour, the
+response is still a success, and `data` carries `styleError` with Firefox's message
+beside the `groupId`. The grouping is not undone.
+
+#### Ungroup Tabs
+
+Takes tabs out of whatever group they are in. Firefox deletes a group once its last
+tab leaves. Requires Firefox 138+.
+
+**Request:**
+```json
+{
+  "id": "req_007c",
+  "type": "request",
+  "action": "tabs.ungroup",
+  "data": {
+    "tabIds": [123, 124]
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:** `data` is `{"success": true}`.
+
+#### Update Tab Group
+
+Changes a group's `title`, `color` or `collapsed` state; at least one is required.
+Requires Firefox 139+.
+
+**Request:**
+```json
+{
+  "id": "req_007d",
+  "type": "request",
+  "action": "tabGroups.update",
+  "data": {
+    "groupId": 1789744400280043,
+    "collapsed": true
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:** `data.group` is the updated group, as Firefox returns it.
+
+#### Query Tab Groups
+
+Lists tab groups. Every field of `data` is an optional filter: `windowId`, `title`,
+`color`, `collapsed`. Requires Firefox 139+.
+
+**Request:**
+```json
+{
+  "id": "req_007e",
+  "type": "request",
+  "action": "tabGroups.query",
+  "data": {
+    "windowId": 1
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_007e",
+  "type": "response",
+  "action": "tabGroups.query",
+  "data": {
+    "groups": [
+      {
+        "id": 1789744400280043,
+        "title": "Research",
+        "color": "blue",
+        "collapsed": false,
+        "windowId": 1
+      }
+    ]
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` and
+`yellow`, in all four actions.
+
 #### Capture Screenshot of Tab
 **Request:**
 ```json
@@ -1107,7 +1228,9 @@ at birth or answer each removal with another.
 - `CAPTURE_ERROR` - Failed to capture screenshot of the visible tab
 - `MONITOR_NOT_FOUND` - No monitoring session with the given `monitor_id`
 - `REQUEST_NOT_FOUND` - No captured request with the given `request_id`
-- `API_ERROR` - A `browser.*` call raised while handling a `requests.*` action
+- `API_ERROR` - A `browser.*` call raised while handling the action; `message` carries its error
+- `INVALID_PARAMETER` - A request field is missing or has the wrong type or value
+- `UNSUPPORTED_API` - This Firefox lacks the API the action needs, such as `tabs.group` before Firefox 138
 
 ## Test Helper Messages
 

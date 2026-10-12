@@ -182,8 +182,8 @@ outliving every client and every session, with no port to contend for.
 ## Reducing the Tool Surface
 
 Every tool's description sits in an MCP client's context for the whole session,
-whether or not the tool is ever called. The full set of 35 tools costs roughly
-4,700 tokens. `--disable-tools` leaves a group unregistered, so a client never
+whether or not the tool is ever called. The full set of 39 tools costs roughly
+5,850 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -197,14 +197,14 @@ token, so treat them as proportions rather than exact counts:
 
 | Group | Tools | ~Tokens |
 |---|---|---|
-| `tabs` | list, create, close, switch, move, capture_screenshot | 1,195 |
-| `windows` | list, get, get_current, create, close, focus, update | 948 |
+| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,166 |
+| `windows` | list, get, get_current, create, close, focus, update | 949 |
+| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 795 |
 | `bookmarks` | list, search, create, create_folder, update, delete | 703 |
-| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 693 |
+| `navigation` | back, forward, reload, go_to_url | 430 |
 | `content` | get_text, get_html, execute_script, execute_predefined | 421 |
-| `navigation` | back, forward, reload, go_to_url | 380 |
 | `history` | query, get_recent, delete_item | 304 |
-| `debug` | websocket_status | 58 |
+| `debug` | websocket_status | 78 |
 
 All groups are on by default. An unrecognized group name is an error rather than
 a warning, so a typo cannot silently leave the group enabled.
@@ -216,7 +216,7 @@ security boundary — see [architecture.md](architecture.md#security-architectur
 ### Keeping one tool out of a disabled group
 
 Sometimes a single tool is the reason to keep a group, and the rest of it is
-dead weight — a screenshot of the page, without the five tab tools that manage
+dead weight — a screenshot of the page, without the nine tab tools that manage
 tabs. `--enable-tools` names tools to register even though their group is
 disabled:
 

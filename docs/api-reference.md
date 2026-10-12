@@ -4,11 +4,12 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 35 tools are offered by default. Each section below corresponds to a *group*
+All 39 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
-Tools is `debug`. `--enable-tools` takes the tool names below, for keeping one
+Tools is `debug`. Window Management is the exception: its group is `windows`, but
+its tools are named `create_window`, `list_windows` and so on. `--enable-tools` takes the tool names below, for keeping one
 tool out of a group you disabled. See
 [configuration.md](configuration.md#reducing-the-tool-surface) for the full list
 and what each group costs.
@@ -26,6 +27,13 @@ and what each group costs.
   - Without `window_id`, tabs are reordered within the window they are in
   - Reports `Moved {n} of {m}` — Firefox refuses some moves silently, chiefly moving an
     unpinned tab in front of a pinned one, and a refused tab is absent from the result
+- `tabs_group(tab_ids, group_id=None, title=None, color=None)` - Group tabs into a new group, or into an existing one
+  - Without `group_id`, the new group goes in the first tab's window, and tabs from other
+    windows move there
+  - Reports `Tabs grouped into group {id}`; see [Tab groups](#tab-groups)
+- `tabs_ungroup(tab_ids)` - Take tabs out of their group
+- `tabs_groups_update(group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
+- `tabs_groups_query(window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
 - `tabs_capture_screenshot(filename=None, window_id=None, format="png", quality=90)` - Capture screenshot of visible tab
   - If `filename` provided: saves screenshot to file and returns success message
   - If `filename` omitted: returns base64 encoded image data URL
@@ -251,62 +259,37 @@ window = await client.call_tool("create_window", {
 await client.call_tool("focus_window", {"window_id": 456})
 ```
 
-### Native tab groups
+### Tab groups
 
-`tabs_group(tab_ids, group_id=None, title=None, color=None)` groups existing tabs
-without requesting tab activation or window focus. For example:
+These are Firefox's own tab groups, and need Firefox 139 or later. None of the
+four tools activates a tab or focuses a window.
 
 ```python
 tabs_group(tab_ids=[12, 15], title="Research", color="blue")
-# Tabs grouped into group 3
-tabs_group(tab_ids=18, group_id=3)
+# Tabs grouped into group 1789744400280043
+tabs_group(tab_ids=18, group_id=1789744400280043)
+tabs_groups_query(window_id=1)
+# Tab groups (1 found):
+# - ID 1789744400280043: Research - blue [window 1]
 ```
 
-Omitting `group_id` creates a new group in the first tab's window, not the
-currently focused window. Omitted title/colour leave the browser
-defaults or existing properties unchanged; `title=""` clears a title. Colours are
-`blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red`, `yellow`.
-These four tools belong to the `tabs` tool group and honour its enable/disable
-settings. No tabs are automatically grouped, and existing tools retain their
-behaviour. Groups organise tabs in ordinary browser sessions: they do not create
-containers or change cookie isolation. Firefox enforces group/window and
-pinned-tab rules.
+Group IDs are large numbers, not small counters like tab IDs. `tabs_group` reports
+one only when it creates the group; `tabs_groups_query` finds any other.
 
-If grouping succeeds but styling a newly created group fails, the group is
-rolled back with `tabs.ungroup` rather than left half-styled — the error reports
-no group ID, because there is no longer a group to name. Adding tabs to an
-*existing* group is not rolled back on the same failure, since that group
-predates the call; the error names the group so the caller can retry the
-styling with `tab_groups_update` instead of regrouping the tabs. If the
-rollback itself fails, the error falls back to naming the group ID, since the
-state genuinely is partial at that point. Rollback removes the new group rather
-than restoring whatever came before it: a tab that belonged to another group
-when `tabs_group` was called is left in no group, not put back in its old one.
+Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` and
+`yellow`. Omitting `title` or `color` leaves it as it is, and `title=""` clears it.
 
-`tabs_ungroup(tab_ids)` removes tabs from whatever group they are in, leaving
-the tabs themselves untouched. A group left with no tabs is removed by Firefox
-automatically.
+Grouping and styling are two calls to Firefox. If the tabs are grouped but the title
+or colour cannot be set, `tabs_group` still reports the group, and says what failed:
 
-`tab_groups_update(group_id, title=None, color=None, collapsed=None)` changes a
-group's title, colour or collapsed state without adding or removing tabs — the
-counterpart to `tabs_group` for restyling a group that already exists. At least
-one of `title`, `color` or `collapsed` is required.
+```
+Tabs grouped into group 1789744400280043, but its title/colour could not be set:
+<reason>. Retry the styling with tabs_groups_update.
+```
 
-`tab_groups_query(window_id=None, title=None, color=None, collapsed=None)` lists
-tab groups and their IDs, optionally filtered by any of its arguments. Grouping
-tools return a group's ID only when they create it, so this is how a caller
-recovers the ID of a group it did not just create.
-
-Missing APIs are reported before any mutation. A browser API rejection is
-returned as an error. An older extension reports an unknown action.
-
-Requires Firefox **139+**, and matching server/extension versions containing
-this feature. The extension requests the `tabGroups` permission. Although
-[`tabs.group`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/group)
-and [`tabs.ungroup`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/ungroup)
-arrived in Firefox 138,
-[`tabGroups.update`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabGroups/update)
-and [`tabGroups.query`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabGroups/query)
-arrived in 139, so 139+ remains the stated requirement.
+What Firefox does on its own:
+- A pinned tab is unpinned before it is grouped.
+- Private and non-private tabs cannot share a group; the call fails.
+- A group whose last tab leaves it is deleted.
 
 For WebSocket protocol details, see [protocol.md](protocol.md).
