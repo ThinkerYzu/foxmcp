@@ -135,6 +135,79 @@ function pressKey(el, key) {
   }
 }
 
+// Overlay shown while an agent acts on the tab: a glowing border, a label and a
+// cursor that moves to each element before it is clicked or typed into. It is
+// purely visual (pointer-events: none) and fades once the agent goes quiet, so
+// the tab looks normal again when the person takes over.
+const OVERLAY_ID = 'foxmcp-agent-overlay';
+const OVERLAY_IDLE_MS = 6000;
+const CURSOR_MOVE_MS = 350;
+let overlayTimer = null;
+let cursorPos = null;
+
+function overlayRoot() {
+  let host = document.getElementById(OVERLAY_ID);
+  if (!host) {
+    host = document.createElement('div');
+    host.id = OVERLAY_ID;
+    host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;';
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        :host { transition: opacity .4s; }
+        .glow { position:fixed; inset:0; box-shadow: inset 0 0 0 2px rgba(217,119,87,.9), inset 0 0 22px rgba(217,119,87,.5); }
+        .label { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); display:flex; align-items:center; gap:8px;
+          padding:7px 14px; border-radius:999px; background:rgba(28,25,23,.92); color:#fff;
+          font:500 13px/1 system-ui, sans-serif; box-shadow:0 2px 10px rgba(0,0,0,.3); white-space:nowrap; }
+        .dot { width:8px; height:8px; border-radius:50%; background:rgb(217,119,87); }
+        .cursor { position:fixed; left:0; top:0; width:22px; height:22px; opacity:0; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+        .ripple { position:fixed; width:28px; height:28px; margin:-14px 0 0 -14px; border-radius:50%;
+          border:2px solid rgb(217,119,87); animation:ripple .45s ease-out forwards; }
+        @keyframes ripple { from { transform:scale(.3); opacity:1; } to { transform:scale(1.4); opacity:0; } }
+      </style>
+      <div class="glow"></div>
+      <div class="label"><span class="dot"></span>AI agent is working in this tab</div>
+      <svg class="cursor" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 1.5 L2 18 L6.6 13.9 L9.6 20.5 L12.5 19.2 L9.6 12.7 L15.8 12.7 Z" fill="rgb(217,119,87)" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>`;
+    document.documentElement.appendChild(host);
+  }
+  return host;
+}
+
+function showOverlay() {
+  const host = overlayRoot();
+  host.style.opacity = '1';
+  host.style.visibility = 'visible';
+  clearTimeout(overlayTimer);
+  overlayTimer = setTimeout(() => { host.style.opacity = '0'; }, OVERLAY_IDLE_MS);
+}
+
+async function moveCursorTo(el, press) {
+  el.scrollIntoView({ block: 'center', inline: 'center' });
+  const rect = el.getBoundingClientRect();
+  const to = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  const from = cursorPos || to;
+  cursorPos = to;
+  const root = overlayRoot().shadowRoot;
+  const cursor = root.querySelector('.cursor');
+  cursor.style.transition = 'none';
+  cursor.style.opacity = '1';
+  cursor.style.transform = `translate(${from.x}px, ${from.y}px)`;
+  cursor.getBoundingClientRect();
+  cursor.style.transition = `transform ${CURSOR_MOVE_MS}ms cubic-bezier(.3,.7,.4,1)`;
+  cursor.style.transform = `translate(${to.x}px, ${to.y}px)`;
+  await new Promise(resolve => setTimeout(resolve, CURSOR_MOVE_MS));
+  if (press) {
+    const ripple = document.createElement('div');
+    ripple.className = 'ripple';
+    ripple.style.left = to.x + 'px';
+    ripple.style.top = to.y + 'px';
+    root.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 500);
+  }
+}
+
 // Listen for messages from background script
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const { action, script, data } = request;
@@ -169,28 +242,49 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         break;
 
       case 'snapshot':
+        showOverlay();
         sendResponse({ snapshot: snapshot(data.maxElements || 300), url: location.href, title: document.title });
         break;
 
       case 'click': {
         const el = findTarget(data);
-        clickElement(el, data.doubleClick ? 2 : 1);
-        sendResponse({ clicked: describe(el) });
+        showOverlay();
+        moveCursorTo(el, true)
+          .then(() => {
+            clickElement(el, data.doubleClick ? 2 : 1);
+            sendResponse({ clicked: describe(el) });
+          })
+          .catch(error => sendResponse({ error: error.message }));
         break;
       }
 
       case 'type': {
         const el = findTarget(data);
-        typeInto(el, data.text, data.clear !== false);
-        if (data.submit) pressKey(el, 'Enter');
-        sendResponse({ typed: describe(el) });
+        showOverlay();
+        moveCursorTo(el, true)
+          .then(() => {
+            typeInto(el, data.text, data.clear !== false);
+            if (data.submit) pressKey(el, 'Enter');
+            sendResponse({ typed: describe(el) });
+          })
+          .catch(error => sendResponse({ error: error.message }));
         break;
       }
 
       case 'pressKey': {
         const el = data.ref || data.selector ? findTarget(data) : (document.activeElement || document.body);
+        showOverlay();
         pressKey(el, data.key);
         sendResponse({ pressed: data.key });
+        break;
+      }
+
+      // Hidden while a screenshot is taken, so the capture shows the page as
+      // it is rather than with the agent's border and cursor on top.
+      case 'overlayVisibility': {
+        const host = document.getElementById(OVERLAY_ID);
+        if (host) host.style.visibility = data.visible ? 'visible' : 'hidden';
+        sendResponse({ ok: true });
         break;
       }
 

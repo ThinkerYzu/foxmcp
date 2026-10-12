@@ -640,8 +640,19 @@ async function handleTabsAction(id, action, data) {
           quality: data.quality || 90
         };
 
+        // The agent overlay sits on top of the page in the tab being captured;
+        // hide it for the capture. Tabs without content.js simply have none.
+        const [shownTab] = await browser.tabs.query(
+          windowId ? { active: true, windowId } : { active: true, currentWindow: true });
+        const setOverlay = (visible) => shownTab
+          ? browser.tabs.sendMessage(shownTab.id, { action: 'overlayVisibility', data: { visible } })
+            .catch(() => {})
+          : Promise.resolve();
+
         try {
-          const dataUrl = await browser.tabs.captureVisibleTab(windowId, options);
+          await setOverlay(false);
+          const dataUrl = await browser.tabs.captureVisibleTab(windowId, options)
+            .finally(() => setOverlay(true));
           sendResponse(id, action, {
             dataUrl: dataUrl,
             format: options.format,
