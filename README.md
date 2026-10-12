@@ -185,7 +185,7 @@ Once connected, you can control Firefox through natural language:
 ### Copy a tab ID from Firefox
 
 Right-click a tab in Firefox's tab bar. The menu shows an item such as
-`当前标签tab_id = 33（点击复制）` ("Current tab_id = 33 (click to copy)").
+`Tab ID = 33 (click to copy)`.
 The number is the ID of the tab you right-clicked, including a background tab;
 you do not need to switch to it first.
 

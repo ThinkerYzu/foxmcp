@@ -376,12 +376,11 @@ function sendDebugLog(message, level = 'log') {
 
 // Display and copy the ID of the right-clicked tab, including background tabs.
 const TAB_ID_MENU_ID = 'foxmcp-copy-tab-id';
-let tabIdMenuInstance = 0;
 
 // Firefox does not persist menus for persistent background pages.
 browser.menus.create({
   id: TAB_ID_MENU_ID,
-  title: '当前标签tab_id（点击复制）',
+  title: 'Tab ID (click to copy)',
   contexts: ['tab'],
   enabled: false
 }, () => {
@@ -390,27 +389,20 @@ browser.menus.create({
   }
 });
 
-browser.menus.onShown.addListener(async (info, tab) => {
+browser.menus.onShown.addListener((info, tab) => {
   if (!info.menuIds.includes(TAB_ID_MENU_ID)) return;
 
-  const menuInstance = ++tabIdMenuInstance;
   const hasTabId = Number.isInteger(tab?.id) && tab.id >= 0;
-  try {
-    await browser.menus.update(TAB_ID_MENU_ID, {
-      title: hasTabId ? `当前标签tab_id = ${tab.id}（点击复制）` : '当前标签tab_id 不可用',
-      enabled: hasTabId
-    });
-    // A different menu may have opened while update() was pending.
-    if (menuInstance === tabIdMenuInstance) {
-      await browser.menus.refresh();
-    }
-  } catch (error) {
+  // Dispatch both calls without awaiting, so no menu-instance state is needed.
+  browser.menus.update(TAB_ID_MENU_ID, {
+    title: hasTabId ? `Tab ID = ${tab.id} (click to copy)` : 'Tab ID unavailable',
+    enabled: hasTabId
+  }).catch(error => {
     console.error('Failed to update tab ID menu:', error);
-  }
-});
-
-browser.menus.onHidden.addListener(() => {
-  ++tabIdMenuInstance;
+  });
+  browser.menus.refresh().catch(error => {
+    console.error('Failed to refresh tab ID menu:', error);
+  });
 });
 
 browser.menus.onClicked.addListener(async (info, tab) => {
