@@ -71,7 +71,7 @@ foxmcp/
 - **Purpose**: Extension configuration file for Firefox
 - **Key Features**:
   - Manifest V2 format for Firefox WebExtensions compatibility
-  - Permissions for tabs, windows, history, bookmarks, activeTab, storage, and all URLs
+  - Permissions for tabs, tab groups, the tab context menu, clipboard writes, windows, history, bookmarks, activeTab, storage, web requests, and all URLs
   - Persistent background script registration
   - Content script injection for all URLs
   - Browser action popup UI configuration
