@@ -105,18 +105,14 @@ let CONFIG = {
 };
 
 let retryAttempts = 0;
-// After this many attempts at retryInterval, retries slow to SLOW_RETRY_INTERVAL
-// rather than stopping. Under --stdio the server is down whenever the MCP client
-// is closed, and an extension that gave up would stay disconnected after the
-// client came back. One localhost connection attempt every 30s costs nothing.
+// After this many attempts at retryInterval, retries slow to SLOW_RETRY_INTERVAL.
+// Under --stdio the server is down whenever the MCP client is closed, so the
+// extension keeps dialing until the client starts a new one.
 const FAST_RETRIES = 50;
 const SLOW_RETRY_INTERVAL = 30000;
 
 function connectToMCPServer() {
   try {
-    console.log('🔍 CONNECT ATTEMPT - Stack trace:');
-    console.trace();
-
     // IMPORTANT: Only one WebSocket connection is allowed at a time
     // Disconnect any existing connection first to prevent multiple connections
     if (websocket && websocket.readyState !== WebSocket.CLOSED) {
@@ -127,7 +123,6 @@ function connectToMCPServer() {
     // Compute WebSocket URL dynamically using current config
     const WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
     console.log(`🔗 Connecting to ${WS_URL} (attempt ${retryAttempts + 1})`);
-    console.log(`🔧 Using CONFIG:`, JSON.stringify(CONFIG, null, 2));
 
     const socket = new WebSocket(WS_URL);
     websocket = socket;
