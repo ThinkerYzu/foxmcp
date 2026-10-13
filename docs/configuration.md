@@ -121,7 +121,7 @@ returns `No extension connection available` immediately rather than waiting for
 the browser. Run it again.
 
 **The extension slows down without a server, but does not give up.** It retries
-every Retry Interval for 50 attempts, about four minutes at the default five
+every Retry Interval for 50 attempts, at least four minutes at the default five
 seconds, and then every 30 seconds for as long as the server stays away. Leaving
 Firefox open and your editor closed is the normal case, so a server that comes
 back is picked up on the next attempt:
@@ -129,7 +129,7 @@ back is picked up on the next attempt:
 ```
 12:00  editor exits, server dies
 12:00  extension starts retrying, every 5s
-12:04  50 attempts spent, extension retries every 30s
+12:05  50 attempts spent, extension retries every 30s
 13:00  editor starts, server comes back
 13:00  extension connects on its next attempt, within 30s
 ```
