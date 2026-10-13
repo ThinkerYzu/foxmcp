@@ -683,8 +683,19 @@ async function handleTabsAction(id, action, data) {
           quality: data.quality || 90
         };
 
+        // The agent overlay sits on top of the page in the tab being captured;
+        // hide it for the capture. Tabs without content.js simply have none.
+        const [shownTab] = await browser.tabs.query(
+          windowId ? { active: true, windowId } : { active: true, currentWindow: true });
+        const setOverlay = (visible) => shownTab
+          ? browser.tabs.sendMessage(shownTab.id, { action: 'overlayVisibility', data: { visible } })
+            .catch(() => {})
+          : Promise.resolve();
+
         try {
-          const dataUrl = await browser.tabs.captureVisibleTab(windowId, options);
+          await setOverlay(false);
+          const dataUrl = await browser.tabs.captureVisibleTab(windowId, options)
+            .finally(() => setOverlay(true));
           sendResponse(id, action, {
             dataUrl: dataUrl,
             format: options.format,
@@ -786,6 +797,16 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 20
       const result = await browser.tabs.sendMessage(tabId, message);
       return result;
     } catch (error) {
+      // Tabs that finished loading before the extension started (or was
+      // reloaded) never got content.js, and no amount of waiting fixes that.
+      if (attempt < maxRetries && error.message.includes('Receiving end does not exist')) {
+        try {
+          await browser.tabs.executeScript(tabId, { file: '/content.js' });
+          continue;
+        } catch (injectError) {
+          // Fall through to the retry delay; the tab may still be loading.
+        }
+      }
       if (attempt === maxRetries) {
         throw new Error(`Content script not available after ${maxRetries} attempts: ${error.message}`);
       }
@@ -829,6 +850,21 @@ async function handleContentAction(id, action, data) {
           sendError(id, 'SCRIPT_ERROR', `Script execution failed: ${scriptError.message}`);
         }
         break;
+
+      case 'content.snapshot':
+      case 'content.click':
+      case 'content.type':
+      case 'content.press_key': {
+        const pageAction = { 'content.snapshot': 'snapshot', 'content.click': 'click',
+          'content.type': 'type', 'content.press_key': 'pressKey' }[action];
+        const pageResult = await sendMessageWithRetry(data.tabId, { action: pageAction, data });
+        if (pageResult && pageResult.error) {
+          sendError(id, 'PAGE_ERROR', pageResult.error);
+        } else {
+          sendResponse(id, action, pageResult);
+        }
+        break;
+      }
 
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown content action: ${action}`);
