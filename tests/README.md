@@ -176,15 +176,16 @@ names = [tool.name for tool in await mcp_tools.mcp.list_tools()]
 ## Port Isolation
 
 Tests must never touch the live server on 8765/3000. `auto_dynamic_ports` rewrites
-every `FoxMCPServer` construction to use the high test ports from
-`port_coordinator.py`:
+every `FoxMCPServer` construction to use the test ports from
+`port_coordinator.py`, which sit below Linux's ephemeral range (32768-60999)
+so a client dialing one can never be given it as its own local port:
 
 | Purpose | Port |
 |---|---|
-| Test WebSocket server | 40400 |
-| Test MCP server | 40600 |
-| Reserved (`websocket`) | 40000 |
-| Reserved (`mcp`) | 40200 |
+| Test WebSocket server | 30400 |
+| Test MCP server | 30600 |
+| Reserved (`websocket`) | 30000 |
+| Reserved (`mcp`) | 30200 |
 
 The extension's build-time fallback port also changes from 8765 to 48765, so an
 extension in a test profile cannot reach a development server even if its stored

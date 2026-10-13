@@ -21,10 +21,10 @@ Main API:
   with a coordination file, for Firefox extension tests
 
 Port Types:
-- 'websocket': Main websocket server port (40000)
-- 'mcp': Main MCP server port (40200)
-- 'test_individual': Individual test websocket port (40400)
-- 'test_mcp_individual': Individual test MCP port (40600)
+- 'websocket': Main websocket server port (30000)
+- 'mcp': Main MCP server port (30200)
+- 'test_individual': Individual test websocket port (30400)
+- 'test_mcp_individual': Individual test MCP port (30600)
 """
 
 import tempfile
@@ -34,13 +34,19 @@ import time
 from contextlib import contextmanager
 from typing import Tuple, Dict, Optional
 
-# The port assigned to each server role, kept high to stay clear of the live
-# server and of anything else likely to be listening on a developer's machine.
+# The port assigned to each server role, kept below Linux's ephemeral range.
+#
+# Linux picks the local port of an outgoing connection from 32768-60999 by
+# default. A test port inside that range can be handed to a client dialing it
+# while no server listens - the extension retries every second between tests -
+# and the socket then connects to itself. Once closed it holds the port in
+# TIME_WAIT for 60 seconds, which SO_REUSEADDR does not get past, so every
+# server started in that window fails to bind.
 FIXED_PORTS = {
-    'websocket': 40000,
-    'mcp': 40200,
-    'test_individual': 40400,
-    'test_mcp_individual': 40600
+    'websocket': 30000,
+    'mcp': 30200,
+    'test_individual': 30400,
+    'test_mcp_individual': 30600
 }
 
 
