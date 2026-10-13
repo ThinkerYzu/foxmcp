@@ -66,7 +66,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 39 MCP tool definitions
+│   └── mcp_tools.py # The 40 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment

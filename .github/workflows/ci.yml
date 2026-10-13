@@ -133,7 +133,7 @@ jobs:
           import asyncio
           from fastmcp import Client
 
-          EXPECTED = 39
+          EXPECTED = 40
 
           async def main():
               async with Client("http://localhost:13000/mcp/") as client:
@@ -178,7 +178,7 @@ jobs:
           from fastmcp import Client
           from fastmcp.client.transports import PythonStdioTransport
 
-          EXPECTED = 39
+          EXPECTED = 40
 
           async def main():
               transport = PythonStdioTransport(

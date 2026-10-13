@@ -719,3 +719,85 @@ class TestBookmarkManagementEndToEnd:
         print("✅ Correctly handled missing parameters")
 
         print("✅ All bookmark update tests passed")
+
+    @pytest.mark.asyncio
+    async def test_bookmark_move(self, full_bookmark_system):
+        """A move into another folder and a reorder within one, checked against bookmarks_list"""
+        mcp_client = full_bookmark_system['mcp_client']
+        await mcp_client.connect()
+
+        source_id = created_id(await mcp_client.call_tool(
+            "bookmarks_create_folder", {"title": "Move source"}))
+        target_id = created_id(await mcp_client.call_tool(
+            "bookmarks_create_folder", {"title": "Move target"}))
+        ids = []
+        for n in range(3):
+            ids.append(created_id(await mcp_client.call_tool("bookmarks_create", {
+                "title": f"Item {n}", "url": f"https://example.org/item{n}",
+                "parent_id": source_id})))
+
+        # Into another folder, at the end of it
+        result = await mcp_client.call_tool(
+            "bookmarks_move", {"bookmark_id": ids[0], "parent_id": target_id})
+        assert result.get('content') == f"Moved Item 0 (ID: {ids[0]}) to folder {target_id} at index 0", result
+
+        # Within one folder: index is the final position, so moving index 0 to
+        # index 1 swaps the two remaining items
+        result = await mcp_client.call_tool("bookmarks_move", {"bookmark_id": ids[1], "index": 1})
+        assert f"to folder {source_id} at index 1" in result.get('content', ''), result
+
+        listing = (await mcp_client.call_tool(
+            "bookmarks_list", {"folder_id": source_id})).get('content', '')
+        assert f"(ID: {ids[2]}, Parent: {source_id}, Index: 0)" in listing, listing
+        assert f"(ID: {ids[1]}, Parent: {source_id}, Index: 1)" in listing, listing
+        assert ids[0] not in listing, listing
+
+        # index 0 is the first place, not "no index": it must not land at the end
+        result = await mcp_client.call_tool("bookmarks_move", {"bookmark_id": ids[1], "index": 0})
+        assert f"to folder {source_id} at index 0" in result.get('content', ''), result
+
+    @pytest.mark.asyncio
+    async def test_bookmark_move_refusals(self, full_bookmark_system):
+        """A folder into its own subfolder, and an item under a parent that is not a folder
+
+        Firefox accepts a plain bookmark as a parent for create, create_folder and move,
+        and nothing lists the item afterwards, so the extension refuses all three.
+        """
+        mcp_client = full_bookmark_system['mcp_client']
+        await mcp_client.connect()
+
+        outer_id = created_id(await mcp_client.call_tool(
+            "bookmarks_create_folder", {"title": "Outer"}))
+        inner_id = created_id(await mcp_client.call_tool(
+            "bookmarks_create_folder", {"title": "Inner", "parent_id": outer_id}))
+        result = await mcp_client.call_tool(
+            "bookmarks_move", {"bookmark_id": outer_id, "parent_id": inner_id})
+        assert "itself or one of its descendants" in result.get('content', ''), result
+
+        link_id = created_id(await mcp_client.call_tool("bookmarks_create", {
+            "title": "Plain link", "url": "https://example.org/link"}))
+        item_id = created_id(await mcp_client.call_tool("bookmarks_create", {
+            "title": "To move", "url": "https://example.org/move"}))
+        not_a_folder = f"Parent {link_id} is a bookmark, not a folder"
+
+        result = await mcp_client.call_tool(
+            "bookmarks_move", {"bookmark_id": item_id, "parent_id": link_id})
+        assert result.get('content') == f"Failed to move bookmark: {not_a_folder}", result
+        result = await mcp_client.call_tool("bookmarks_create", {
+            "title": "Under link", "url": "https://example.org/c", "parent_id": link_id})
+        assert result.get('content') == f"Failed to create bookmark: {not_a_folder}", result
+        result = await mcp_client.call_tool(
+            "bookmarks_create_folder", {"title": "Folder under link", "parent_id": link_id})
+        assert result.get('content') == f"Failed to create folder: {not_a_folder}", result
+
+        # The refused move left the item where it was
+        listing = (await mcp_client.call_tool("bookmarks_list", {})).get('content', '')
+        assert f"(ID: {item_id}, Parent: unfiled_____," in listing, listing
+
+
+def created_id(result):
+    """The ID in a bookmarks_create or bookmarks_create_folder reply, "... (ID: <id>)" """
+    content = result.get('content', '')
+    match = re.search(r"\(ID: ([^)]+)\)$", content)
+    assert match, f"No ID in: {result}"
+    return match.group(1)

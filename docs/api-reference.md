@@ -47,13 +47,17 @@ and what each group costs.
 ### Bookmark Management
 - `bookmarks_list(folder_id=None)` - List bookmarks from all folders or a specific folder
   - Returns formatted text with folder (📁) and bookmark (🔖) entries
-  - Each item includes unique ID and parent folder ID for navigation
-  - When `folder_id` is provided, returns only direct children of that folder
+  - Each item includes unique ID, parent folder ID, and index (position within the parent, from 0)
+  - When `folder_id` is provided, returns only direct children of that folder, in order
 - `bookmarks_search(query)` - Search bookmarks by title or URL
   - Returns formatted text with matching bookmark entries including ID and parent folder ID
 - `bookmarks_create(title, url, parent_id=None)` - Create bookmark
 - `bookmarks_create_folder(title, parent_id=None)` - Create bookmark folder
 - `bookmarks_update(bookmark_id, title=None, url=None)` - Update bookmark or folder title/URL
+- `bookmarks_move(bookmark_id, parent_id=None, index=None)` - Move a bookmark or folder into another folder, or to another position
+  - Needs at least one of `parent_id` and `index`; the bookmark keeps its ID
+  - `index` is the final position, counting from 0; omitted, the item goes to the end of the folder
+- For `bookmarks_create`, `bookmarks_create_folder` and `bookmarks_move`, `parent_id` must be a folder; a bookmark or separator ID is refused
 - `bookmarks_delete(bookmark_id)` - Delete bookmark
 
 ### Navigation Control
@@ -226,6 +230,13 @@ await client.call_tool("bookmarks_update", {
 await client.call_tool("bookmarks_update", {
     "bookmark_id": "folder_id_here",
     "title": "Renamed Folder"
+})
+
+# Move a bookmark to the top of another folder
+await client.call_tool("bookmarks_move", {
+    "bookmark_id": "bookmark_id_here",
+    "parent_id": "folder_id_here",
+    "index": 0
 })
 ```
 

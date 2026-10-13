@@ -1422,9 +1422,13 @@ class FoxMCPTools:
         async def bookmarks_list(folder_id: Optional[str] = None) -> str:
             """List browser bookmarks
 
-            Folders are marked 📁 and bookmarks 🔖. Every line carries its own ID and its
-            parent folder's ID — those IDs are what bookmarks_update, bookmarks_delete and
+            Folders are marked 📁 and bookmarks 🔖. Every line carries its own ID, its
+            parent folder's ID and its index, its position within that folder counting
+            from 0. The IDs are what bookmarks_update, bookmarks_delete, bookmarks_move and
             the parent_id of bookmarks_create take, so this listing is how you find them.
+            With folder_id, the lines are that folder's direct children in order. Without
+            it, the whole tree is listed and a folder's children are interleaved with
+            everything nested under them, so read positions from Index, not line order.
             An empty folder returns "No bookmarks found".
 
             Args:
@@ -1433,8 +1437,8 @@ class FoxMCPTools:
             Returns:
                 Formatted string with bookmark information:
                 "Bookmarks:
-                📁 {folder_title} (ID: {folder_id}, Parent: {parent_id})
-                🔖 {bookmark_title} - {bookmark_url} (ID: {bookmark_id}, Parent: {parent_id})"
+                📁 {folder_title} (ID: {folder_id}, Parent: {parent_id}, Index: {index})
+                🔖 {bookmark_title} - {bookmark_url} (ID: {bookmark_id}, Parent: {parent_id}, Index: {index})"
 
                 Not exposed to clients — see the description above.
             """
@@ -1462,6 +1466,10 @@ class FoxMCPTools:
                 result = "Bookmarks:\n"
                 for bookmark in bookmarks:
                     parent_info = f", Parent: {bookmark.get('parentId', 'None')}"
+                    # The root has no parent and so no index; leave the field out
+                    # rather than print "Index: None"
+                    if bookmark.get("index") is not None:
+                        parent_info += f", Index: {bookmark['index']}"
                     if bookmark.get("isFolder", False):
                         result += f"📁 {bookmark.get('title', 'Untitled Folder')} (ID: {bookmark.get('id')}{parent_info})\n"
                     else:
@@ -1534,7 +1542,8 @@ class FoxMCPTools:
             Args:
                 title: Title of the bookmark
                 url: URL of the bookmark
-                parent_id: Optional parent folder ID
+                parent_id: Optional ID of the folder to create it in. It must be a
+                    folder; a bookmark or separator ID is refused.
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -1572,7 +1581,8 @@ class FoxMCPTools:
 
             Args:
                 title: Title of the folder
-                parent_id: Optional parent folder ID
+                parent_id: Optional ID of the folder to create it in. It must be a
+                    folder; a bookmark or separator ID is refused.
             """
             request = {
                 "id": str(uuid.uuid4()),
@@ -1641,6 +1651,70 @@ class FoxMCPTools:
                 return f"Failed to update bookmark: {error_msg}"
 
             return f"Unable to update bookmark: {bookmark_id}"
+
+        # Move Bookmark Tool
+        @self._tool()
+        async def bookmarks_move(
+            bookmark_id: str,
+            parent_id: Optional[str] = None,
+            index: Optional[int] = None
+        ) -> str:
+            """Move a bookmark or folder into another folder, or to another position
+
+            The bookmark keeps its ID, unlike deleting and recreating it. A folder moves
+            with everything in it. Give at least one of parent_id and index. Use
+            bookmarks_list to find IDs and the current index of each entry.
+
+            Firefox refuses to move the hidden bookmark root, or a folder into itself or
+            one of its own subfolders.
+
+            Args:
+                bookmark_id: ID of the bookmark or folder to move.
+                parent_id: Folder to move it into. It must be a folder; a bookmark or
+                    separator ID is refused. Omit it to reorder within the current folder.
+                index: Position in the destination folder, counting from 0. It is the
+                    final position: in the same folder, moving index 0 to index 2 leaves
+                    it third. An index past the end means the last place. Omit it to put
+                    the item at the end of parent_id.
+
+            Returns:
+                "Moved {title} (ID: {id}) to folder {parent_id} at index {index}", read
+                from Firefox's reply, so the index is where it actually landed. Not
+                exposed to clients — see the description above.
+            """
+            if parent_id is None and index is None:
+                return "Error: At least one of parent_id or index must be provided"
+            if index is not None and index < 0:
+                return f"Error: Invalid index {index}. Must be 0 or greater."
+
+            # Both are tested against None, not truthiness: index 0 is the first
+            # place, and dropping it would move the item to the end instead
+            request = {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "bookmarks.move",
+                "data": {
+                    "bookmarkId": bookmark_id,
+                    **({"parentId": parent_id} if parent_id is not None else {}),
+                    **({"index": index} if index is not None else {})
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response = await self.websocket_server.send_request_and_wait(request)
+
+            if "error" in response:
+                return f"Error moving bookmark: {response['error']}"
+
+            if response.get("type") == "response" and "data" in response:
+                bookmark = response["data"].get("bookmark", {})
+                return (f"Moved {bookmark.get('title', '')} (ID: {bookmark.get('id')}) "
+                        f"to folder {bookmark.get('parentId')} at index {bookmark.get('index')}")
+            elif response.get("type") == "error":
+                error_msg = response.get("data", {}).get("message", "Unknown error")
+                return f"Failed to move bookmark: {error_msg}"
+
+            return f"Unable to move bookmark: {bookmark_id}"
 
         # Delete Bookmark Tool
         @self._tool()

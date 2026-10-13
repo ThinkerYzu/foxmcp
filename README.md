@@ -261,7 +261,7 @@ python server/server.py --disable-tools bookmarks,history
 python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
 ```
 
-All 39 tools are offered by default, costing an MCP client roughly 5,850 tokens of
+All 40 tools are offered by default, costing an MCP client roughly 6,350 tokens of
 context. `--disable-tools` leaves a group unregistered: `windows`, `tabs`,
 `bookmarks`, `navigation`, `content`, `requests`, `history`, `debug`.
 `--enable-tools` names individual tools to register anyway, for when one tool out

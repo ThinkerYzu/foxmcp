@@ -866,8 +866,33 @@ async function handleNavigationAction(id, action, data) {
 }
 
 // Bookmarks handlers
+
+// Why a bookmark cannot go under parentId, or null when it can.
+//
+// Firefox only checks that a new parent exists, so it accepts a plain
+// bookmark or a separator as one. The item it puts there is listed nowhere
+// afterwards: getTree leaves it out and getChildren on the parent returns
+// nothing, while the caller is told it worked. An unknown ID makes
+// bookmarks.get throw, which reaches the caller as an API_ERROR.
+async function nonFolderParentReason(parentId) {
+  const [parent] = await browser.bookmarks.get(parentId);
+  if (parent.type !== 'folder') {
+    return `Parent ${parentId} is a ${parent.type}, not a folder`;
+  }
+  return null;
+}
+
 async function handleBookmarksAction(id, action, data) {
   try {
+    if (['bookmarks.create', 'bookmarks.createFolder', 'bookmarks.move'].includes(action)
+        && data && data.parentId !== undefined) {
+      const reason = await nonFolderParentReason(data.parentId);
+      if (reason) {
+        sendError(id, 'INVALID_PARAMETER', reason);
+        return;
+      }
+    }
+
     switch (action) {
       case 'bookmarks.list':
         let bookmarks;
@@ -882,7 +907,8 @@ async function handleBookmarksAction(id, action, data) {
               title: node.title,
               url: node.url,
               isFolder: !node.url,
-              parentId: node.parentId
+              parentId: node.parentId,
+              index: node.index
             }));
           } catch (folderError) {
             // Handle invalid folder ID
@@ -902,7 +928,8 @@ async function handleBookmarksAction(id, action, data) {
                 title: node.title,
                 url: node.url,
                 isFolder: !node.url,
-                parentId: node.parentId
+                parentId: node.parentId,
+                index: node.index
               });
               // Recursively add children
               if (node.children) {
@@ -951,6 +978,19 @@ async function handleBookmarksAction(id, action, data) {
         const updatedBookmark = await browser.bookmarks.update(data.bookmarkId, updateData);
         sendResponse(id, action, { bookmark: updatedBookmark });
         break;
+
+      case 'bookmarks.move': {
+        const destination = {};
+        if (data.parentId !== undefined) {
+          destination.parentId = data.parentId;
+        }
+        if (data.index !== undefined) {
+          destination.index = data.index;
+        }
+        const movedBookmark = await browser.bookmarks.move(data.bookmarkId, destination);
+        sendResponse(id, action, { bookmark: movedBookmark });
+        break;
+      }
 
       case 'bookmarks.delete':
         await browser.bookmarks.remove(data.bookmarkId);

@@ -854,19 +854,24 @@ new one keeps it.
         "parentId": "1",
         "title": "GitHub",
         "url": "https://github.com",
-        "isFolder": false
+        "isFolder": false,
+        "index": 0
       },
       {
         "id": "bm_002", 
         "parentId": "1",
         "title": "Development",
-        "isFolder": true
+        "isFolder": true,
+        "index": 1
       }
     ]
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
+
+`index` is the entry's position within its parent, counting from 0. The root
+entry of a full listing has neither `parentId` nor `index`.
 
 #### Search Bookmarks
 **Request:**
@@ -989,6 +994,52 @@ new one keeps it.
 ```
 
 **Note:** For folders, omit the `url` parameter. Either `title` or `url` (or both) must be provided.
+
+#### Move Bookmark or Folder
+**Request:**
+```json
+{
+  "id": "req_017c",
+  "type": "request",
+  "action": "bookmarks.move",
+  "data": {
+    "bookmarkId": "bm_003",
+    "parentId": "bm_002",
+    "index": 0
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_017c",
+  "type": "response",
+  "action": "bookmarks.move",
+  "data": {
+    "bookmark": {
+      "id": "bm_003",
+      "parentId": "bm_002",
+      "index": 0,
+      "title": "Updated Title",
+      "url": "https://updated-site.com",
+      "type": "bookmark"
+    }
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+**Note:** `parentId` and `index` are each optional; the server sends at least one.
+Without `parentId` the item stays in its folder; without `index` it goes to the end
+of the destination. `index` is the final position, and one past the end is clamped
+to the last place, so the reply's `index` is where the item landed.
+
+**Parent must be a folder.** `bookmarks.create`, `bookmarks.createFolder` and
+`bookmarks.move` answer `INVALID_PARAMETER` ("Parent bm_001 is a bookmark, not a
+folder") when `parentId` names a bookmark or a separator. Firefox accepts such a
+parent and the item is then listed nowhere, so the extension checks first.
 
 #### Delete Bookmark
 **Request:**
