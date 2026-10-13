@@ -105,7 +105,12 @@ let CONFIG = {
 };
 
 let retryAttempts = 0;
-const MAX_ABSOLUTE_RETRIES = 50; // Absolute maximum to prevent infinite loops
+// After this many attempts at retryInterval, retries slow to SLOW_RETRY_INTERVAL
+// rather than stopping. Under --stdio the server is down whenever the MCP client
+// is closed, and an extension that gave up would stay disconnected after the
+// client came back. One localhost connection attempt every 30s costs nothing.
+const FAST_RETRIES = 50;
+const SLOW_RETRY_INTERVAL = 30000;
 
 function connectToMCPServer() {
   try {
@@ -189,14 +194,11 @@ function scheduleReconnect() {
     return;
   }
 
-  // Check absolute max retries to prevent infinite loops
-  if (retryAttempts > MAX_ABSOLUTE_RETRIES) {
-    console.error(`Absolute max retry attempts (${MAX_ABSOLUTE_RETRIES}) exceeded. Stopping reconnection attempts.`);
-    return;
-  }
-
-  console.log(`Scheduling reconnection attempt ${retryAttempts} in ${CONFIG.retryInterval}ms`);
-  setTimeout(connectToMCPServer, CONFIG.retryInterval);
+  const delay = retryAttempts > FAST_RETRIES
+    ? Math.max(CONFIG.retryInterval, SLOW_RETRY_INTERVAL)
+    : CONFIG.retryInterval;
+  console.log(`Scheduling reconnection attempt ${retryAttempts} in ${delay}ms`);
+  setTimeout(connectToMCPServer, delay);
 }
 
 // Function to update configuration (can be called from popup or other scripts)
