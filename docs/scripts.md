@@ -200,29 +200,63 @@ The completion line names the **URL**, not just the tab id, because the tab may 
 
 1. **Error Handling**: Always include error handling in your scripts
 2. **Validation**: Validate input arguments before using them
-3. **Documentation**: Add comments explaining what your script does
+3. **Documentation**: Give every script a `foxmcp-description` line; see [Telling AI Tools What a Script Does](#telling-ai-tools-what-a-script-does)
 4. **Testing**: Test scripts independently before using with FoxMCP
 5. **Security**: Never accept untrusted input or execute dangerous commands
 
-## Documenting Scripts for AI Tools
+## Telling AI Tools What a Script Does
 
-**Important**: When you create new predefined scripts, document them in your project's `CLAUDE.md` file so AI tools can discover and use them effectively.
+`content_execute_predefined`'s description lists every script it can run, so an
+MCP client knows the names and what each one is for without being told
+anywhere else. Two lines in a script's header control its entry:
 
-**Add to your CLAUDE.md**:
-```markdown
-## Foxmcp Predefined External Scripts
-- script_name.sh: Brief description of what the script does
-  Usage: script_name.sh "arg1" "arg2"
-  Example: script_name.sh "Get page title"
-- another_script.sh: Another script description
-  Usage: another_script.sh [optional_arg]
+```bash
+#!/bin/bash
+# foxmcp-description: In a YouTube tab, play, pause or toggle the video and report its state
+# foxmcp-args: [play|pause|toggle]
 ```
 
-**Benefits**:
-- AI tools automatically discover your custom scripts
-- Enables natural language usage ("extract the page title" → calls your script)
-- Provides usage examples for correct parameter formatting
-- Maintains documentation alongside your codebase
+which the client sees as:
+
+```
+Available scripts:
+- youtube-play-pause.sh [play|pause|toggle]: In a YouTube tab, play, pause or toggle the video and report its state
+```
+
+- Both lines must be in the first 30 lines. Any comment syntax works (`#`, `//`,
+  `--`), since the server looks for the text `foxmcp-description:` itself.
+- `foxmcp-args` is optional. Leave it out for a script that takes no arguments.
+- Each value is cut at 200 characters.
+
+**Without the marker**, the first line of the script's opening comment block is
+used instead, skipping the shebang, blank comments, editor settings and lines
+starting with `Copyright`, `SPDX-`, `Usage:`, `Example:` or `Arguments:`. That
+line is often just a title ("DOM Summarization Script"), so add the marker to
+any script an agent should pick correctly. A script with no usable comment at
+all is listed by name only, on an `Also available, without a description` line.
+
+**Only scripts the tool would run are listed:** executable regular files directly
+in the directory, named with letters, digits, `.`, `_` and `-`, not starting with
+a dot.
+
+**The list is read when the server starts.** A script you add later runs at once
+but is listed only after a restart. Under `--stdio` that happens whenever your
+MCP client starts the server.
+
+**Print usage on bad arguments.** When a script exits non-zero, the error the
+client gets carries its stdout and stderr (each cut at 2,000 characters), so a
+usage message tells an agent that guessed wrong how to call the script:
+
+```
+Error: Script 'gcal-cal-event-js.sh' failed with exit code 1.
+stdout: Usage: /path/to/your/scripts/gcal-cal-event-js.sh "Event Title" day time
+```
+
+The script name in it is the full path, because the server runs the script by
+its absolute path.
+
+Each listed script costs roughly 35 tokens of every client's context. A large
+directory of scripts an agent never needs is worth splitting out.
 
 ## Example Script Collection
 

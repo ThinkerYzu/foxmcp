@@ -1,4 +1,6 @@
 #!/bin/bash
+# foxmcp-description: List the page's visible interactive elements as an indented tree, tagging each with a persistent dsid attribute to select it by later
+# foxmcp-args: [onscreen [withpos]]
 # DOM Summarization Script
 # Extracts visible interactive elements (input, textarea, select, button, a, option) from the current page
 # Assigns persistent dsid attributes to each element for future reference

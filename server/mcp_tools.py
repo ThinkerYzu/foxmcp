@@ -11,6 +11,7 @@ import asyncio
 import logging
 import uuid
 import os
+import re
 import subprocess
 import time
 import json
@@ -51,6 +52,160 @@ def format_script_args_for_log(args_list):
         else:
             rendered.append(repr(arg))
     return ", ".join(rendered)
+
+
+# Names content_execute_predefined will run; anything else is refused.
+SCRIPT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
+
+# How many lines from the top of a script read_script_header looks at.
+#
+# A script's description sits in its header, and a generated script can run to
+# tens of kilobytes, so reading the whole file would slow startup for nothing.
+SCRIPT_HEADER_LINES = 30
+
+# Longest a script's description or argument summary may be in the tool listing.
+MAX_SCRIPT_DESCRIPTION_LENGTH = 200
+
+# Longest each output stream of a failed script may be in the error it returns.
+MAX_FAILED_OUTPUT_LENGTH = 2000
+
+# Comment lines that never make a description when a script has no marker.
+#
+# They say how to call the script, or carry editor and licence boilerplate,
+# rather than what the script does. Matched case-insensitively at the start.
+NON_DESCRIPTION_PREFIXES = ('copyright', 'spdx-', 'usage:', 'example:', 'arguments:', 'vim:')
+
+
+def shorten(text, limit):
+    """text cut to limit characters, with '...' marking a cut"""
+    return text if len(text) <= limit else text[:limit] + '...'
+
+
+def comment_text(line):
+    """The text of a comment line with its #, // or -- prefix removed, or None
+
+    Returns None for a line that is not a comment at all, which is how
+    read_script_header knows the header has ended.
+    """
+    stripped = line.strip()
+    for prefix in ('#', '//', '--'):
+        if stripped.startswith(prefix):
+            return stripped.lstrip(prefix[0]).strip()
+    return None
+
+
+def read_script_header(path):
+    """What a predefined script says about itself: (description, args)
+
+    Either may be None. The description comes from a 'foxmcp-description:' line
+    and the args from 'foxmcp-args:', found anywhere in the first
+    SCRIPT_HEADER_LINES lines whatever the comment syntax. With no description
+    marker, the first comment line that describes the script stands in for it;
+    args have no stand-in, since a guessed argument list misleads more than a
+    missing one. Returns (None, None) for a file that cannot be read.
+
+    The fallback reads only the opening comment block - the shebang, blank lines
+    and comments - and skips boilerplate such as Usage: and Copyright lines, so
+    a comment inside the code never becomes a description.
+    """
+    try:
+        with open(path, encoding='utf-8', errors='replace') as script:
+            lines = [line for _, line in zip(range(SCRIPT_HEADER_LINES), script)]
+    except OSError:
+        return None, None
+
+    description = args = fallback = None
+    in_opening_comments = True
+    for index, line in enumerate(lines):
+        if 'foxmcp-description:' in line and description is None:
+            description = line.split('foxmcp-description:', 1)[1].strip() or None
+        elif 'foxmcp-args:' in line and args is None:
+            args = line.split('foxmcp-args:', 1)[1].strip() or None
+        elif in_opening_comments and fallback is None:
+            if (index == 0 and line.startswith('#!')) or not line.strip():
+                continue
+            text = comment_text(line)
+            if text is None:
+                in_opening_comments = False
+            elif text and '-*-' not in text and not text.lower().startswith(NON_DESCRIPTION_PREFIXES):
+                fallback = text
+
+    description = description or fallback
+    if description:
+        description = shorten(description, MAX_SCRIPT_DESCRIPTION_LENGTH)
+    if args:
+        args = shorten(args, MAX_SCRIPT_DESCRIPTION_LENGTH)
+    return description, args
+
+
+def describe_predefined_scripts(scripts_dir):
+    """The script listing appended to content_execute_predefined's description
+
+    scripts_dir is FOXMCP_EXT_SCRIPTS, or None when it is unset. Lists the files
+    the tool would run - executable regular files directly in the directory with
+    an allowed name - except dot files, one line each from read_script_header.
+    Scripts with nothing to say for themselves share one line of names. When
+    there is nothing to list, says why, so an agent does not spend a call to
+    find out.
+
+    Read once, when the tool is registered: a script added later runs at once
+    but is listed only after the server restarts.
+    """
+    if not scripts_dir:
+        return "No scripts are available: FOXMCP_EXT_SCRIPTS is not set."
+
+    scripts_dir = os.path.abspath(scripts_dir)
+    try:
+        names = sorted(os.listdir(scripts_dir))
+    except OSError as e:
+        logger.warning(f"Cannot list predefined scripts in {scripts_dir!r}: {e}")
+        return "No scripts are available: the scripts directory cannot be read."
+
+    described = []
+    undescribed = []
+    for name in names:
+        path = os.path.join(scripts_dir, name)
+        if (name.startswith('.') or not SCRIPT_NAME_PATTERN.match(name)
+                or not os.path.isfile(path) or not os.access(path, os.X_OK)):
+            continue
+        description, args = read_script_header(path)
+        if not description and not args:
+            undescribed.append(name)
+            continue
+        line = f"- {name} {args}" if args else f"- {name}"
+        described.append(f"{line}: {description}" if description else line)
+
+    if not described and not undescribed:
+        logger.info(f"No runnable predefined scripts in {scripts_dir}")
+        return "No scripts are available: the scripts directory has none that can run."
+
+    lines = ["Available scripts:"] + described
+    if undescribed:
+        label = "Also available, without a description" if described else "Without a description"
+        lines.append(f"{label}: {', '.join(undescribed)}")
+    listing = "\n".join(lines)
+
+    logger.info(
+        f"Listing {len(described) + len(undescribed)} predefined scripts from {scripts_dir} "
+        f"({len(undescribed)} without a description) in {len(listing)} characters"
+    )
+    return listing
+
+
+def format_failed_script_reply(script_name, returncode, stdout, stderr):
+    """The error content_execute_predefined returns when a script exits non-zero
+
+    Carries both output streams, each cut to MAX_FAILED_OUTPUT_LENGTH, and leaves
+    out an empty one. stdout matters as much as stderr here: scripts commonly
+    print their usage there, and that is what tells an agent how to call the
+    script after a wrong guess at its arguments.
+    """
+    parts = [f"Error: Script '{script_name}' failed with exit code {returncode}."]
+    for stream_name, text in (("stdout", stdout), ("stderr", stderr)):
+        text = (text or "").strip()
+        if text:
+            parts.append(f"{stream_name}: {shorten(text, MAX_FAILED_OUTPUT_LENGTH)}")
+    return "\n".join(parts)
 
 
 # Colours Firefox accepts for a tab group.
@@ -221,13 +376,18 @@ class FoxMCPTools:
         self._validate_tools()
         self._log_disabled_groups()
 
-    def _tool(self):
+    def _tool(self, describe_more=None):
         """Return the decorator that registers one tool, in place of @self.mcp.tool()
 
         Every tool definition below goes through here, which is what gives
         --enable-tools its per-tool grip: this is the one place that knows both
         the group being set up and the name of the tool being defined. A tool
         from a disabled group is registered only if it was named individually.
+
+        describe_more, if given, is called only when the tool is registered, and
+        the text it returns is appended to the tool's description. That keeps the
+        work it does, such as reading a directory, off servers that never offer
+        the tool.
 
         A tool that is not registered is still recorded in group_by_tool, and the
         undecorated function is handed back - the closure stays defined, and no
@@ -239,7 +399,13 @@ class FoxMCPTools:
             self.group_by_tool[fn.__name__] = group
             if group in self.disabled_groups and fn.__name__ not in self.enabled_tools:
                 return fn
-            return self.mcp.tool()(fn)
+            if describe_more is None:
+                return self.mcp.tool()(fn)
+            # An explicit description replaces FastMCP's own reading of the
+            # docstring, which is its first paragraph; the Args: descriptions
+            # are still read from the docstring either way.
+            summary = fn.__doc__.strip().split('\n\n')[0]
+            return self.mcp.tool(description=f"{summary}\n\n{describe_more()}")(fn)
 
         return register
 
@@ -1798,7 +1964,7 @@ class FoxMCPTools:
             return f"Unable to execute script in tab {tab_id}"
 
         # Execute Predefined Script Tool
-        @self._tool()
+        @self._tool(describe_more=lambda: describe_predefined_scripts(os.environ.get('FOXMCP_EXT_SCRIPTS')))
         async def content_execute_predefined(
             tab_id: int,
             script_name: str,
@@ -1808,7 +1974,7 @@ class FoxMCPTools:
 
             Args:
                 tab_id: ID of the tab to execute script in
-                script_name: Name of the external script to run
+                script_name: Name of the script to run, one of those listed above
                 script_args: JSON array of strings to pass to the external script (e.g., '["arg1", "arg2"]')
                             or empty string for no arguments
             """
@@ -1835,8 +2001,7 @@ class FoxMCPTools:
                 return f"Error: Invalid script name '{script_name}'. Script names cannot contain path separators or '..' sequences"
 
             # Additional validation: only allow alphanumeric, underscore, dash, and dot
-            import re
-            if not re.match(r'^[a-zA-Z0-9._-]+$', script_name):
+            if not SCRIPT_NAME_PATTERN.match(script_name):
                 logger.warning(
                     f"Predefined script refused: name {script_name!r} has characters outside [a-zA-Z0-9._-]"
                 )
@@ -1910,7 +2075,9 @@ class FoxMCPTools:
                         f"Predefined script {script_name!r} exited {result.returncode} "
                         f"after {elapsed:.1f}s: {result.stderr.strip()!r}"
                     )
-                    return f"Error: Script '{script_name}' failed with exit code {result.returncode}. stderr: {result.stderr}"
+                    return format_failed_script_reply(
+                        script_name, result.returncode, result.stdout, result.stderr
+                    )
 
                 # The script output should be JavaScript code
                 javascript_code = result.stdout.strip()

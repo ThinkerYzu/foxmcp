@@ -1,4 +1,6 @@
 #!/bin/bash
+# foxmcp-description: In a Google Calendar tab, return one day's events in time order with RSVP status, as JSON
+# foxmcp-args: day [month] [year]
 
 # Generate JavaScript for Google Calendar Daily Events Extraction
 # Usage: ./gen-daily-events-js.sh day [month] [year]

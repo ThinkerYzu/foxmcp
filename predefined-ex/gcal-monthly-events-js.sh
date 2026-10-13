@@ -1,4 +1,5 @@
 #!/bin/bash
+# foxmcp-description: In a Google Calendar month view, return every event grouped by day, with per-day counts, as JSON
 
 # Generate JavaScript for Google Calendar Monthly Events Extraction
 # Usage: ./gen-monthly-events-js.sh

@@ -189,9 +189,13 @@ token, so treat them as proportions rather than exact counts:
 | `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 795 |
 | `bookmarks` | list, search, create, create_folder, update, delete | 703 |
 | `navigation` | back, forward, reload, go_to_url | 430 |
-| `content` | get_text, get_html, execute_script, execute_predefined | 421 |
+| `content` | get_text, get_html, execute_script, execute_predefined | 440, plus ~35 per listed script |
 | `history` | query, get_recent, delete_item | 304 |
 | `debug` | websocket_status | 78 |
+
+The `content` figure is with `FOXMCP_EXT_SCRIPTS` unset. `content_execute_predefined`
+lists every script in that directory in its description; see
+[Telling AI Tools What a Script Does](scripts.md#telling-ai-tools-what-a-script-does).
 
 All groups are on by default. An unrecognized group name is an error rather than
 a warning, so a typo cannot silently leave the group enabled.

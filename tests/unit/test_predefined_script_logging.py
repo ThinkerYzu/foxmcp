@@ -15,6 +15,7 @@ import pytest
 
 import test_imports  # Automatic path setup
 from server.mcp_tools import (
+    MAX_FAILED_OUTPUT_LENGTH,
     MAX_LOGGED_ARG_LENGTH,
     FoxMCPTools,
     format_script_args_for_log,
@@ -138,6 +139,26 @@ class TestRefusalsAreLogged:
         assert 'Error' in result
         assert 'exited 3' in caplog.text
         assert 'went wrong' in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_failing_script_reply_carries_stdout(self, run_script, scripts_dir):
+        """Usage text printed to stdout is what tells an agent how to call the script"""
+        write_script(scripts_dir, 'picky.sh', '#!/bin/bash\necho "Usage: picky.sh <name>"\nexit 1\n')
+
+        result = await run_script(tab_id=1, script_name='picky.sh')
+
+        assert result == "Error: Script 'picky.sh' failed with exit code 1.\nstdout: Usage: picky.sh <name>"
+
+    @pytest.mark.asyncio
+    async def test_failing_script_reply_cuts_long_output(self, run_script, scripts_dir):
+        write_script(scripts_dir, 'noisy.sh',
+                     f'#!/bin/bash\nprintf "%0{MAX_FAILED_OUTPUT_LENGTH + 500}d" 0\nprintf "%0{MAX_FAILED_OUTPUT_LENGTH + 500}d" 0 >&2\nexit 2\n')
+
+        result = await run_script(tab_id=1, script_name='noisy.sh')
+
+        stdout_line, stderr_line = result.splitlines()[1:]
+        assert stdout_line == 'stdout: ' + '0' * MAX_FAILED_OUTPUT_LENGTH + '...'
+        assert stderr_line == 'stderr: ' + '0' * MAX_FAILED_OUTPUT_LENGTH + '...'
 
     @pytest.mark.asyncio
     async def test_silent_script_is_logged(self, run_script, scripts_dir, caplog):

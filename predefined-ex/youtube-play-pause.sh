@@ -1,4 +1,6 @@
 #!/bin/bash
+# foxmcp-description: In a YouTube tab, play, pause or toggle the video and report its state; toggles by default
+# foxmcp-args: [play|pause|toggle]
 
 # YouTube Play/Pause Script
 # This script generates JavaScript to play or pause a YouTube video

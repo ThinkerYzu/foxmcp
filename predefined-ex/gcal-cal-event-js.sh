@@ -1,4 +1,6 @@
 #!/bin/bash
+# foxmcp-description: In a Google Calendar tab, return one event's details (time, meeting links, attendees, attachments) as JSON
+# foxmcp-args: "Event Title" day time
 
 # Generate JavaScript for Google Calendar Event Details Extraction
 # Usage: ./generate-calendar-js.sh "Event Title" day time
