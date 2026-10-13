@@ -1797,6 +1797,123 @@ class FoxMCPTools:
 
             return f"Unable to execute script in tab {tab_id}"
 
+        async def page_request(message: Dict[str, Any]):
+            """Send a {"action", "data"} content request
+
+            Returns (data, None) on success and (None, error message) on failure.
+            """
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                **message,
+                "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return None, response["error"]
+            if response.get("type") == "response" and "data" in response:
+                return response["data"], None
+            return None, response.get("data", {}).get("message", "Unknown error")
+
+        def target(tab_id: int, ref: Optional[str], selector: Optional[str]) -> Dict[str, Any]:
+            if not ref and not selector:
+                raise ValueError("Pass either ref (from content_snapshot) or selector")
+            return {"tabId": tab_id, "ref": ref, "selector": selector}
+
+        # Snapshot Tool
+        @self._tool()
+        async def content_snapshot(tab_id: int, max_elements: int = 300) -> str:
+            """List the visible interactive elements of a page, each with a ref
+            that content_click and content_type accept
+
+            Args:
+                tab_id: ID of the tab to snapshot
+                max_elements: Stop listing after this many elements (default: 300)
+            """
+            data, error = await page_request(
+                {"action": "content.snapshot",
+                 "data": {"tabId": tab_id, "maxElements": max_elements}}
+            )
+            if error:
+                return f"Failed to snapshot page: {error}"
+            header = f"Snapshot of {data.get('title', '')} ({data.get('url', '')}):"
+            return f"{header}\n{data.get('snapshot', '')}"
+
+        # Click Tool
+        @self._tool()
+        async def content_click(
+            tab_id: int,
+            ref: Optional[str] = None,
+            selector: Optional[str] = None,
+            double_click: bool = False
+        ) -> str:
+            """Click an element, dispatching the pointer and mouse events a real click fires
+
+            Args:
+                tab_id: ID of the tab
+                ref: Element ref from content_snapshot, such as "r12"
+                selector: CSS selector, used when no ref is given
+                double_click: Double-click instead, as opening a file or folder
+                    in a file list usually needs (default: False)
+            """
+            data, error = await page_request({
+                "action": "content.click",
+                "data": {**target(tab_id, ref, selector), "doubleClick": double_click}
+            })
+            if error:
+                return f"Failed to click: {error}"
+            return f"{'Double-clicked' if double_click else 'Clicked'} {data.get('clicked')}"
+
+        # Type Tool
+        @self._tool()
+        async def content_type(
+            tab_id: int,
+            text: str,
+            ref: Optional[str] = None,
+            selector: Optional[str] = None,
+            clear: bool = True,
+            submit: bool = False
+        ) -> str:
+            """Type text into an input, textarea or editable element
+
+            Args:
+                tab_id: ID of the tab
+                text: Text to enter
+                ref: Element ref from content_snapshot
+                selector: CSS selector, used when no ref is given
+                clear: Replace the current value instead of appending (default: True)
+                submit: Press Enter afterwards (default: False)
+            """
+            data, error = await page_request({
+                "action": "content.type",
+                "data": {**target(tab_id, ref, selector),
+                         "text": text, "clear": clear, "submit": submit}
+            })
+            if error:
+                return f"Failed to type: {error}"
+            return f"Typed into {data.get('typed')}"
+
+        # Press Key Tool
+        @self._tool()
+        async def content_press_key(
+            tab_id: int, key: str, ref: Optional[str] = None, selector: Optional[str] = None
+        ) -> str:
+            """Press a key such as "Enter", "Escape" or "Tab" on an element, or on
+            the focused element when no target is given
+
+            Args:
+                tab_id: ID of the tab
+                key: Key name as in KeyboardEvent.key
+                ref: Element ref from content_snapshot
+                selector: CSS selector, used when no ref is given
+            """
+            data, error = await page_request({
+                "action": "content.press_key",
+                "data": {"tabId": tab_id, "key": key, "ref": ref, "selector": selector}
+            })
+            if error:
+                return f"Failed to press {key}: {error}"
+            return f"Pressed {data.get('pressed')}"
+
         # Execute Predefined Script Tool
         @self._tool()
         async def content_execute_predefined(
