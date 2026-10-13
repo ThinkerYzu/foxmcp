@@ -374,6 +374,47 @@ function sendDebugLog(message, level = 'log') {
   websocket.send(JSON.stringify(debugMessage));
 }
 
+// Display and copy the ID of the right-clicked tab, including background tabs.
+const TAB_ID_MENU_ID = 'foxmcp-copy-tab-id';
+
+// Firefox does not persist menus for persistent background pages.
+browser.menus.create({
+  id: TAB_ID_MENU_ID,
+  title: 'Tab ID (click to copy)',
+  contexts: ['tab'],
+  enabled: false
+}, () => {
+  if (browser.runtime.lastError) {
+    console.error('Failed to create tab ID menu:', browser.runtime.lastError.message);
+  }
+});
+
+browser.menus.onShown.addListener((info, tab) => {
+  if (!info.menuIds.includes(TAB_ID_MENU_ID)) return;
+
+  const hasTabId = Number.isInteger(tab?.id) && tab.id >= 0;
+  // Dispatch both calls without awaiting, so no menu-instance state is needed.
+  browser.menus.update(TAB_ID_MENU_ID, {
+    title: hasTabId ? `Tab ID = ${tab.id} (click to copy)` : 'Tab ID unavailable',
+    enabled: hasTabId
+  }).catch(error => {
+    console.error('Failed to update tab ID menu:', error);
+  });
+  browser.menus.refresh().catch(error => {
+    console.error('Failed to refresh tab ID menu:', error);
+  });
+});
+
+browser.menus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== TAB_ID_MENU_ID || !Number.isInteger(tab?.id) || tab.id < 0) return;
+
+  try {
+    await navigator.clipboard.writeText(`tab_id = ${tab.id}`);
+  } catch (error) {
+    console.error('Failed to copy tab ID:', error);
+  }
+});
+
 // Handle popup requests for connection status
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 

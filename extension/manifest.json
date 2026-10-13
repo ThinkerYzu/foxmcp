@@ -9,6 +9,8 @@
   "permissions": [
     "tabs",
     "tabGroups",
+    "menus",
+    "clipboardWrite",
     "windows",
     "history",
     "bookmarks",

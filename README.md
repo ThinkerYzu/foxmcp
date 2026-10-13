@@ -9,6 +9,7 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 ## Features
 
 - **Complete Browser Control**: Tabs, windows, navigation, bookmarks, history
+- **Copy Tab IDs**: Right-click a Firefox tab to copy its ID for an MCP request
 - **Web Request Monitoring**: Monitor and analyze HTTP requests with configurable filtering
 - **Content Access**: Extract text, HTML, execute JavaScript in pages
 - **MCP Integration**: Works with Claude Desktop, Claude Code, and other MCP clients
@@ -180,6 +181,22 @@ Once connected, you can control Firefox through natural language:
 "Take a screenshot of the current tab"
 "Execute JavaScript: document.title"
 ```
+
+### Copy a tab ID from Firefox
+
+Right-click a tab in Firefox's tab bar. The menu shows an item such as
+`Tab ID = 33 (click to copy)`.
+The number is the ID of the tab you right-clicked, including a background tab;
+you do not need to switch to it first.
+
+Clicking the item copies `tab_id = 33` to the clipboard. Paste it into an
+instruction such as "Get the text from tab_id = 33" to target that specific tab.
+It is the same ID returned by `tabs_list`, and the menu works even when the MCP
+server is disconnected. Tab IDs belong to the current browser session, so get a
+fresh ID after restarting Firefox.
+
+The extension uses the `menus` permission to add the item and `clipboardWrite`
+to copy the ID when you click it.
 
 ## Available Functions
 
