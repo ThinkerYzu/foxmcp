@@ -141,24 +141,13 @@ caught, and stop it within the one client session; a `monitor_id` from an earlie
 session answers `MONITOR_NOT_FOUND`. See
 [How long a monitor lives](web-request-monitoring.md#how-long-a-monitor-lives).
 
-To get it back, open the extension popup and press **Reconnect**, which resets
-the counter and dials again (and clears any monitors, as any other end of the
-connection does). Restarting the extension or Firefox does the same
-thing the slow way.
+To skip the wait, open the extension popup and press **Reconnect**, which dials
+at once and starts the 50 attempts at the Retry Interval again.
 
-**Raise the Retry Interval if you use this mode.** The extension's options page
-accepts 1000 to 60000 ms. The 50-attempt budget is spent at whatever rate you
-set, so 60000 ms buys 50 minutes of quiet instead of four:
-
-| Retry Interval | Budget before it stops | Delay picking up a new server |
-|---|---|---|
-| 5000 ms (default) | 4 minutes | up to 5 seconds |
-| 30000 ms | 25 minutes | up to 30 seconds |
-| 60000 ms (max) | 50 minutes | up to 1 minute |
-
-The cost is the third column: a longer interval means the extension takes longer
-to notice the server your client just started, which widens the first problem
-while narrowing the second.
+**The Retry Interval only sets the pace of the first 50 attempts.** The options
+page accepts 1000 to 60000 ms, and a shorter interval picks up a new server
+sooner. After those attempts the extension waits 30 seconds between tries, or the
+Retry Interval if you set it longer.
 
 **Which mode to use.** It depends on how long your client lives, not on which
 client it is.
@@ -169,9 +158,10 @@ extension has reconnected long before you ask for anything.
 
 A terminal client is the opposite. Every `claude` invocation starts a server and
 kills it on exit, so a morning of short sessions cycles the server all morning.
-Each session pays the first-call gap, and the time between sessions comes out of
-the 50-attempt budget. This is the case the example command at the top of this
-section configures, which is why it is worth saying plainly.
+Each session pays the first-call gap, and after a break of more than a few
+minutes the extension can take up to 30 seconds to notice the new server. This
+is the case the example command at the top of this section configures, which is
+why it is worth saying plainly.
 
 If that is how you work, HTTP mode avoids all of it: one server, started once,
 outliving every client and every session, with no port to contend for.
