@@ -553,6 +553,83 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
 }
 ```
 
+#### Snapshot Interactive Elements
+Lists the visible interactive elements of a page. Each gets a ref, written to the
+element as a `data-foxmcp-ref` attribute, that `content.click`, `content.type` and
+`content.press_key` accept in place of a selector. A ref stays on its element
+across snapshots, so it still works after other parts of the page re-render.
+
+**Request:**
+```json
+{
+  "id": "req_010c",
+  "type": "request",
+  "action": "content.snapshot",
+  "data": {
+    "tabId": 123,
+    "maxElements": 300
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_010c",
+  "type": "response",
+  "action": "content.snapshot",
+  "data": {
+    "snapshot": "[r1] h1 \"Sign in\"\n[r2] input \"Email\" (type=email)\n[r3] button \"Next\"",
+    "url": "https://example.org/login",
+    "title": "Sign in"
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+#### Click, Type and Press a Key
+`content.click`, `content.type` and `content.press_key` take a `ref` from a
+snapshot or a CSS `selector`. A click dispatches the pointer and mouse sequence at
+the element's centre; `doubleClick: true` repeats it with the click count in
+`detail` and ends with `dblclick`. Typing goes through `insertText`, so inputs
+whose value a framework tracks see the change, and `submit: true` presses Enter
+afterwards. A stale ref is an error naming the ref.
+
+```json
+{"action": "content.click", "data": {"tabId": 123, "ref": "r3", "selector": null, "doubleClick": false}}
+{"action": "content.type", "data": {"tabId": 123, "ref": "r2", "selector": null, "text": "dor@example.org", "clear": true, "submit": false}}
+{"action": "content.press_key", "data": {"tabId": 123, "key": "Escape", "ref": null, "selector": null}}
+```
+
+Each answers with the element it acted on, described as in a snapshot:
+`{"clicked": "[r3] button \"Next\""}`, `{"typed": ...}`, `{"pressed": "Escape"}`.
+
+#### Upload Files
+`content_upload_files` reads a file, or every file in a folder, from the server's
+disk and sends it in four steps. Each chunk is a separate request that waits for
+its answer, so a large file never becomes one huge message.
+
+```json
+{"action": "content.upload_begin", "data": {"uploadId": "u1", "files": [{"name": "a.txt", "relativePath": "Assets/a.txt"}]}}
+{"action": "content.upload_chunk", "data": {"uploadId": "u1", "fileIndex": 0, "data": "<base64, at most 512 KB decoded>"}}
+{"action": "content.upload_finish", "data": {"uploadId": "u1", "tabId": 123, "ref": "r4", "selector": null}}
+```
+
+`content.upload_finish` answers with the count and the first few paths:
+`{"count": 1, "paths": ["Assets/a.txt"], "target": "[r4] input \"Folder\" (type=file)"}`.
+Relative paths are only applied on an input that picks folders (`webkitdirectory`),
+as a browser would; a plain file input gets the files flat.
+
+Pages that open the dialog from a button instead of showing an input are handled
+with `content.capture_file_input` first. While it is armed, the page's
+`HTMLInputElement.click()` and `showPicker()` hand the next file input back instead
+of opening the native dialog, and the answer is that input's ref:
+
+```json
+{"action": "content.capture_file_input", "data": {"tabId": 123, "triggerRef": "r7", "triggerSelector": null}}
+```
+
 ### 4. Navigation
 
 #### Navigate Back

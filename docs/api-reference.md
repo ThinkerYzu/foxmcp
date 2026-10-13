@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 39 tools are offered by default. Each section below corresponds to a *group*
+All 44 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -67,6 +67,11 @@ and what each group costs.
   - `max_length`: Optional maximum length of text to return (default: unlimited)
 - `content_get_html(tab_id)` - Get page HTML source
 - `content_execute_script(tab_id, script)` - Execute JavaScript directly
+- `content_snapshot(tab_id, max_elements=300)` - List visible interactive elements, each with a ref
+- `content_click(tab_id, ref=None, selector=None, double_click=False)` - Click an element by ref or selector
+- `content_type(tab_id, text, ref=None, selector=None, clear=True, submit=False)` - Type into an input or editable element
+- `content_press_key(tab_id, key, ref=None, selector=None)` - Press a key on an element, or on the focused one
+- `content_upload_files(tab_id, path, ref=None, selector=None, trigger_ref=None, trigger_selector=None)` - Put a local file or folder on a file input; a trigger fills the input a button would open
 - `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
 
 ### Web Request Monitoring
