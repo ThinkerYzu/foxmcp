@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-18
+
 ### Added
 - **Release checks exercise the final archives.** CI and releases share lint, Python 3.10/3.14 installation and unit checks, and a full Firefox suite that rejects missing test modules and skipped tests. A clean installation from the final archives must exercise every advertised tool over HTTP and stdio, including tabs/groups, windows, navigation, history, bookmarks, screenshots, request bodies and real file uploads, before the same packages are attested, published and submitted to AMO.
 - **The GitHub installer verifies archive checksums and fails on HTTP errors.** `make package` refreshes the checksum manifest on every build. The installer supports `--non-interactive` in an empty directory and includes the predefined file-input helper. Installer tests cover missing assets, invalid checksum manifests, tampering and corrupt archives.
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A failed predefined script's stdout reaches the caller.** The error carried only stderr, while scripts usually print their usage to stdout, so an agent that guessed the arguments wrong learned nothing from it. Both streams are now included.
 
 ### Fixed
+- **Remove the invalid `windows` permission entry.** Window management remains available through the Windows API; the final-package smoke test covers its operations.
 - **Tiny response bodies keep their content type when captured.** Response-header processing now finishes before response filters can finish, preventing fast responses from being stored as having no MIME type. A real-Firefox regression test verifies ten small JSON responses, and final-package smoke tests verify response bodies over both MCP transports.
 - **`create_window(focused=False)` now leaves focus where it was.** Firefox focuses every new window and ignores `focused: false`, so the window opened in front regardless. The extension now hands focus back to the window that had it, and the result says `(focused)` when the new window has focus.
 - **`update_window(focused=False)` is refused instead of ignored.** Firefox has no way to take focus away from a window and drops the flag without an error. The tool now says so and points to `focus_window`.
@@ -31,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **A request monitor now ends with whoever started it.** Monitors live in the extension, which outlives every server and every client, and only the client that started one knows its `monitor_id` - so a monitor left behind could never be read or stopped again while it went on holding the extension's `webRequest` listeners up and filtering response bodies for a reader that was gone. Two things end one now, on top of `requests_stop_monitoring`: the MCP client that started it disconnecting, which the server notices within a few seconds and stops that client's monitors and no one else's; and the extension losing its connection to the server, which clears every monitor it holds along with their captured data. Under `--stdio` those are the same event, since the server lives and dies with its client. `requests_list_captured` answers `MONITOR_NOT_FOUND` for an id that has been cleared rather than an empty list, because an empty list is also what a healthy monitor returns before anything has completed. As a backstop, a monitor named in anything the extension says that no client owns is stopped on sight, which covers the two halves drifting apart - an extension too old to clear its monitors when a connection ends, against a server that expects it to. See [`docs/web-request-monitoring.md`](docs/web-request-monitoring.md#how-long-a-monitor-lives).
 - **`navigation_reload` and `requests_list_captured` say when their results are ready.** Both tool descriptions now name the trap behind the fixes above: `navigation_reload` returns when the reload is issued rather than when the page has loaded, and a request reaches `requests_list_captured` only once it has completed, so listing immediately after a navigation returns an empty list from a monitor that is working.
+
+### Upgrade notes
+
+- Update the Python server and Firefox extension together. Python 3.10+ is required; native tab groups require Firefox 139+.
+- The extension adds `tabGroups`, `menus` and `clipboardWrite` permissions. Existing users may need to approve the clipboard permission when updating.
+- `content_load_file` reads files on the server machine using Python's OS permissions, independently of Firefox's local-file permission. It is enabled with the `content` group by default; disable that group to omit it.
+- Request monitors now stop when their owning MCP client disconnects; losing the extension/server connection clears monitors and their captured data.
 
 ## [1.3.0] - 2026-09-07
 
@@ -245,6 +255,8 @@ error. See **Removed** below.
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
+[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.1.0

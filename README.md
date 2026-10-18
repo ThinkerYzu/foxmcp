@@ -22,11 +22,11 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 ### Option 1: Install from GitHub Release (Recommended)
 
 ```bash
-curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.3.0/install-from-github.sh | bash
+curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.4.0/install-from-github.sh | bash
 ```
 
 This script automatically:
-- Downloads the v1.3.0 release binaries
+- Downloads the v1.4.0 release binaries
 - Checks HTTP download failures, verifies both archive SHA-256 checksums, and validates the archives
 - Sets up Python virtual environment and dependencies
 - Downloads the Firefox extension and installation script

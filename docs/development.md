@@ -281,10 +281,10 @@ test is fine.
 
 1. Bump the version in `extension/manifest.json`, `package.json`,
    `scripts/install-from-github.sh` and the install URL in `README.md`
-2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.2.0] - <date>` and add
+2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.4.0] - <date>` and add
    the link reference at the bottom
-3. `scripts/check-version.sh 1.2.0` — fails unless all five files agree
-4. Commit, then tag: `git tag -a v1.2.0 -m "..."` and push the tag
+3. `scripts/check-version.sh 1.4.0` — fails unless all five files agree
+4. Commit, then tag: `git tag -a v1.4.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,

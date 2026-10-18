@@ -6,6 +6,41 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
+## v1.4.0 - Local files, tab groups and release verification (2026-10-18)
+
+### Highlights
+
+- `content_load_file` loads a server-local file into a tab for upload/import scripts,
+  preserving its basename and allowing a MIME override. The predefined
+  `set-file-input.py` example assigns it to an input and dispatches events.
+- Native tab groups, `bookmarks_move`, and a tab-menu action to copy the tab ID.
+- Predefined scripts appear in the tool schema; failed scripts return stdout as
+  well as stderr to help callers correct their arguments.
+- Reconnection, window focus, bookmark validation and request-capture fixes,
+  including tiny response bodies and overlapping monitors.
+- Release gates test the exact ZIP/XPI through clean installation and all 41 tools
+  over HTTP and stdio. The installer verifies archive checksums and HTTP errors.
+
+### Upgrade from v1.3.0
+
+Update both the Python server and Firefox extension. Python 3.10+ is required;
+native tab groups require Firefox 139+. The extension adds `tabGroups`, `menus`
+and `clipboardWrite`; Firefox may ask existing users to approve the clipboard
+permission before the updated add-on is enabled.
+
+Local file loading uses the Python server's filesystem permissions and is enabled
+with the `content` group by default. Handles last five minutes or until navigation;
+loading does not select an input or submit a form. See
+[Loading local files](docs/scripts.md#loading-local-files).
+
+Request monitors stop when their owning client disconnects, and losing the
+extension/server connection clears monitors and captured data. With Max Retries
+set to `-1`, the extension now keeps reconnecting indefinitely, slowing down after
+50 attempts; the old four-minute reconnect limit no longer applies.
+
+The full change list and upgrade notes are in
+[CHANGELOG.md](CHANGELOG.md#140---2026-10-18).
+
 ## v1.3.0 - Launching the Server From Your Client (2026-09-07)
 
 ### ✨ Feature Release

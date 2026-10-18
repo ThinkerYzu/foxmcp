@@ -6,7 +6,7 @@
 
 set -e
 
-VERSION="v1.3.0"
+VERSION="v1.4.0"
 GITHUB_REPO="ThinkerYzu/foxmcp"
 GITHUB_API_URL="https://api.github.com/repos/$GITHUB_REPO/releases/tags/$VERSION"
 GITHUB_RELEASE_URL="${FOXMCP_RELEASE_URL:-https://github.com/$GITHUB_REPO/releases/download/$VERSION}"
