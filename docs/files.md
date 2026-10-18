@@ -345,7 +345,7 @@ foxmcp/
 ## Virtual Environment and Testing
 
 ### `venv/` - Python Virtual Environment
-- **Python 3.10 or newer**, which is `fastmcp` 3's floor; development and CI run 3.14
+- **Python 3.10 or newer**, which is `fastmcp` 3's floor; CI checks 3.10 and 3.14
 - **Dependencies**: websockets, fastmcp, uvicorn, pydantic (server); pytest, pytest-asyncio, pytest-mock, pytest-cov, coverage, aiohttp (tests)
 - **Created by** `make install` (server only) or `make setup` (server plus tests)
 - **Usage**: `source venv/bin/activate`, or run `venv/bin/python` directly as the Makefile does
@@ -356,7 +356,7 @@ foxmcp/
 - Server and test running instructions
 
 ### Test Results (Current)
-- **259 tests passing** - 107 unit and 152 integration, collected by `make test`
+- **471 tests** - 284 unit and 187 integration, collected by `make test`
 - **0 tests skipped** - a skip means Firefox was unusable, and CI fails the build on one
 - **18 standalone drivers** - `tests/*.py`, run by hand, not collected by `make test`
 - **HTML coverage reports** - Generated in tests/htmlcov/

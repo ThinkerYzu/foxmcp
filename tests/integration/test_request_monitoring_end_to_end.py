@@ -579,3 +579,88 @@ async def test_monitoring_test_environment():
         print(f"   ❌ DirectMCPTestClient error: {e}")
 
     print("✅ Environment check completed")
+
+@pytest.mark.asyncio
+async def test_small_json_bodies_keep_their_response_content_type(server_with_extension):
+    """Fast local responses must not finish filtering before headers are recorded."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from fastmcp import Client
+
+    body = b'{"small":true}'
+    page = b'''<!doctype html><button id="fetch">Fetch tiny responses</button><script>
+    document.querySelector('button').onclick = async () => {
+      for (let i = 0; i < 10; i++) {
+        await (await fetch('/tiny?i=' + i, {cache:'no-store'})).json();
+      }
+    };
+    </script>'''
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):
+            tiny = self.path.startswith('/tiny?')
+            content = body if tiny else page
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json' if tiny else 'text/html')
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+
+    website = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=website.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{website.server_port}'
+    tab_id = None
+    monitor_id = None
+    try:
+        async with Client(server_with_extension['server'].mcp_tools.mcp) as client:
+            async def call(name, **arguments):
+                result = await client.call_tool(name, arguments)
+                assert not result.is_error, result
+                return result.content[0].text
+
+            try:
+                created = await call('tabs_create', url=url + '/page')
+                tab_id = int(re.search(r'ID (\d+)', created)[1])
+                for _ in range(100):
+                    html = await call('content_get_html', tab_id=tab_id)
+                    if 'id="fetch"' in html:
+                        break
+                    await asyncio.sleep(.1)
+                else:
+                    pytest.fail('Tiny response fixture did not load')
+                started = json.loads(await call('requests_start_monitoring',
+                    url_patterns=[url + '/tiny*'], tab_id=tab_id,
+                    options={'capture_response_bodies': True,
+                             'content_types_to_capture': ['application/json']}))
+                monitor_id = started['monitor_id']
+                await call('content_execute_script', tab_id=tab_id,
+                           code="document.querySelector('#fetch').click(); 'started'")
+                for _ in range(100):
+                    captured = json.loads(await call('requests_list_captured', monitor_id=monitor_id))
+                    if len(captured['requests']) == 10:
+                        break
+                    await asyncio.sleep(.1)
+                else:
+                    pytest.fail(f'Expected ten tiny responses: {captured}')
+                for request in captured['requests']:
+                    assert request['status_code'] == 200
+                    content = json.loads(await call('requests_get_content', monitor_id=monitor_id,
+                                                    request_id=request['request_id']))
+                    response = content['response_body']
+                    assert response['included'], response
+                    assert response['content_type'] == 'application/json'
+                    assert response['size_bytes'] == len(body)
+                    assert json.loads(response['content']) == {'small': True}
+            finally:
+                if monitor_id:
+                    await call('requests_stop_monitoring', monitor_id=monitor_id)
+                if tab_id is not None:
+                    await call('tabs_close', tab_id=tab_id)
+    finally:
+        website.shutdown()
+        website.server_close()
+        thread.join()

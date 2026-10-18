@@ -22,17 +22,23 @@ A Firefox extension that exposes browser functionality to AI assistants and auto
 ### Option 1: Install from GitHub Release (Recommended)
 
 ```bash
-curl -L https://github.com/ThinkerYzu/foxmcp/releases/download/v1.3.0/install-from-github.sh | bash
+curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.3.0/install-from-github.sh | bash
 ```
 
 This script automatically:
-- Downloads the latest v1.3.0 release binaries
+- Downloads the v1.3.0 release binaries
+- Checks HTTP download failures, verifies both archive SHA-256 checksums, and validates the archives
 - Sets up Python virtual environment and dependencies
 - Downloads the Firefox extension and installation script
 - Creates CLAUDE.md for Claude Code integration
-- Downloads Google Calendar automation scripts to predefined-scripts/ directory
+- Downloads predefined examples, including the file-input helper, to predefined-scripts/
 - Optionally connects to Claude Code
 - Creates a startup script for easy server management
+
+For unattended installation, save the script outside the target directory, then
+run `bash /path/to/install-from-github.sh --non-interactive` from the empty target
+directory. This skips the optional Claude Code connection and refuses to overwrite
+a nonempty directory.
 
 **Install Firefox Extension:**
 
@@ -58,7 +64,7 @@ Development and CI run 3.14, and 3.12 is verified. `make install` creates `venv/
 installs `server/requirements.txt` into it; use `make setup` instead if you also want
 to run the test suite, which adds `tests/requirements.txt`.
 
-You also need `make`, `zip` and Python's `venv` module, none of which a stock Ubuntu
+You also need `make`, `zip`, `sha256sum` and Python's `venv` module, none of which a stock Ubuntu
 has: `sudo apt install make zip python3-venv`. Without `python3-venv`, `make install`
 stops at "The virtual environment was not created successfully"; without `zip`,
 `make package` cannot build the XPI.

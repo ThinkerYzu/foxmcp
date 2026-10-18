@@ -8,9 +8,10 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -31,19 +32,32 @@ jobs:
       # found — useful locally, useless as a gate. Real errors fail the build
       # here; style is advisory, matching what the Makefile intended.
       - name: Fail on syntax errors and undefined names
-        run: venv/bin/flake8 server/ tests/ --select=E9,F63,F7,F82 --show-source
+        run: venv/bin/flake8 server/ tests/ scripts/check-test-report.py --select=E9,F63,F7,F82 --show-source
 
       - name: Report style issues
-        run: venv/bin/flake8 server/ tests/ --max-line-length=100 --ignore=E203,W503 --exit-zero
+        run: venv/bin/flake8 server/ tests/ scripts/check-test-report.py --max-line-length=100 --ignore=E203,W503 --exit-zero
 
   unit:
-    name: Unit tests
+    name: Unit tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.14']
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python-env
-      - run: make test-unit
+        with:
+          python-version: ${{ matrix.python }}
+      - run: make package
+      - name: Run unit tests
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/unit.xml
+        run: make test-unit
+      - name: Require every unit module to pass without skips
+        if: always()
+        run: venv/bin/python scripts/check-test-report.py "$RUNNER_TEMP/unit.xml" --kind unit
 
   suite:
     name: Full suite
@@ -61,30 +75,16 @@ jobs:
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/junit.xml
         run: make test
 
-      # A green run is only meaningful if the tests actually ran. Anything the
-      # browser touches skips rather than fails when Firefox is unusable, which
-      # would otherwise turn a broken environment into a passing build.
-      - name: Fail if tests were skipped rather than run
+      - name: Require every unit and integration module to pass without skips
         if: always()
-        shell: python
-        run: |
-          import os, sys, xml.etree.ElementTree as ET
+        run: venv/bin/python scripts/check-test-report.py "$RUNNER_TEMP/junit.xml"
 
-          report = os.path.join(os.environ["RUNNER_TEMP"], "junit.xml")
-          if not os.path.exists(report):
-              sys.exit("No JUnit report was written; the suite did not start.")
-
-          suite = ET.parse(report).getroot()
-          if suite.tag == "testsuites":
-              suite = suite[0]
-          total = int(suite.get("tests", 0))
-          skipped = int(suite.get("skipped", 0))
-          print(f"{total} tests, {skipped} skipped")
-
-          if skipped:
-              sys.exit(f"{skipped} tests skipped; the suite expects none.")
-          if total < 200:
-              sys.exit(f"Only {total} tests collected; the suite should be well over 200.")
+      - name: Keep the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: ${{ runner.temp }}/junit.xml
 
       - name: Keep the coverage report
         if: always()
@@ -95,20 +95,23 @@ jobs:
           if-no-files-found: ignore
 
   install:
-    name: Install from source
+    name: Install from source (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.14']
     # Follows README's from-source instructions on a clean checkout, because the
     # rest of CI does not: setup-python-env creates the venv itself and runs
     # `make setup`, so `make install` — what the README tells a user to run — is
-    # never exercised. This job is also the only check that the server starts and
-    # serves tools to a real MCP client - over HTTP, and over stdio, where the
-    # client launches the server itself - rather than to a test fixture.
+    # never exercised. Check the documented minimum Python as well as the suite's
+    # interpreter, including HTTP and stdio MCP startup without test fixtures.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python }}
 
       - name: make install, as README says
         run: make install
@@ -224,13 +227,32 @@ jobs:
           PY
 
   package:
-    name: Build packages
+    name: Test final release packages
+    needs: [lint, unit, suite, install]
     runs-on: ubuntu-latest
-    # No Python: `make package` only copies the extension and zips it.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+      - uses: ./.github/actions/setup-firefox
       - run: make package
+      - name: Exercise every tool from these exact archives over HTTP and stdio
+        run: >-
+          venv/bin/python tests/package_smoke.py --packages dist/packages
+          --work-dir "$RUNNER_TEMP/package-smoke"
+      - name: Keep package smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-smoke
+          path: |
+            ${{ runner.temp }}/package-smoke/*.log
+            ${{ runner.temp }}/package-smoke/receipts.json
+            ${{ runner.temp }}/package-smoke/smoke-*.json
+            ${{ runner.temp }}/package-smoke/smoke-*.png
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: packages
           path: dist/packages/
+          if-no-files-found: error

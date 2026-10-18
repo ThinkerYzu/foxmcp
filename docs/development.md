@@ -229,7 +229,9 @@ There is no JavaScript linting or formatting configured.
 
 `.github/workflows/ci.yml` runs on every push to master and every pull request:
 lint, unit tests, the full suite against a real Firefox, an install from source,
-and a package build.
+and a smoke test of the final release archives. Unit and installation jobs run
+on Python 3.10 and 3.14. The release workflow calls this same CI workflow, so
+these checks also gate tag releases and manual rehearsals.
 
 The install job is the one that follows README rather than the test harness. It
 runs `make install` on a clean checkout — which nothing else does, since the other
@@ -256,6 +258,9 @@ signing regardless, so the extension never loads and every browser test fails.
 Pass `channel: nightly` to `.github/actions/setup-firefox` to test against
 tomorrow's Firefox.
 
+The shared `scripts/check-test-report.py` guard requires successful test cases
+from every unit and integration module on disk. It detects missing integration
+collection even if all unit tests pass, and handles multiple JUnit suites.
 The job also fails if any test was *skipped*. Everything that touches the
 browser skips rather than fails when Firefox is unusable, so without that guard
 a broken runner would produce a green build of a suite that never opened a
@@ -282,9 +287,25 @@ test is fine.
 4. Commit, then tag: `git tag -a v1.2.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
-the version, runs the full suite, builds the artifacts, publishes a signed
-provenance attestation for them, creates the GitHub release with notes taken
-from the changelog section, and submits the extension to addons.mozilla.org.
+the version and runs all CI checks. The package job builds the archives once,
+records SHA-256 checksums, and tests the real installer in an empty directory.
+The installed server and final XPI must exercise every advertised tool through
+both HTTP and stdio MCP: windows, tabs/groups, navigation/content, screenshots,
+history, bookmarks, request capture, connection diagnostics and file uploads.
+Checks read back state and verify captured bodies and uploaded bytes. Each
+transport saves a tool-call report, completed feature checks and a screenshot;
+logs and upload receipts are also retained as Actions artifacts. See [Package smoke test](../tests/README.md#release-package-smoke-test).
+
+Only those tested archives are attested and published to the GitHub release.
+The AMO job unpacks the tested XPI for submission rather than rebuilding it.
+Release notes come from the changelog section. No publication happens if lint,
+installation, minimum-Python checks, the full suite or package smoke testing fails.
+
+The package check covers every advertised tool with representative workflows;
+the full suite covers additional cases and invalid inputs. Credentialed agent
+trials remain manual. Testing the signed extension on standard Firefox remains
+a separate post-signing check; the release gate uses Developer Edition to load
+the unsigned XPI.
 
 The AMO step runs in the `amo` deployment environment, which holds the API
 credentials and requires a human to approve the deployment. Nothing else in

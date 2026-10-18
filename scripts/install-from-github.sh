@@ -9,7 +9,8 @@ set -e
 VERSION="v1.3.0"
 GITHUB_REPO="ThinkerYzu/foxmcp"
 GITHUB_API_URL="https://api.github.com/repos/$GITHUB_REPO/releases/tags/$VERSION"
-GITHUB_RELEASE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION"
+GITHUB_RELEASE_URL="${FOXMCP_RELEASE_URL:-https://github.com/$GITHUB_REPO/releases/download/$VERSION}"
+GITHUB_SOURCE_URL="${FOXMCP_SOURCE_URL:-https://raw.githubusercontent.com/$GITHUB_REPO/$VERSION}"
 
 # Color output functions
 RED='\033[0;31m'
@@ -49,7 +50,7 @@ check_dependencies() {
     info "Checking system dependencies..."
 
     # Check for required commands
-    for cmd in curl unzip python3; do
+    for cmd in curl unzip python3 sha256sum; do
         if ! command -v "$cmd" &> /dev/null; then
             error "$cmd is required but not installed. Please install $cmd and try again."
         fi
@@ -89,19 +90,38 @@ download_release() {
 
     # Download server package
     info "Downloading server package..."
-    if ! curl -L -o foxmcp-server.zip "$GITHUB_RELEASE_URL/foxmcp-server.zip"; then
+    if ! curl -fSL -o foxmcp-server.zip "$GITHUB_RELEASE_URL/foxmcp-server.zip"; then
         error "Failed to download server package from $GITHUB_RELEASE_URL/foxmcp-server.zip"
     fi
 
     # Download Firefox extension
     info "Downloading Firefox extension..."
-    if ! curl -L -o "foxmcp@codemud.org.xpi" "$GITHUB_RELEASE_URL/foxmcp@codemud.org.xpi"; then
+    if ! curl -fSL -o "foxmcp@codemud.org.xpi" "$GITHUB_RELEASE_URL/foxmcp@codemud.org.xpi"; then
         error "Failed to download Firefox extension from $GITHUB_RELEASE_URL/foxmcp@codemud.org.xpi"
     fi
 
+    # Verify both release archives before extracting or installing anything.
+    curl -fSL -o SHA256SUMS "$GITHUB_RELEASE_URL/SHA256SUMS" \
+        || error "Failed to download SHA256SUMS"
+    # Accept only the two expected filenames; do not let a manifest name paths
+    # outside this download directory or omit one of the archives.
+    python3 - <<'PY_CHECKSUMS'
+import re
+from pathlib import Path
+lines = Path("SHA256SUMS").read_text().splitlines()
+expected = {"foxmcp-server.zip", "foxmcp@codemud.org.xpi"}
+entries = [re.fullmatch(r"([0-9a-fA-F]{64}) [ *](foxmcp-server\.zip|foxmcp@codemud\.org\.xpi)", line)
+           for line in lines]
+if len(entries) != 2 or any(entry is None for entry in entries) or {entry[2] for entry in entries} != expected:
+    raise SystemExit("Invalid SHA256SUMS: expected exactly both release archives")
+PY_CHECKSUMS
+    sha256sum --check --strict SHA256SUMS || error "Release checksum verification failed"
+    unzip -tq foxmcp-server.zip >/dev/null || error "Invalid server archive"
+    unzip -tq 'foxmcp@codemud.org.xpi' >/dev/null || error "Invalid extension archive"
+
     # Download install-xpi.sh script
     info "Downloading extension installation script..."
-    if ! curl -L -o install-xpi.sh "https://raw.githubusercontent.com/$GITHUB_REPO/$VERSION/scripts/install-xpi.sh"; then
+    if ! curl -fSL -o install-xpi.sh "$GITHUB_SOURCE_URL/scripts/install-xpi.sh"; then
         error "Failed to download install-xpi.sh script"
     fi
     chmod +x install-xpi.sh
@@ -111,12 +131,13 @@ download_release() {
     mkdir -p predefined-scripts-download
 
     # List of predefined scripts to download
-    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh" "dom-summarize.sh" "youtube-play-pause.sh")
+    scripts=("gcal-cal-event-js.sh" "gcal-daily-events-js.sh" "gcal-monthly-events-js.sh" "dom-summarize.sh" "youtube-play-pause.sh" "set-file-input.py")
 
     for script in "${scripts[@]}"; do
-        if curl -L -o "predefined-scripts-download/$script" "https://raw.githubusercontent.com/$GITHUB_REPO/$VERSION/predefined-ex/$script"; then
+        if curl -fSL -o "predefined-scripts-download/$script" "$GITHUB_SOURCE_URL/predefined-ex/$script"; then
             chmod +x "predefined-scripts-download/$script"
         else
+            rm -f "predefined-scripts-download/$script"
             warning "Failed to download predefined script: $script (continuing anyway)"
         fi
     done
@@ -334,6 +355,10 @@ EOF
 }
 
 setup_claude_code_connection() {
+    if [ "${noninteractive:-false}" = true ]; then
+        info "Skipping optional Claude Code connection in non-interactive mode"
+        return
+    fi
     echo ""
     info "Claude Code MCP Connection Setup"
     echo ""
@@ -415,6 +440,15 @@ print_installation_guide() {
 }
 
 main() {
+    if [ "$#" -gt 1 ]; then
+        error "Usage: $0 [--non-interactive]"
+    fi
+    noninteractive=false
+    case "${1:-}" in
+        --non-interactive) noninteractive=true ;;
+        "") ;;
+        *) error "Usage: $0 [--non-interactive]" ;;
+    esac
     print_header
 
     # Check if we're in an empty directory or user confirmation
@@ -422,6 +456,9 @@ main() {
         warning "Current directory is not empty."
         echo "FoxMCP will be installed in the current directory: $(pwd)"
 
+        if [ "$noninteractive" = true ]; then
+            error "Non-interactive installation requires an empty directory"
+        fi
         read -p "Continue? (y/N): " -r < /dev/tty
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "Installation cancelled."
@@ -445,4 +482,6 @@ main() {
 trap 'echo -e "\n${RED}Installation interrupted${NC}"; exit 1' INT
 
 # Run main function
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

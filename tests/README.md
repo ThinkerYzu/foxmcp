@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**455 collected, 0 skipped** — 269 unit and 186 integration.
+**471 collected, 0 skipped** — 284 unit and 187 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,12 +42,12 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 455. Run them by hand if you need them.
+and are **not** part of the 471. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 269 | no |
-| `integration/` | 186 | yes |
+| `unit/` | 284 | no |
+| `integration/` | 187 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
@@ -56,14 +56,16 @@ Selected test modules, including local-file coverage:
 
 | File | Tests | Covers |
 |---|---|---|
-| `test_file_transfer.py` | 19 | Streaming integrity, MIME, regular-file validation, single-use grants, expiry, revocation, capacity, shutdown and content-group registration |
-| `test_tab_move.py` | 24 | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
+| `test_github_installer.py` | 9 | Real HTTP download failures, checksums, corrupt archives and installed upload example |
+| `test_release_report.py` | 6 | Missing integration modules, multiple JUnit suites, skipped/failed tests and empty reports |
+| `test_file_transfer.py` | 18 | Streaming integrity, MIME, regular-file validation, single-use grants, expiry, revocation, capacity, shutdown and content-group registration |
+| `test_tab_move.py` | 27 | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
 | `test_protocol.py` | 14 | Message structure, JSON serialization, error codes |
-| `test_window_handlers.py` | 14 | Window action handlers |
-| `test_predefined_script_logging.py` | 12 | The audit log around `content_execute_predefined`, and the validation chain behind it |
+| `test_window_handlers.py` | 17 | Window action handlers |
+| `test_predefined_script_logging.py` | 14 | The audit log around `content_execute_predefined`, and the validation chain behind it |
 | `test_request_monitoring.py` | 11 | Web request capture logic |
 | `test_ping_pong.py` | 8 | Ping-pong protocol |
-| `test_server.py` | 7 | Server init, connection handling, message processing |
+| `test_server.py` | 10 | Server init, connection handling, message processing |
 | `test_screenshot_filename.py` | 5 | Screenshot filename generation |
 
 ### Integration tests
@@ -73,28 +75,81 @@ Selected test modules:
 | File | Tests | Covers |
 |---|---|---|
 | `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
-| `test_window_management.py` | 11 | Window creation, focus switching, cross-window tabs |
+| `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
 | `test_history_management.py` | 10 | History query, recent, time ranges, concurrency |
 | `test_mcp_integration.py` | 10 | FastMCP tool init and call handling |
 | `test_mcp_protocol_compliance.py` | 10 | Tool schemas, parameter formats, HTTP endpoint |
 | `test_ping_pong_integration.py` | 10 | Bidirectional ping-pong over a live socket |
-| `test_bookmark_management.py` | 8 | Bookmark CRUD and folders |
+| `test_bookmark_management.py` | 10 | Bookmark CRUD and folders |
 | `test_real_websocket_communication.py` | 8 | Protocol formats, timeouts, multi-client |
 | `test_test_helper_protocol.py` | 8 | The `test.*` action namespace |
 | `test_live_server_communication.py` | 7 | Real server startup, shutdown, recovery |
 | `test_websocket_communication.py` | 7 | Connection state and message routing |
-| `test_firefox_extension_communication.py` | 6 | Real Firefox with the extension installed |
+| `test_firefox_extension_communication.py` | 8 | Real Firefox with the extension installed |
 | `test_history_with_content.py` | 6 | History entries alongside page content |
 | `test_mcp_server_integration.py` | 6 | Dual-port startup, MCP client connections |
-| `test_request_monitoring_integration.py` | 6 | Request capture through the MCP layer |
+| `test_request_monitoring_integration.py` | 10 | Request capture through the MCP layer |
 | `test_ui_storage_sync.py` | 6 | Popup settings persistence |
 | `test_browser_functionality.py` | 5 | Tabs, script execution, reload, content, screenshots |
 | `test_connection_origin.py` | 5 | The origin allowlist on the extension WebSocket |
 | `test_mcp_port_not_web_reachable.py` | 5 | That no web page can reach the MCP port — see [Dependency-held guarantees](#dependency-held-guarantees) |
 | `test_real_firefox_communication.py` | 5 | Extension-server message exchange in a real browser |
-| `test_request_monitoring_end_to_end.py` | 5 | Capture a request and read its content back |
+| `test_request_monitoring_end_to_end.py` | 8 | Capture and read response bodies, including ten tiny local JSON responses that expose header/filter ordering races |
 | `test_tab_move_end_to_end.py` | 4 | Gathering tabs into a new window, and reordering within one |
 | `test_history_mcp_integration.py` | 4 | History through the MCP tool surface |
+
+## Release package smoke test
+
+`make package` writes both archives and a fresh `SHA256SUMS` manifest on every
+build. CI runs `package_smoke.py` after lint, unit, integration and source-install checks
+pass. It serves the final archives through a local HTTP fixture, runs the actual
+installer in an empty directory with its own dependency venv, and starts the
+installed server from outside the checkout. A real Firefox loads the final XPI.
+An ordinary page submits a multipart upload over both HTTP and stdio MCP; the
+receiver verifies the filename, MIME override, SHA-256 and change event. The
+installed `set-file-input.py` helper must assign the file and release its handle
+before the form submits, and the page must display success.
+
+To repeat locally, use the project venv and Developer Edition:
+
+```bash
+export FM_ROOT=/path/to/foxmcp
+make -C "$FM_ROOT" package
+FIREFOX_PATH=/path/to/firefox "$FM_ROOT/venv/bin/python" \
+  "$FM_ROOT/tests/package_smoke.py" --packages "$FM_ROOT/dist/packages"
+```
+
+Each transport exercises every advertised tool, with read-back checks for:
+
+- Windows: create, list, inspect, focus, resize and close.
+- Tabs: create, list, switch, move, group, update/query groups, ungroup and close.
+- Navigation/content: navigate, back, forward, reload, HTML, text and JavaScript.
+- Screenshots: save and validate a nonempty PNG.
+- History: observe visited URLs in searches/recent items, delete and verify removal.
+- Bookmarks: create folders/bookmark, update/search, move and delete with read-back.
+- Requests: start capture, fetch local JSON, verify captured status/body and stop.
+- Debug connection status, plus local-file loading and the installed upload helper.
+
+A new tool without a smoke scenario fails the advertised-tool coverage check.
+Each mode starts its own test browser after the server is ready, avoiding the
+finite reconnect budget in the test profile. Only disposable profile data and
+local fixture pages are used. Windows, bookmarks, monitors and tabs are cleaned up.
+
+The printed work directory retains installer/server logs, upload receipts,
+`smoke-http.json`, `smoke-stdio.json` and screenshots. Reports record each tool
+call and completed feature check, including partial evidence if a check fails.
+GitHub retains these files in its `package-smoke` artifact.
+No model credentials or running FoxMCP host are needed. It creates a fresh venv
+and installs dependencies, so access to the Python package index is required.
+The MCP and WebSocket smoke servers reserve test ports 31086/31087; the HTTP
+fixture uses an automatically assigned port. Do not run another agent or package
+evaluation simultaneously.
+
+`python scripts/check-test-report.py REPORT.xml` requires successful test cases
+from every unit and integration module on disk, with no skips; `--kind unit`
+checks only unit modules. This detects missing browser collection even when
+hundreds of unit tests pass. CI checks unit tests and source installation on
+Python 3.10 and 3.14; the full browser suite uses 3.14.
 
 ## Manual agent upload evaluation
 
@@ -330,7 +385,7 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 455 must pass.
+- **Run the suite before committing.** All 471 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem

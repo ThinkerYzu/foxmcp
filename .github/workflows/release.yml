@@ -58,48 +58,14 @@ jobs:
       - name: The changelog must have something to say
         run: scripts/release-notes.sh "${{ steps.resolve.outputs.version }}"
 
-  suite:
-    name: Full suite
+  checks:
+    name: Release checks
     needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-python-env
-      - uses: ./.github/actions/setup-firefox
-
-      - name: Run the suite
-        env:
-          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/junit.xml
-        run: make test
-
-      # Same guard as CI: skips are not passes, and a release must not go out on
-      # a suite that quietly never ran.
-      - name: Fail if tests were skipped rather than run
-        if: always()
-        shell: python
-        run: |
-          import os, sys, xml.etree.ElementTree as ET
-
-          report = os.path.join(os.environ["RUNNER_TEMP"], "junit.xml")
-          if not os.path.exists(report):
-              sys.exit("No JUnit report was written; the suite did not start.")
-
-          suite = ET.parse(report).getroot()
-          if suite.tag == "testsuites":
-              suite = suite[0]
-          total = int(suite.get("tests", 0))
-          skipped = int(suite.get("skipped", 0))
-          print(f"{total} tests, {skipped} skipped")
-
-          if skipped:
-              sys.exit(f"{skipped} tests skipped; the suite expects none.")
-          if total < 200:
-              sys.exit(f"Only {total} tests collected; the suite should be well over 200.")
+    uses: ./.github/workflows/ci.yml
 
   build:
-    name: Build and attest
-    needs: [verify, suite]
+    name: Verify and attest tested packages
+    needs: [verify, checks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -108,12 +74,14 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v4
-      - run: make package
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/packages
 
-      - name: Record checksums
+      - name: Verify tested archive checksums
         working-directory: dist/packages
-        run: |
-          sha256sum 'foxmcp@codemud.org.xpi' foxmcp-server.zip | tee SHA256SUMS
+        run: sha256sum --check --strict SHA256SUMS
 
       # This is the part that answers issue #1. The attestation is a signed
       # statement that these exact bytes came out of this workflow, at this
@@ -126,11 +94,6 @@ jobs:
           subject-path: |
             dist/packages/foxmcp@codemud.org.xpi
             dist/packages/foxmcp-server.zip
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: packages
-          path: dist/packages/
 
   github-release:
     name: Publish the GitHub release
@@ -145,6 +108,10 @@ jobs:
         with:
           name: packages
           path: dist/packages
+
+      - name: Verify archives before publishing
+        working-directory: dist/packages
+        run: sha256sum --check --strict SHA256SUMS
 
       - name: Write the release notes
         run: scripts/release-notes.sh "${{ needs.verify.outputs.version }}" > "$RUNNER_TEMP/notes.md"
@@ -182,8 +149,17 @@ jobs:
 
       - run: npm install --global web-ext@8
 
-      - name: Build the extension directory
-        run: make build
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/packages
+
+      - name: Use the tested extension for AMO submission
+        run: |
+          cd dist/packages
+          sha256sum --check --strict SHA256SUMS
+          mkdir -p ../extension
+          unzip -q 'foxmcp@codemud.org.xpi' -d ../extension
 
       # --channel=listed submits the version to the public AMO listing, where it
       # enters Mozilla's review queue. --approval-timeout=0 returns as soon as

@@ -1218,7 +1218,10 @@ function setupWebRequestListeners() {
   browser.webRequest.onHeadersReceived.addListener(
     onHeadersReceivedListener,
     { urls: ["<all_urls>"] },
-    ["responseHeaders"]
+    // Record the MIME type before response filters can finish. With an
+    // asynchronous header notification, a tiny response can reach onstop first
+    // and be stored as having no content type. No headers are changed.
+    ["responseHeaders", "blocking"]
   );
 
   browser.webRequest.onCompleted.addListener(

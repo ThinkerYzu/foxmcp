@@ -11,8 +11,8 @@ inputs:
   python-version:
     description: >
       Python version to install. Matches the venv the suite is green on locally.
-      The project floor is 3.10, which is fastmcp 3's own; nothing is tested below
-      this version.
+      The project floor is 3.10; CI tests installation and unit tests on that
+      minimum as well as the default interpreter.
     required: false
     default: '3.14'
 

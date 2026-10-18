@@ -116,7 +116,7 @@ build-extension:
 	@echo "Extension built at: dist/extension/"
 	@echo "✅ Extension build complete!"
 
-# Build the two release archives, containing exactly what the source tree holds.
+# Build the two release archives and checksums from the current source tree.
 #
 # Both archives and the server staging directory are cleared before being
 # written. zip updates an existing archive instead of replacing it, so a file
@@ -139,6 +139,9 @@ package: build
 	@find dist/server-package -type d -name __pycache__ -prune -exec rm -rf {} +
 	@cp README.md dist/server-package/ 2>/dev/null || echo "README.md not found, skipping..."
 	cd dist && zip -r packages/foxmcp-server.zip server-package/
+
+	# Keep checksums in sync on every rebuild, including local test builds.
+	cd dist/packages && sha256sum 'foxmcp@codemud.org.xpi' foxmcp-server.zip > SHA256SUMS
 
 	# Clear profile cache since extension has changed
 	@echo "Clearing profile cache..."
