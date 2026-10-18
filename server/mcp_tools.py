@@ -1916,6 +1916,55 @@ class FoxMCPTools:
     def _setup_content_tools(self):
         """Setup content access tools"""
 
+        @self._tool()
+        async def content_load_file(
+            tab_id: int, path: str, mime_type: Optional[str] = None
+        ) -> str:
+            """Load a server-local file for website uploads/imports; does not submit it.
+
+            Waits for downloading to finish, then returns JSON with file_id and metadata.
+            In the SAME tab, use content_execute_script or a predefined script:
+            const file = globalThis.foxmcpFiles.get(file_id);
+            For file inputs, use cloneInto(file, window), the page's
+            window.wrappedJSObject.DataTransfer, and input/change events.
+            Return metadata, not the File. Release: globalThis.foxmcpFiles.delete(file_id).
+            Handle expires five minutes after loading or on navigation; assigned inputs
+            remain valid. Download timeout: 110s. Private tabs unsupported.
+
+            Args:
+                tab_id: Target tab ID.
+                path: Regular file on the server's machine; only its basename reaches the tab.
+                mime_type: Optional MIME override; otherwise inferred from the filename,
+                    falling back to application/octet-stream.
+            """
+            service = self.websocket_server.file_transfers
+            token = None
+            try:
+                token, url, metadata = service.grant(path, mime_type)
+                file_id = str(uuid.uuid4())
+                logger.info("Loading local file %r (%s bytes, %s) into tab %s",
+                            metadata["name"], metadata["size"], metadata["type"], tab_id)
+                response = await self.websocket_server.send_request_and_wait({
+                    "id": str(uuid.uuid4()), "type": "request",
+                    "action": "content.load_file",
+                    "data": {"tabId": tab_id, "fileId": file_id,
+                             "url": url, **metadata},
+                    "timestamp": datetime.now().isoformat()
+                }, timeout=120.0)
+                if "error" in response or response.get("type") == "error":
+                    detail = response.get("error") or response.get("data", {}).get("message", "Unknown error")
+                    return f"Failed to load file: {detail}"
+                data = response.get("data", {})
+                if data.get("fileId") != file_id:
+                    return "Failed to load file: extension did not confirm the file handle"
+                return json.dumps({"file_id": file_id, **metadata, "expires_in_seconds": 300})
+            except (OSError, ValueError, RuntimeError) as error:
+                logger.warning("Local file load refused or failed: %s", error)
+                return f"Failed to load file: {getattr(error, 'strerror', None) or error}"
+            finally:
+                if token is not None:
+                    service.revoke(token)
+
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(tab_id: int, max_length: Optional[int] = None) -> str:

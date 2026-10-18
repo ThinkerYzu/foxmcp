@@ -258,6 +258,54 @@ its absolute path.
 Each listed script costs roughly 35 tokens of every client's context. A large
 directory of scripts an agent never needs is worth splitting out.
 
+## Loading local files
+
+Call `content_load_file(tab_id, path, mime_type=None)` first. Python reads the
+regular file and streams it over a temporary localhost HTTP URL to the extension.
+The result contains its original basename, MIME type, size, modification time
+and a `file_id`; it contains neither the local directory nor file bytes.
+An explicit `mime_type` overrides filename inference. Unknown extensions use
+`application/octet-stream`.
+
+The download starts during the tool call; a successful result means it has
+finished and the handle is ready. The fetch timeout is 110 seconds. If loading
+fails, retry the tool to create a new transfer.
+
+The File is available in that tab's extension-isolated scope:
+
+```javascript
+const file = globalThis.foxmcpFiles.get(fileId);
+```
+
+The handle expires five minutes after loading finishes, and navigation destroys
+the map. An already assigned file input remains valid after handle expiry or
+deletion. Delete the
+entry after use with `globalThis.foxmcpFiles.delete(fileId)`. The page cannot
+read this map directly. Clone the File into the page before assigning it through
+the page's own DataTransfer; [set-file-input.py](../predefined-ex/set-file-input.py)
+demonstrates this and dispatches `input` and `change` events. Copy that executable
+example into `FOXMCP_EXT_SCRIPTS`, then call:
+
+```python
+content_load_file(tab_id=17, path="/home/me/reports/report.pdf",
+                  mime_type="application/pdf")
+# Returns JSON including file_id, name="report.pdf", type and size.
+content_execute_predefined(tab_id=17, script_name="set-file-input.py",
+                           script_args='["<returned file_id>", "input[type=file]"]')
+```
+
+Loading does not click a button, open a picker, choose an input, or submit a
+form. Scripts can implement those page-specific steps, including interception
+of dynamically created inputs. The example replaces the input's selection
+with one file; compose a DataTransfer with several loaded handles for multiple
+files. Folder traversal and relative-path metadata are not part of this initial
+single-file primitive. Private tabs are refused.
+
+Large responses can use Firefox temporary disk storage because fetching happens
+in the background page. Do not convert the Blob or File to an ArrayBuffer merely
+to wrap it: `new File([blob], name, {type})` preserves the existing backing blob.
+The receiving site's own reads may still allocate the whole file.
+
 ## Example Script Collection
 
 Create a collection of useful scripts:

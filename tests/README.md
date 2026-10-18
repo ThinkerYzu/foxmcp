@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**259 collected, 0 skipped** — 107 unit and 152 integration.
+**455 collected, 0 skipped** — 269 unit and 186 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,18 +42,21 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 259. Run them by hand if you need them.
+and are **not** part of the 455. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 107 | no |
-| `integration/` | 152 | yes |
+| `unit/` | 269 | no |
+| `integration/` | 186 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
 
+Selected test modules, including local-file coverage:
+
 | File | Tests | Covers |
 |---|---|---|
+| `test_file_transfer.py` | 19 | Streaming integrity, MIME, regular-file validation, single-use grants, expiry, revocation, capacity, shutdown and content-group registration |
 | `test_tab_move.py` | 24 | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
 | `test_protocol.py` | 14 | Message structure, JSON serialization, error codes |
 | `test_window_handlers.py` | 14 | Window action handlers |
@@ -65,8 +68,11 @@ and are **not** part of the 259. Run them by hand if you need them.
 
 ### Integration tests
 
+Selected test modules:
+
 | File | Tests | Covers |
 |---|---|---|
+| `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_window_management.py` | 11 | Window creation, focus switching, cross-window tabs |
 | `test_history_management.py` | 10 | History query, recent, time ranges, concurrency |
 | `test_mcp_integration.py` | 10 | FastMCP tool init and call handling |
@@ -89,6 +95,41 @@ and are **not** part of the 259. Run them by hand if you need them.
 | `test_request_monitoring_end_to_end.py` | 5 | Capture a request and read its content back |
 | `test_tab_move_end_to_end.py` | 4 | Gathering tabs into a new window, and reordering within one |
 | `test_history_mcp_integration.py` | 4 | History through the MCP tool surface |
+
+## Manual agent upload evaluation
+
+`agent_file_upload_eval.py` runs a fresh Codex or Claude agent with the actual
+MCP schemas, a real Firefox instance and a local CSV importer. The task supplies
+only a local file path and destination URL. Built-in filesystem and shell use
+is prohibited; Claude's built-in tools are disabled. No upload example or tool
+name is supplied in the task prompt.
+
+Use an authenticated CLI for the chosen agent and a packaged extension built
+from this checkout:
+
+```bash
+export FM_ROOT=/path/to/foxmcp
+make -C "$FM_ROOT" package
+PYTHONPATH="$FM_ROOT:$FM_ROOT/tests" FIREFOX_PATH=/path/to/firefox \
+  "$FM_ROOT/venv/bin/python" "$FM_ROOT/tests/agent_file_upload_eval.py"
+# Repeat with Claude:
+PYTHONPATH="$FM_ROOT:$FM_ROOT/tests" FIREFOX_PATH=/path/to/firefox \
+  "$FM_ROOT/venv/bin/python" "$FM_ROOT/tests/agent_file_upload_eval.py" --agent-cli claude
+```
+
+This invokes a model and is deliberately excluded from pytest. The printed
+artifact directory contains the prompt, schemas, JSONL transcript, final answer,
+upload receipt and result. A pass requires use of `content_load_file`, the original
+filename, inferred MIME type, an exact SHA-256 match and a page change event.
+Inspect the transcript for input assignment, handle release and the final page
+readout. It uses isolated test ports 31086/31087; run one evaluation at a time.
+
+On 2026-10-18, both agents completed the task with the shortened schema without
+coaching or failed tool calls: Codex used seven calls and Claude six. Each agent
+retrieved the File, assigned it using DataTransfer and cloneInto, dispatched
+input/change, released the handle, submitted and read the success message.
+These individual trials establish usability for the test task, not a general
+success rate.
 
 ## Test Import System
 
@@ -289,7 +330,7 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 259 must pass.
+- **Run the suite before committing.** All 455 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem

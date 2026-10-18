@@ -553,6 +553,37 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
 }
 ```
 
+#### Load a local file
+
+`content.load_file` fetches a one-use HTTP URL in the extension background page
+and delivers a File to the target tab. Python reads the local path; only its
+basename reaches the browser. The URL must use `http://127.0.0.1:<port>/files/<token>`.
+The transfer token is opaque and expires after 60 seconds if unused.
+
+```json
+{
+  "action": "content.load_file",
+  "data": {
+    "tabId": 17,
+    "fileId": "<uuid>",
+    "url": "http://127.0.0.1:12345/files/<43-character-token>",
+    "name": "report.pdf",
+    "type": "application/pdf",
+    "size": 10485760,
+    "lastModified": 1792330000000
+  }
+}
+```
+
+A successful response carries `{"fileId": "<uuid>"}`. The isolated content-script
+scope stores the File in `globalThis.foxmcpFiles`, indexed by that ID. It expires
+after 300 seconds, or when navigation destroys the scope. Delivery fails if the
+document changed during the fetch, if the fetched size differs, or if the target
+tab is private. The server waits up to 120 seconds, with a 110-second fetch
+timeout in the extension. Errors use the existing `API_ERROR` response format.
+No file bytes travel over the WebSocket. See [scripts.md](scripts.md#loading-local-files)
+for page-side use.
+
 ### 4. Navigation
 
 #### Navigate Back

@@ -22,8 +22,10 @@ import websockets
 import uvicorn
 try:
     from .mcp_tools import FoxMCPTools
+    from .file_transfer import FileTransferServer
 except ImportError:
     from mcp_tools import FoxMCPTools
+    from file_transfer import FileTransferServer
 
 # Try to import port coordinator for dynamic port allocation
 try:
@@ -144,6 +146,7 @@ class FoxMCPServer:
         self._connection_waiters = []  # List of futures waiting for connection
 
         # Initialize MCP tools
+        self.file_transfers = FileTransferServer()
         self.mcp_tools = FoxMCPTools(self, disabled_groups=disabled_tool_groups,
                                      enabled_tools=enabled_tools)
         self.mcp_app = self.mcp_tools.get_mcp_app()
@@ -849,6 +852,8 @@ class FoxMCPServer:
         # Stop WebSocket server
         await self._stop_websocket_server()
 
+        await asyncio.to_thread(self.file_transfers.close)
+
         logger.info("FoxMCP server stopped")
 
     async def shutdown(self, server_task):
@@ -937,7 +942,7 @@ class FoxMCPServer:
         in a uvicorn thread, because the stdio transport is asyncio all the way
         down and has no thread of its own to run in.
         """
-        logger.info("MCP serving over stdio; no HTTP listener")
+        logger.info("MCP serving over stdio; no MCP HTTP listener")
 
         # show_banner=False keeps startup off the network as well as quiet: the
         # banner asks PyPI whether a newer fastmcp exists, which is a delay a

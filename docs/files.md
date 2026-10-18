@@ -29,7 +29,10 @@ foxmcp/
 │   ├── __init__.py    # Python package init (for imports)
 │   ├── requirements.txt # Python dependencies
 │   ├── server.py       # WebSocket server implementation with ping-pong
+│   ├── file_transfer.py # One-use localhost HTTP file grants and bounded streaming
 │   └── mcp_tools.py    # FastMCP tool definitions and handlers
+├── predefined-ex/      # Example external scripts generating JavaScript
+│   └── set-file-input.py # Assign a content_load_file handle to a file input
 ├── tools/             # Utility scripts and tools
 │   └── generate-channel-switch.sh # Generate JavaScript for channel switching
 └── tests/             # Test suite directory
@@ -49,8 +52,10 @@ foxmcp/
     │   ├── test_ping_pong.py   # Ping-pong functionality tests
     │   ├── test_window_handlers.py # Window management message and MCP tool tests
     │   ├── test_tab_move.py    # Tab moving, and the window scoping on tabs_list
+    │   ├── test_file_transfer.py # File HTTP grants, metadata, expiry and lifecycle
     │   └── test_protocol_pairing.py # Every action the server sends has a handler, and back
     ├── integration/   # Integration tests
+    │   ├── test_file_loading.py # File integrity, script assignment and navigation in Firefox
     │   ├── test_websocket_communication.py # WebSocket communication tests
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests
     │   ├── test_real_firefox_communication.py # Real Firefox extension tests

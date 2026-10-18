@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 39 tools are offered by default. Each section below corresponds to a *group*
+All 41 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -67,6 +67,12 @@ and what each group costs.
 - `navigation_go_to_url(tab_id, url)` - Navigate to URL
 
 ### Content Access
+
+`content_load_file` includes a short handle-lookup snippet and Firefox page-cloning guidance
+in its MCP description. See [Loading local files](scripts.md#loading-local-files)
+for the complete input-assignment example and transfer details.
+
+- `content_load_file(tab_id, path, mime_type=None)` - Load one regular local file into the tab's extension-isolated JavaScript scope. Returns JSON with `file_id`, `name` (basename only), `type`, `size`, `lastModified` and `expires_in_seconds` (300). Use `globalThis.foxmcpFiles.get(file_id)` from `content_execute_script` or a predefined script, and delete the entry after use. MIME is inferred from the filename unless overridden, with `application/octet-stream` as the fallback. Does not select an input or submit a form. Private tabs are refused. See [Loading local files](scripts.md#loading-local-files).
 - `content_get_text(tab_id, max_length=None)` - Extract page text content
   - `max_length`: Optional maximum length of text to return (default: unlimited)
 - `content_get_html(tab_id)` - Get page HTML source

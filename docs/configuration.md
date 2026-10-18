@@ -70,7 +70,7 @@ The extension side does not change. The WebSocket server still listens on 8765,
 the extension still connects to it, and every tool works as it does over HTTP.
 Three things are different:
 
-- **No HTTP listener.** Nothing serves port 3000, so `--mcp-port` is refused
+- **No MCP HTTP listener.** Nothing serves port 3000, so `--mcp-port` is refused
   rather than silently ignored. `--no-mcp` is refused too, since it would leave
   stdio mode with nothing to serve.
 - **The server lives as long as the client.** Closing the client ends the
@@ -169,8 +169,8 @@ outliving every client and every session, with no port to contend for.
 ## Reducing the Tool Surface
 
 Every tool's description sits in an MCP client's context for the whole session,
-whether or not the tool is ever called. The full set of 40 tools costs roughly
-6,350 tokens. `--disable-tools` leaves a group unregistered, so a client never
+whether or not the tool is ever called. The full set of 41 tools costs roughly
+6,650 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -189,7 +189,7 @@ token, so treat them as proportions rather than exact counts:
 | `windows` | list, get, get_current, create, close, focus, update | 1,029 |
 | `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 795 |
 | `navigation` | back, forward, reload, go_to_url | 430 |
-| `content` | get_text, get_html, execute_script, execute_predefined | 440, plus ~35 per listed script |
+| `content` | get_text, get_html, execute_script, execute_predefined, load_file | 732, plus ~35 per listed script |
 | `history` | query, get_recent, delete_item | 304 |
 | `debug` | websocket_status | 78 |
 
@@ -240,6 +240,31 @@ export FOXMCP_ENABLE_TOOLS=tabs_capture_screenshot
 `--disable-tools` overrides `FOXMCP_DISABLE_TOOLS`, and `--enable-tools`
 overrides `FOXMCP_ENABLE_TOOLS`, when both are given.
 
+## Local file transfers
+
+The first `content_load_file` call starts a small HTTP listener owned by FoxMCP
+on `127.0.0.1` and an automatically assigned port. It runs in both HTTP and
+stdio modes; it is separate from the MCP HTTP listener. There is no port to
+configure and no separate process to start.
+
+Each transfer URL grants a single read and expires after 60 seconds if unused.
+It contains a random token, with no filename or local directory. The server
+opens only the file explicitly named by the MCP call, streams it in 64 KiB
+blocks, disables caching, and closes unused grants and the listener on shutdown.
+At most 32 transfers can be pending or active. Never share a transfer URL; it
+authorizes that read. URLs and file bytes do not appear in MCP results.
+
+The extension fetches in its background page, where Firefox can store large
+response blobs in temporary disk files. The tab receives a File handle that
+expires after five minutes or navigation. Private tabs are refused. Disk
+spooling reduces retained memory but is not a hard peak-memory limit; queued
+I/O and the receiving site's own code can still allocate buffers.
+
+This tool reads through Python's OS permissions, independently of Firefox's
+local-file permission toggle. All tools are enabled by default; disabling the
+`content` group removes it, and `--enable-tools content_load_file` can keep it
+individually. See [Loading local files](scripts.md#loading-local-files).
+
 ## Security Features
 
 - **Localhost-only binding**: Both WebSocket and MCP servers bind to `localhost` only for security
@@ -250,6 +275,7 @@ overrides `FOXMCP_ENABLE_TOOLS`, when both are given.
 
 - **WebSocket Port**: Default `8765` - Used for Firefox extension communication
 - **MCP Port**: Default `3000` - Used for MCP client connections
+- **File Transfer Port**: Assigned automatically on `127.0.0.1` at the first local-file load
 
 ## Configuring Extension
 

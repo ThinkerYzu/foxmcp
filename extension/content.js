@@ -7,14 +7,40 @@
 // Content script for page interaction
 console.log('FoxMCP content script loaded');
 
+function expireFileHandle(handles, fileId, delay) {
+  setTimeout(() => handles.delete(fileId), delay);
+}
+
 // Listen for messages from background script
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const { action, script, data } = request;
 
-  console.log('📨 Content script received message:', action, data);
+  console.log('📨 Content script received message:', action,
+    action === 'storeFile' ? { fileId: data.fileId } : data);
 
   try {
     switch (action) {
+      case 'prepareFile': {
+        const fileId = data.fileId;
+        const pending = globalThis.foxmcpPendingFiles ||= new Set();
+        pending.add(fileId);
+        expireFileHandle(pending, fileId, 120000);
+        sendResponse({ ready: true });
+        break;
+      }
+
+      case 'storeFile': {
+        const fileId = data.fileId;
+        if (!globalThis.foxmcpPendingFiles?.delete(fileId)) {
+          throw new Error('Target document changed or the file load expired');
+        }
+        const files = globalThis.foxmcpFiles ||= new Map();
+        files.set(fileId, data.file);
+        expireFileHandle(files, fileId, 300000);
+        sendResponse({ fileId });
+        break;
+      }
+
       case 'extractText':
         sendResponse({ text: document.body.innerText });
         break;

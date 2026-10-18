@@ -209,6 +209,7 @@ to copy the ID when you click it.
 
 ### Content Interaction
 - Extract page text and HTML
+- [Load local files](docs/scripts.md#loading-local-files) for upload scripts, preserving the filename and an optional MIME override
 - Execute JavaScript in pages
 - Run custom predefined scripts
 
@@ -261,7 +262,7 @@ python server/server.py --disable-tools bookmarks,history
 python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
 ```
 
-All 40 tools are offered by default, costing an MCP client roughly 6,350 tokens of
+All 41 tools are offered by default, costing an MCP client roughly 6,650 tokens of
 context. `--disable-tools` leaves a group unregistered: `windows`, `tabs`,
 `bookmarks`, `navigation`, `content`, `requests`, `history`, `debug`.
 `--enable-tools` names individual tools to register anyway, for when one tool out

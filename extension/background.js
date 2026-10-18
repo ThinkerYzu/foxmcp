@@ -795,6 +795,45 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 20
 async function handleContentAction(id, action, data) {
   try {
     switch (action) {
+      case 'content.load_file': {
+        const url = new URL(data.url);
+        if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' ||
+            !url.port || !/^\/files\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ||
+            url.username || url.password || url.search || url.hash) {
+          throw new Error('Invalid local file transfer URL');
+        }
+        const tab = await browser.tabs.get(data.tabId);
+        if (tab.incognito) {
+          throw new Error('Local file loading is unavailable in private tabs');
+        }
+        const prepare = { action: 'prepareFile', data: { fileId: data.fileId } };
+        let ready;
+        try {
+          ready = await browser.tabs.sendMessage(data.tabId, prepare);
+        } catch (error) {
+          if (!error.message.includes('Receiving end does not exist')) throw error;
+          await browser.tabs.executeScript(data.tabId, { file: '/content.js' });
+          ready = await browser.tabs.sendMessage(data.tabId, prepare);
+        }
+        if (!ready || ready.error) throw new Error(ready?.error || 'Content script unavailable');
+        const response = await fetch(url.href, {
+          credentials: 'omit', redirect: 'error', cache: 'no-store',
+          signal: AbortSignal.timeout(110000)
+        });
+        if (!response.ok) throw new Error(`Local file transfer returned HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (blob.size !== data.size) throw new Error('File size changed during transfer');
+        const file = new File([blob], data.name, {
+          type: data.type, lastModified: data.lastModified
+        });
+        const result = await browser.tabs.sendMessage(data.tabId, {
+          action: 'storeFile', data: { fileId: data.fileId, file }
+        });
+        if (!result || result.error) throw new Error(result?.error || 'Content script unavailable');
+        sendResponse(id, action, result);
+        break;
+      }
+
       case 'content.get_text':
         const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'

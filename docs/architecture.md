@@ -70,12 +70,34 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 - **Lifecycle**: Graceful startup and shutdown, including cleanup of the extension connection
 
 #### MCP Tools (`mcp_tools.py`)
-- **MCP Tool Definitions**: 40 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
+- **MCP Tool Definitions**: 41 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
 - **Parameter Validation**: Type-annotated tool signatures; FastMCP derives the schema
 - **Response Formatting**: Each tool turns the raw browser response into a human-readable string
 - **Error Handling**: Every tool checks for `error` in the response before reading data
 
 ### 3. Communication Protocols
+
+#### Local file transfer
+
+`content_load_file` opens a regular file in Python and creates a temporary
+single-use HTTP grant on an on-demand loopback listener. `content.load_file`
+sends only the URL, file ID and basename/MIME/size/mtime metadata over the
+WebSocket. The extension background page fetches the response as a Blob and
+wraps it in a File, preserving Firefox's disk-backed blob storage. Extension
+messaging structured-clones it to the target document's isolated content-script
+scope, where scripts access it through `globalThis.foxmcpFiles`.
+
+A preparation message marks the target document before fetching. If the tab
+navigates during the transfer, its replacement document rejects delivery. File
+handles expire after five minutes and should be deleted by the consuming
+script. Private tabs are refused. Page-specific input assignment stays in
+predefined scripts; see [scripts.md](scripts.md#loading-local-files).
+
+The HTTP service uses standard-library threads and 64 KiB read/write blocks,
+without an extra dependency or a fixed port. It runs independently of the MCP
+transport, including stdio. Host/Origin checks and opaque one-use grants keep
+the endpoint from acting as a directory server. It grants no CORS access and
+is closed with the WebSocket and MCP services.
 
 #### WebSocket Protocol
 ```json
@@ -315,7 +337,7 @@ server = FoxMCPServer(
     port=8765,             # WebSocket port
     mcp_port=3000,         # MCP server port (None → 3000, or dynamic under pytest)
     start_mcp=True,        # Enable MCP integration
-    use_stdio=False        # True: serve MCP on stdin/stdout, and open no HTTP port
+    use_stdio=False        # True: serve MCP on stdin/stdout without an MCP HTTP port
 )
 ```
 
@@ -324,7 +346,7 @@ Or from the command line:
 ```bash
 python server/server.py --host localhost --port 8765 --mcp-port 3000
 python server/server.py --no-mcp          # WebSocket only
-python server/server.py --stdio           # MCP on stdin/stdout, no HTTP listener
+python server/server.py --stdio           # MCP on stdin/stdout, no MCP HTTP listener
 ```
 
 ### 2. Extension Configuration
