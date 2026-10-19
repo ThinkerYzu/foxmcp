@@ -34,10 +34,14 @@ and what each group costs.
 - `tabs_ungroup(tab_ids)` - Take tabs out of their group
 - `tabs_groups_update(group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
 - `tabs_groups_query(window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
-- `tabs_capture_screenshot(filename=None, window_id=None, format="png", quality=90)` - Capture screenshot of visible tab
+- `tabs_capture_screenshot(filename=None, window_id=None, format="png", quality=90, tab_id=None)` - Capture screenshot of the visible tab, or of one given tab
   - If `filename` provided: saves screenshot to file and returns success message
   - If `filename` omitted: returns base64 encoded image data URL
   - Automatically adds file extension (.png/.jpeg) if not provided
+  - Without `tab_id`, it is the tab a window is showing (`window_id`, or the current window)
+  - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
+    not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
+    has `tabs.captureTab`; an older one answers that it is too old
 
 ### History Operations
 - `history_query(query, max_results=50)` - Search browser history
