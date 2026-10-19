@@ -63,8 +63,16 @@ For Claude Code, run this in another terminal:
 claude mcp add --transport http foxmcp http://localhost:3000/mcp/
 ```
 
-If the installer already connected Claude Code, skip that command. For another
-MCP client, add an HTTP server with URL `http://localhost:3000/mcp/`.
+If the installer already connected Claude Code, skip that command.
+
+For Codex, run:
+
+```bash
+codex mcp add foxmcp --url http://localhost:3000/mcp/
+```
+
+For another MCP client, add an HTTP server with URL
+`http://localhost:3000/mcp/`.
 
 ### 5. Try it
 
