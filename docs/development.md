@@ -44,7 +44,7 @@ make test-integration  # integration only
 make check             # lint + test
 ```
 
-Expect **259 passing** in about ten minutes. See [`../tests/README.md`](../tests/README.md)
+The v1.4.0 suite has **471 tests**; allow about fifteen minutes for a full run. See [`../tests/README.md`](../tests/README.md)
 for the suite layout, fixtures, and troubleshooting.
 
 ### Other
@@ -66,7 +66,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 40 MCP tool definitions
+│   └── mcp_tools.py # The 41 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -92,31 +92,40 @@ tracked by git.
 
 ### Loading in Firefox
 
-| Method | Survives restart | Best for |
+Build the extension with `make package` first. If you used the release installer,
+the downloaded XPI is already at `dist/packages/foxmcp@codemud.org.xpi`.
+
+**Firefox Release and Beta enforce signing.** They ignore
+`xpinstall.signatures.required=false`. Use the signed extension from
+[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/) for
+permanent installation, or load the unsigned build temporarily. Persistent
+unsigned installation requires Developer Edition, Nightly, or an unbranded build.
+
+| Method for an unsigned XPI | Survives restart | Firefox channels |
 |---|---|---|
-| Temporary add-on | no | quick testing |
-| `about:addons` install | yes | manual setup |
-| `scripts/install-xpi.sh` | yes | development |
+| Temporary add-on | No | All |
+| Install from file with signing disabled | Yes | Developer Edition, Nightly, unbranded |
+| `scripts/install-xpi.sh` | Yes, after manual enablement | Developer Edition, Nightly, unbranded |
 
-**Temporary add-on** — go to `about:debugging` → "This Firefox" → "Load Temporary
-Add-on" → pick `dist/packages/foxmcp@codemud.org.xpi`.
+**Temporary add-on:** Open `about:debugging` → **This Firefox** →
+**Load Temporary Add-on**, and select `dist/packages/foxmcp@codemud.org.xpi`.
+Repeat after Firefox restarts.
 
-**`about:addons`** — set `xpinstall.signatures.required` to `false` in `about:config`
-first, then use the gear icon → "Install Add-on From File". Unsigned extensions cannot
-be installed without that preference change.
+**Install from file:** On a channel that permits unsigned extensions, open
+`about:config` and set `xpinstall.signatures.required` to `false`. Then open
+`about:addons` → gear icon → **Install Add-on From File** and select the XPI.
 
-**Script** — close Firefox completely, find your profile directory in `about:profiles`,
-then:
+**Script:** On a channel that permits unsigned extensions, find the profile
+directory in `about:profiles`, close Firefox completely, then run:
 
 ```bash
 ./scripts/install-xpi.sh /path/to/firefox/profile
 ```
 
-The script installs the XPI, sets `xpinstall.signatures.required = false` in `user.js`,
-and fixes permissions. **Then enable the extension in `about:addons`** — Firefox
-installs a profile-side extension disabled and waits for a person to turn it on. The
-test suite gets around this by editing `extensions.json` directly, which is why the
-suite never needed the click and a hand install does.
+The script installs the XPI, changes the signing preference in `user.js`, and
+fixes permissions. Start Firefox, open `about:addons`, and **enable FoxMCP by
+hand**. Firefox initially disables extensions installed directly into a profile.
+Installing through the browser with either method above does not need that step.
 
 ### Layout
 
