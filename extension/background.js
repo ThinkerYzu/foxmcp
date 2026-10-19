@@ -691,6 +691,33 @@ async function handleTabsAction(id, action, data) {
         }
         break;
 
+      case 'tabs.captureTab': {
+        // One given tab, wherever it is: in the background, or in a window that is not in front.
+        // captureVisibleTab above can only see the tab a window is showing.
+        const captureTabId = data.tabId;
+        if (!Number.isInteger(captureTabId)) {
+          sendError(id, 'INVALID_REQUEST', 'tabs.captureTab needs an integer tabId');
+          break;
+        }
+        const captureOptions = {
+          format: data.format || 'png',
+          quality: data.quality || 90
+        };
+
+        try {
+          const dataUrl = await browser.tabs.captureTab(captureTabId, captureOptions);
+          sendResponse(id, action, {
+            dataUrl: dataUrl,
+            format: captureOptions.format,
+            quality: captureOptions.quality,
+            tabId: captureTabId
+          });
+        } catch (captureError) {
+          sendError(id, 'CAPTURE_ERROR', `Failed to capture screenshot of tab ${captureTabId}: ${captureError.message}`);
+        }
+        break;
+      }
+
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown tabs action: ${action}`);
     }

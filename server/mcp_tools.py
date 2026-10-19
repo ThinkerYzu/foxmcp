@@ -1202,9 +1202,10 @@ class FoxMCPTools:
             filename: Optional[str] = None,
             window_id: Optional[int] = None,
             format: str = "png",
-            quality: int = 90
+            quality: int = 90,
+            tab_id: Optional[int] = None
         ) -> str:
-            """Capture a screenshot of the visible tab
+            """Capture a screenshot of the visible tab, or of the tab given by tab_id
 
             What comes back depends on whether you pass a filename: with one, the image is
             written to disk and you get a success message and the path; without one, you get
@@ -1215,34 +1216,60 @@ class FoxMCPTools:
                 window_id: ID of the window to capture (optional, defaults to current window)
                 format: Image format ('png' or 'jpeg', default: 'png')
                 quality: Image quality for JPEG format (1-100, default: 90)
+                tab_id: Capture this tab, even in the background (not with window_id)
 
             Returns:
                 Success message with file path if filename provided, otherwise base64 encoded image data URL
 
                 Not exposed to clients — see the description above.
             """
-            request = {
-                "id": str(uuid.uuid4()),
-                "type": "request",
-                "action": "tabs.captureVisibleTab",
-                "data": {
-                    **({"windowId": window_id} if window_id else {}),
-                    "format": format,
-                    "quality": quality
-                },
-                "timestamp": datetime.now().isoformat()
-            }
+            if tab_id is not None and window_id:
+                return "Error capturing screenshot: pass tab_id or window_id, not both"
+
+            if tab_id is not None:
+                request = {
+                    "id": str(uuid.uuid4()),
+                    "type": "request",
+                    "action": "tabs.captureTab",
+                    "data": {"tabId": tab_id, "format": format, "quality": quality},
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                request = {
+                    "id": str(uuid.uuid4()),
+                    "type": "request",
+                    "action": "tabs.captureVisibleTab",
+                    "data": {
+                        **({"windowId": window_id} if window_id else {}),
+                        "format": format,
+                        "quality": quality
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
 
             response = await self.websocket_server.send_request_and_wait(request)
 
             if "error" in response:
                 return f"Error capturing screenshot: {response['error']}"
 
+            if (tab_id is not None and response.get("type") == "error"
+                    and response.get("data", {}).get("code") == "UNKNOWN_ACTION"):
+                return (
+                    "Failed to capture screenshot: this FoxMCP extension is too old to capture a "
+                    "tab that is not showing (it has no tabs.captureTab). Update the extension, or "
+                    "make the tab the active one (tabs_switch) and use window_id."
+                )
+
             if response.get("type") == "response" and "data" in response:
                 data_url = response["data"].get("dataUrl", "")
                 captured_format = response["data"].get("format", format)
                 captured_quality = response["data"].get("quality", quality)
                 captured_window_id = response["data"].get("windowId", "current")
+                captured_tab_id = response["data"].get("tabId")
+                captured_from = (
+                    f"tab {captured_tab_id}" if captured_tab_id is not None
+                    else f"window {captured_window_id}"
+                )
 
                 if not data_url:
                     return "No screenshot data received"
@@ -1267,7 +1294,7 @@ class FoxMCPTools:
                             f.write(image_data)
 
                         file_size = len(image_data)
-                        return f"Screenshot saved to '{filename}' (window {captured_window_id}, {captured_format}, quality: {captured_quality}, size: {file_size} bytes)"
+                        return f"Screenshot saved to '{filename}' ({captured_from}, {captured_format}, quality: {captured_quality}, size: {file_size} bytes)"
 
                     except Exception as e:
                         return f"Error saving screenshot to file '{filename}': {str(e)}"
@@ -1275,7 +1302,7 @@ class FoxMCPTools:
                 else:
                     # Return base64 data as before when no filename provided
                     data_size = len(base64_data)
-                    return f"Screenshot captured successfully from window {captured_window_id} ({captured_format}, quality: {captured_quality}):\n{data_url[:100]}...\n\nBase64 data size: {data_size} characters"
+                    return f"Screenshot captured successfully from {captured_from} ({captured_format}, quality: {captured_quality}):\n{data_url[:100]}...\n\nBase64 data size: {data_size} characters"
 
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
