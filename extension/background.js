@@ -695,8 +695,8 @@ async function handleTabsAction(id, action, data) {
         // One given tab, wherever it is: in the background, or in a window that is not in front.
         // captureVisibleTab above can only see the tab a window is showing.
         const captureTabId = data.tabId;
-        if (!Number.isInteger(captureTabId)) {
-          sendError(id, 'INVALID_REQUEST', 'tabs.captureTab needs an integer tabId');
+        if (!isBrowserId(captureTabId)) {
+          sendError(id, 'INVALID_PARAMETER', 'tabs.captureTab needs a non-negative integer tabId');
           break;
         }
         const captureOptions = {

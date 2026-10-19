@@ -469,8 +469,8 @@ answers `UNKNOWN_ACTION`.
 }
 ```
 
-`tabId` must be an integer (`INVALID_REQUEST` otherwise); a tab that does not exist or cannot be
-captured is a `CAPTURE_ERROR`.
+`tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
+that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 
 ### 3. Tab Content
 

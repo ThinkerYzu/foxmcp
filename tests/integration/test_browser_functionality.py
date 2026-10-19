@@ -19,7 +19,7 @@ from test_config import FIREFOX_TEST_CONFIG
 from mcp_client_harness import DirectMCPTestClient
 
 
-def png_pixel(png: bytes, x: int, y: int):
+def png_pixel(png: bytes, x: int, y: int) -> tuple[int, int, int]:
     """(r, g, b) of one pixel of an 8-bit RGB or RGBA PNG: enough to tell red from blue"""
     import struct
     import zlib
@@ -555,9 +555,24 @@ class TestBrowserFunctionality:
         print("\n5️⃣  A tab that does not exist, or a tab and a window together, are refused...")
         missing = await mcp_client.call_tool("tabs_capture_screenshot", {"tab_id": 987654321})
         missing_text = missing.get('content', '')
-        assert "Screenshot" not in missing_text or "Failed" in missing_text, missing
+        assert missing_text.startswith("Failed to capture screenshot:"), missing
+        assert "987654321" in missing_text, missing
         both = await mcp_client.call_tool(
             "tabs_capture_screenshot", {"tab_id": blue, "window_id": 1})
         assert "not both" in both.get('content', ''), both
+
+        # Validate malformed protocol input through the actual extension, including
+        # negative IDs that the shared browser-ID validator rejects.
+        import uuid
+
+        for invalid_id in (None, -1, 1.5, "42", True):
+            response = await system['server'].send_request_and_wait({
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "tabs.captureTab",
+                "data": {"tabId": invalid_id},
+            })
+            assert response.get("type") == "error", response
+            assert response["data"]["code"] == "INVALID_PARAMETER", response
 
         print("✅ Background tab screenshot test successful!")

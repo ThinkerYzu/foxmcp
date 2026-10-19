@@ -209,10 +209,11 @@ class TestScreenshotOfOneTab:
         assert stub.sent_request["data"]["windowId"] == 7
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("window_id", [0, 7])
     async def test_a_tab_id_and_a_window_id_together_are_refused_before_asking_the_browser(
-        self, call, stub
+        self, call, stub, window_id
     ):
-        result = await call(tab_id=42, window_id=7)
+        result = await call(tab_id=42, window_id=window_id)
 
         assert "not both" in result
         assert stub.requests == 0

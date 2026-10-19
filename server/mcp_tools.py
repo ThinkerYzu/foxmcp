@@ -1223,7 +1223,7 @@ class FoxMCPTools:
 
                 Not exposed to clients — see the description above.
             """
-            if tab_id is not None and window_id:
+            if tab_id is not None and window_id is not None:
                 return "Error capturing screenshot: pass tab_id or window_id, not both"
 
             if tab_id is not None:
@@ -1294,7 +1294,11 @@ class FoxMCPTools:
                             f.write(image_data)
 
                         file_size = len(image_data)
-                        return f"Screenshot saved to '{filename}' ({captured_from}, {captured_format}, quality: {captured_quality}, size: {file_size} bytes)"
+                        return (
+                            f"Screenshot saved to '{filename}' "
+                            f"({captured_from}, {captured_format}, "
+                            f"quality: {captured_quality}, size: {file_size} bytes)"
+                        )
 
                     except Exception as e:
                         return f"Error saving screenshot to file '{filename}': {str(e)}"
@@ -1302,7 +1306,12 @@ class FoxMCPTools:
                 else:
                     # Return base64 data as before when no filename provided
                     data_size = len(base64_data)
-                    return f"Screenshot captured successfully from {captured_from} ({captured_format}, quality: {captured_quality}):\n{data_url[:100]}...\n\nBase64 data size: {data_size} characters"
+                    return (
+                        f"Screenshot captured successfully from {captured_from} "
+                        f"({captured_format}, quality: {captured_quality}):\n"
+                        f"{data_url[:100]}...\n\n"
+                        f"Base64 data size: {data_size} characters"
+                    )
 
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
