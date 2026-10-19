@@ -340,6 +340,45 @@ message.
 | Extension not loading | Check `about:debugging` for errors |
 | Port conflict | Pass `--port` / `--mcp-port` |
 
+### Port conflicts
+
+If the MCP HTTP port is occupied, v1.4.0 logs an `address already in use` error
+but leaves its WebSocket server running. A connected Firefox extension or a
+426 response from the WebSocket port does not prove that the MCP endpoint is
+working. Check the startup log and both ports; an HTTP response on the occupied
+port may come from the other service.
+
+Stop the FoxMCP process you just started, choose unused ports, and start it
+manually. For a release installation, preserve the example-script directory:
+
+```bash
+# From the installation directory, instead of ./start-foxmcp.sh
+export FOXMCP_EXT_SCRIPTS="$PWD/predefined-scripts"
+venv/bin/python server/server.py --port 9000 --mcp-port 4000
+```
+
+Set the extension's WebSocket port to **9000** and the MCP client's URL to
+`http://localhost:4000/mcp/`. Check the new WebSocket port for a 426 response and
+the new MCP URL for a 307 redirect; then connect an MCP client and list tools.
+The generated `start-foxmcp.sh` uses the default ports, so use the manual command
+for this setup.
+
+### README installation verification
+
+On 2026-10-18, the documented unattended installation was run in an empty
+directory using the published v1.4.0 installer and release assets from GitHub.
+Dependency installation succeeded. Manual startup with the documented custom
+ports accepted an MCP client, advertised all 41 tools, included
+`set-file-input.py` in the predefined-script description, and returned the
+expected WebSocket HTTP 426 response.
+
+The default startup script was also tried, exposing the occupied-MCP-port
+behavior described above. This check did not repeat the interactive installer
+prompts, manual Firefox Add-ons installation, Claude Code registration, or the
+natural-language examples through an AI assistant. The release package smoke
+tests separately exercise all 41 tools over HTTP and stdio with an unsigned XPI
+in Firefox Developer Edition; they do not verify the signed Add-ons installation.
+
 ## Security Notes
 
 The server binds to localhost only and is never exposed to a network. Predefined

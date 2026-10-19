@@ -172,6 +172,7 @@ adding scripts to refresh the list shown to clients. See the
 |---|---|
 | Extension disconnected | Start the server and check the host/port in the FoxMCP popup. `curl -i http://localhost:8765` should return **426 Upgrade Required**. |
 | MCP client cannot connect | Check its URL. `curl -i http://localhost:3000/mcp/` should return a **307** redirect when using HTTP mode. |
+| Server logs “address already in use” | Another service owns a port. FoxMCP can keep running even when its MCP listener fails; use [different ports](docs/development.md#port-conflicts) and check both listeners. |
 | Server reports missing Python packages | Use `venv/bin/python`, or the provided startup script. |
 | Built extension will not install | Follow the [Firefox channel and signing guidance](docs/development.md#loading-in-firefox). |
 
