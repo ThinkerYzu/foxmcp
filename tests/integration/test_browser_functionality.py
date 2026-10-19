@@ -19,6 +19,56 @@ from test_config import FIREFOX_TEST_CONFIG
 from mcp_client_harness import DirectMCPTestClient
 
 
+def png_pixel(png: bytes, x: int, y: int):
+    """(r, g, b) of one pixel of an 8-bit RGB or RGBA PNG: enough to tell red from blue"""
+    import struct
+    import zlib
+
+    assert png.startswith(b"\x89PNG\r\n\x1a\n"), "not a PNG"
+    position, idat = 8, b""
+    while position < len(png):
+        length, kind = struct.unpack(">I4s", png[position:position + 8])
+        body = png[position + 8:position + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, color = struct.unpack(">IIBB", body[:10])
+        elif kind == b"IDAT":
+            idat += body
+        position += 12 + length
+    assert depth == 8 and color in (2, 6), f"unsupported PNG (depth {depth}, colour type {color})"
+    assert x < width and y < height, f"pixel ({x}, {y}) is outside the {width}x{height} image"
+    bpp = 3 if color == 2 else 4
+    stride = width * bpp
+    raw = zlib.decompress(idat)
+    previous, line = bytearray(stride), bytearray(stride)
+    for row in range(y + 1):  # each row is filtered against the one above, so read down to y
+        start = row * (stride + 1)
+        filter_type = raw[start]
+        line = bytearray(raw[start + 1:start + 1 + stride])
+        for i in range(stride):
+            left = line[i - bpp] if i >= bpp else 0
+            above = previous[i]
+            corner = previous[i - bpp] if i >= bpp else 0
+            if filter_type == 1:
+                line[i] = (line[i] + left) & 255
+            elif filter_type == 2:
+                line[i] = (line[i] + above) & 255
+            elif filter_type == 3:
+                line[i] = (line[i] + ((left + above) >> 1)) & 255
+            elif filter_type == 4:
+                guess = left + above - corner
+                distances = abs(guess - left), abs(guess - above), abs(guess - corner)
+                near_left, near_above, near_corner = distances
+                if near_left <= near_above and near_left <= near_corner:
+                    pick = left
+                elif near_above <= near_corner:
+                    pick = above
+                else:
+                    pick = corner
+                line[i] = (line[i] + pick) & 255
+        previous = line
+    return tuple(line[x * bpp:x * bpp + 3])
+
+
 class TestBrowserFunctionality:
     """Browser functionality integration tests"""
 
@@ -428,3 +478,86 @@ class TestBrowserFunctionality:
         print("   ✅ PNG format screenshot successful")
 
         print("✅ End-to-end screenshot capture test successful!")
+
+    @pytest.mark.asyncio
+    async def test_end_to_end_background_tab_screenshot(self, full_mcp_system, tmp_path):
+        """tab_id captures a tab that is not showing, and does not bring it to the front
+
+        Headless Firefox keeps its first tab selected whatever `active` says (and ignores
+        tabs_switch), so the tab in front stays the blank one and both painted tabs are in the
+        background: exactly the case tab_id is for.
+        """
+        system = full_mcp_system
+        mcp_client = system['mcp_client']
+        await mcp_client.connect()
+
+        print("\n🧪 Testing screenshot of a background tab")
+
+        async def painted_tab(color):
+            """A new tab loaded from example.org and painted one colour all over"""
+            created = await mcp_client.call_tool(
+                "tabs_create", {"url": "https://example.org/", "active": False})
+            assert not created.get('isError', False), f"tabs_create should not error: {created}"
+            tab_id = int(re.search(r'ID (\d+)', created.get('content', '')).group(1))
+            await asyncio.sleep(3.0)  # let the page load and the content script start
+            paint = (
+                "document.documentElement.style.background = '%s';"
+                "document.body.innerHTML = "
+                "'<div style=\"position:fixed;inset:0;background:%s\"></div>';"
+                "'painted'" % (color, color)
+            )
+            result = await mcp_client.call_tool(
+                "content_execute_script", {"tab_id": tab_id, "code": paint})
+            assert not result.get('isError', False), f"painting the tab should not error: {result}"
+            await asyncio.sleep(0.5)
+            return tab_id
+
+        async def active_tab():
+            listing = (await mcp_client.call_tool("tabs_list")).get('content', '')
+            lines = [line for line in listing.split('\n') if '(active)' in line]
+            return int(re.search(r'ID (\d+):', lines[0]).group(1))
+
+        blue = await painted_tab("rgb(0,0,255)")
+        red = await painted_tab("rgb(255,0,0)")
+        in_front = await active_tab()
+        assert in_front not in (blue, red), "both painted tabs should be in the background"
+
+        async def capture(**arguments):
+            name = str(tmp_path / f"shot-{len(list(tmp_path.iterdir()))}.png")
+            result = await mcp_client.call_tool(
+                "tabs_capture_screenshot", {"filename": name, **arguments})
+            assert not result.get('isError', False), f"screenshot should not error: {result}"
+            content = result.get('content', '')
+            assert content.startswith("Screenshot saved to"), content
+            with open(name, 'rb') as f:
+                return content, f.read()
+
+        print("\n1️⃣  Without tab_id it is the visible tab, which is neither of ours...")
+        _, png = await capture()
+        r, g, b = png_pixel(png, 20, 20)
+        assert r < 100 and b < 100, f"the visible tab is the blank one, got {(r, g, b)}"
+
+        print("\n2️⃣  tab_id of a background tab gives that tab's own page, blue...")
+        content, png = await capture(tab_id=blue)
+        r, g, b = png_pixel(png, 20, 20)
+        assert b > 200 and r < 60, f"the blue tab should be blue, got {(r, g, b)}"
+        assert f"tab {blue}" in content, content
+        assert png_pixel(png, 600, 300) == (r, g, b), "and all of it, not just a corner"
+
+        print("\n3️⃣  ...and of the other one, red...")
+        _, png = await capture(tab_id=red)
+        r, g, b = png_pixel(png, 20, 20)
+        assert r > 200 and b < 60, f"the red tab should be red, got {(r, g, b)}"
+
+        print("\n4️⃣  ...and nothing was switched.")
+        assert await active_tab() == in_front
+
+        print("\n5️⃣  A tab that does not exist, or a tab and a window together, are refused...")
+        missing = await mcp_client.call_tool("tabs_capture_screenshot", {"tab_id": 987654321})
+        missing_text = missing.get('content', '')
+        assert "Screenshot" not in missing_text or "Failed" in missing_text, missing
+        both = await mcp_client.call_tool(
+            "tabs_capture_screenshot", {"tab_id": blue, "window_id": 1})
+        assert "not both" in both.get('content', ''), both
+
+        print("✅ Background tab screenshot test successful!")
