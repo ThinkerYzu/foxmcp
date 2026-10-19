@@ -433,6 +433,45 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
 }
 ```
 
+#### Capture Screenshot of One Tab
+`tabs.captureVisibleTab` can only see the tab a window is showing. This one captures a given tab
+wherever it is, a background tab included, and does not switch to it. An extension without it
+answers `UNKNOWN_ACTION`.
+
+**Request:**
+```json
+{
+  "id": "req_007c",
+  "type": "request",
+  "action": "tabs.captureTab",
+  "data": {
+    "tabId": 123,
+    "format": "png",
+    "quality": 90
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "req_007c",
+  "type": "response",
+  "action": "tabs.captureTab",
+  "data": {
+    "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "format": "png",
+    "quality": 90,
+    "tabId": 123
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
+`tabId` must be an integer (`INVALID_REQUEST` otherwise); a tab that does not exist or cannot be
+captured is a `CAPTURE_ERROR`.
+
 ### 3. Tab Content
 
 #### Get Page Content
@@ -1313,7 +1352,7 @@ at birth or answer each removal with another.
 - `SCRIPT_NOT_EXECUTABLE` - External script file lacks execute permissions
 - `INVALID_JSON` - Script arguments contain malformed JSON
 - `INVALID_SCRIPT_ARGS` - Script arguments must be JSON array of strings or empty string
-- `CAPTURE_ERROR` - Failed to capture screenshot of the visible tab
+- `CAPTURE_ERROR` - Failed to capture screenshot of the visible tab, or of the tab given to `tabs.captureTab`
 - `MONITOR_NOT_FOUND` - No monitoring session with the given `monitor_id`
 - `REQUEST_NOT_FOUND` - No captured request with the given `request_id`
 - `API_ERROR` - A `browser.*` call raised while handling the action; `message` carries its error

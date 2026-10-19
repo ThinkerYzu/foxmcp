@@ -224,8 +224,8 @@ the one tool you wanted quietly missing.
 
 Most tools take a `tab_id` that in practice comes from `tabs_list`, so enabling
 one of those on its own leaves you with a tool you have no way to address.
-`tabs_capture_screenshot` is the exception that makes the example above work: it
-captures the visible tab and takes no tab ID at all.
+`tabs_capture_screenshot` is the exception that makes the example above work: its
+`tab_id` is optional, and without one it captures the visible tab.
 
 ### Setting both from the environment
 
