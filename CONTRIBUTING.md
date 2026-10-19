@@ -150,6 +150,10 @@ Format:
 - **First line**: Brief summary (50 characters or less)
 - **Blank line**
 - **Body**: Detailed explanation if needed
+- **Line wrapping**: Every commit-message line must be at most 80 characters;
+  wrap body paragraphs and bullet points accordingly
+- **Merge messages**: Apply the same format to merge and squash commits
+- **Validation**: Check line lengths before creating a commit
 - **Use bullet points** for multiple changes
 
 ## Release Process
