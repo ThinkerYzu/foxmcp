@@ -34,6 +34,15 @@ scripts and a `CLAUDE.md` template, and offers to connect Claude Code.
 For unattended setup, save the installer outside the target directory and run
 `bash /path/to/install-from-github.sh --non-interactive` from an empty directory.
 
+**Windows:** Use PowerShell instead:
+
+```powershell
+mkdir foxmcp && cd foxmcp
+.\scripts\install-from-github.ps1
+```
+
+For unattended setup, run `.\scripts\install-from-github.ps1 -NonInteractive` from an empty directory. This creates `venv/`, installs Python dependencies, creates `start-foxmcp.ps1`, installs example scripts, and creates a `CLAUDE.md` template.
+
 ### 2. Install the Firefox extension
 
 Open [FoxMCP on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
@@ -47,8 +56,14 @@ version after a GitHub release; to try a version awaiting approval, use the
 
 From your installation directory:
 
+Linux/macOS:
 ```bash
 ./start-foxmcp.sh
+```
+
+Windows (PowerShell):
+```powershell
+.\start-foxmcp.ps1
 ```
 
 Leave it running. Click the FoxMCP toolbar icon in Firefox and check that it shows
