@@ -217,7 +217,7 @@ Neither port authenticates local processes, which is deliberate — a process ru
 
 Enforced in `mcp_tools.py` before a predefined script runs:
 
-- **Opt-in**: Scripts are disabled unless `FOXMCP_EXT_SCRIPTS` is set
+- **Directory selection**: Source startup requires `FOXMCP_EXT_SCRIPTS`; the installed console command defaults to bundled examples when it is absent. An explicit value overrides the bundle, including an empty value to disable scripts.
 - **Name Filtering**: Script names must match `^[a-zA-Z0-9._-]+$` and may not contain `/`, `\`, or `..`
 - **Path Containment**: The resolved absolute path must stay inside the scripts directory
 - **Executable Check**: The file must exist and be executable
@@ -247,6 +247,7 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 ### 1. Connection Management
 - **Single Extension Connection**: One extension connection at a time. When a new one arrives, the server closes the existing connection first, which prevents connection races between two browsers or a stale socket.
 - **MCP Clients**: Served by FastMCP. There is no per-client state — all clients share the one extension connection, and requests from different clients interleave.
+- **Version Diagnostics**: On connection, both peers announce release versions through a standalone `hello`. The popup and server log warn on mismatch or unavailable legacy versions without blocking tools. State resets per connection; see [protocol](protocol.md#connection-version-announcement).
 - **Reconnection Logic**: The extension retries every `retryInterval` (5000 ms by default) and reconnects when settings change. `maxRetries: -1` retries forever, slowing from `retryInterval` to every 30 seconds after 50 attempts (`FAST_RETRIES` and `SLOW_RETRY_INTERVAL` in `background.js`); a positive `maxRetries` stops after that many attempts until **Reconnect** in the popup resets the counter.
 
 ### 2. Request Handling
@@ -382,11 +383,14 @@ python server/server.py --stdio           # MCP on stdin/stdout, no MCP HTTP lis
 ### 3. Environment Configuration
 
 ```bash
-# Required for predefined scripts; without it, the feature is disabled
+# Select custom predefined scripts (required for direct source startup)
 export FOXMCP_EXT_SCRIPTS="/path/to/scripts"
 ```
 
-This is the only environment variable the server reads. Host and ports are set through the constructor or the command-line flags above.
+The console wrapper defaults this variable to bundled examples only when it is
+absent. `FOXMCP_DISABLE_TOOLS` and `FOXMCP_ENABLE_TOOLS` select tools; see
+[configuration.md](configuration.md). Host and ports are set through the
+constructor or command-line flags above.
 
 ## Deployment
 
@@ -400,7 +404,7 @@ make run-server         # Start server
 
 ### 2. Distribution
 - **Extension Packaging**: XPI file, published to the Firefox Add-ons store and attached to GitHub releases
-- **Server**: Run from the checkout with its virtual environment; `scripts/install-from-github.sh` sets this up for end users
+- **Server**: The Python wheel/sdist installs the existing `server/` modules as `foxmcp`, with executable examples under `foxmcp/examples` and a `foxmcp` console entry point. Source startup and `scripts/install-from-github.sh` remain supported; PyPI publication status is in the [README](../README.md#run-with-uvx-next-release).
 - **Versioning**: Extension and server are released together — the WebSocket protocol is the compatibility boundary between them
 
 ### 3. Observability

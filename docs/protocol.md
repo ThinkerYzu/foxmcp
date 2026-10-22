@@ -56,9 +56,41 @@ Request monitors are owned by the proxy that starts them. On disconnect, pending
 requests finish before cleanup, including monitor-creation replies that arrive
 after the caller has gone. Only that proxy's monitors are stopped.
 
+## Connection version announcement
+
+Immediately after opening the extension WebSocket at `/`, each peer sends its
+own release version:
+
+```json
+{"type": "hello", "data": {"version": "1.4.0"}}
+```
+
+This is an advisory announcement with no request ID or reply. It precedes browser
+requests and does not add an MCP tool or change HTTP/stdio startup. The extension
+reads its installed manifest; the Python server uses `server/version.py`, checked
+against release metadata by `scripts/check-version.sh`.
+
+Version strings contain one to four dot-separated numeric components and at most
+64 characters (numeric release versions). Exact equality is checked;
+this is a release mismatch notice, not negotiated protocol compatibility. Both
+peers continue serving tools on mismatch. The server logs both versions and asks
+users to update the extension and server together. The popup shows the same
+notice when opened from the FoxMCP toolbar icon and refreshes once per second
+while open, preserving unsaved configuration. A mismatch does not automatically
+open the popup, display a modal dialog or send a browser notification.
+
+Legacy peers may omit `hello`: the popup shows the server version as unavailable,
+and a new server logs an unavailable extension version after five seconds without
+a valid announcement. Malformed version announcements are ignored. An older
+extension ignores the new non-request message; an older server may log it as
+unhandled. No handshake timeout disconnects a peer. Version state resets on each
+connection and disconnect, and messages from superseded extension sockets are
+ignored.
+
 ## Message Structure
 
-All messages follow this JSON structure:
+Browser requests and their replies follow this JSON structure (the standalone
+`hello` announcement above has no request ID, action or timestamp):
 ```json
 {
   "id": "unique-request-id",

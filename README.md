@@ -13,6 +13,10 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ## Quick start
 
+PyPI packaging is prepared for the next release; `foxmcp` has not yet been
+published to PyPI. Use the GitHub installer below today. The upcoming
+[uvx setup](#run-with-uvx-next-release) removes the server installation directory.
+
 You need Firefox, an MCP client, Python **3.10+** with `venv`, and the commands
 `bash`, `curl`, `unzip`, and `sha256sum`. The commands below use a Bash shell.
 On Debian/Ubuntu, install missing prerequisites with
@@ -39,7 +43,10 @@ For unattended setup, save the installer outside the target directory and run
 Open [FoxMCP on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
 and click **Add to Firefox**.
 
-Use matching server and extension versions. Mozilla review can delay the Add-ons
+Use matching server and extension versions. Click the FoxMCP toolbar icon to see
+a mismatch warning with both versions inside the popup. No automatic dialog or
+notification opens. The server also logs a warning; older peers may show a version
+as unavailable. Tools remain available while you update both together. Mozilla review can delay the Add-ons
 version after a GitHub release; to try a version awaiting approval, use the
 [temporary add-on instructions](docs/development.md#loading-in-firefox).
 
@@ -107,6 +114,28 @@ See the [API reference](docs/api-reference.md) for tool names and parameters.
 
 ## Other setup options
 
+### Run with uvx (next release)
+
+After the first PyPI release, install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+and the [Firefox extension](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
+For one Claude Code client, register a server it launches itself:
+
+```bash
+claude mcp add foxmcp -- uvx foxmcp --stdio
+```
+
+For several clients, start one shared HTTP server with `uvx foxmcp`, then use
+[the HTTP registration commands](#4-connect-your-ai-client). The extension
+connects to WebSocket port 8765 in either mode. Separate stdio clients still
+conflict on that port, and the first browser call may need a retry while the
+extension reconnects; see [stdio tradeoffs](docs/configuration.md#serving-mcp-over-stdio).
+
+The packaged command includes and enables the example scripts. An explicit
+`FOXMCP_EXT_SCRIPTS` overrides them; an empty value disables scripts. To match a
+particular extension release, use `uvx --from foxmcp==VERSION foxmcp --stdio`,
+replacing `VERSION` with that release's version. Python 3.10+ and Bash for the
+shell examples are required.
+
 ### Install from source
 
 You also need Git, `make`, and `zip` (on Debian/Ubuntu:
@@ -159,7 +188,8 @@ See [configuration](docs/configuration.md) for client examples and other options
 ## Predefined scripts
 
 External executable scripts can generate JavaScript for FoxMCP to run in a tab.
-The release installer configures the examples in `predefined-scripts/`, including
+The release installer configures the examples in `predefined-scripts/`; the
+packaged `foxmcp` command uses its bundled examples by default. Both include
 DOM summaries, YouTube controls, calendar extraction, and a file-input helper.
 Ask your assistant which predefined scripts are available.
 

@@ -5,9 +5,9 @@ name: Release
 # user installs should be traceable to the commit it was built from, without
 # taking the maintainer's word for it.
 #
-# Every action used here is published by GitHub itself. The one outside
-# dependency is web-ext, which only the AMO job installs, and that job is the
-# only one that touches a credential.
+# GitHub actions build and attest release artifacts; PyPA's publishing action
+# uploads the tested Python distributions with OIDC. Only the AMO job reaches
+# the web-ext signing credentials.
 #
 # Two ways in:
 #   - push a tag v1.2.0            builds, publishes, submits to AMO
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to rehearse, e.g. 1.2.0. No tag, no release, no AMO upload.'
+        description: 'Version to rehearse, e.g. 1.2.0. No tag, no release, no PyPI or AMO upload.'
         required: true
 
 permissions:
@@ -78,10 +78,18 @@ jobs:
         with:
           name: packages
           path: dist/packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/python
 
       - name: Verify tested archive checksums
         working-directory: dist/packages
         run: sha256sum --check --strict SHA256SUMS
+
+      - name: Verify tested Python distribution checksums
+        working-directory: dist/python
+        run: sha256sum --check --strict PYTHON-SHA256SUMS
 
       # This is the part that answers issue #1. The attestation is a signed
       # statement that these exact bytes came out of this workflow, at this
@@ -94,6 +102,7 @@ jobs:
           subject-path: |
             dist/packages/foxmcp@codemud.org.xpi
             dist/packages/foxmcp-server.zip
+            dist/python/packages/*
 
   github-release:
     name: Publish the GitHub release
@@ -108,10 +117,18 @@ jobs:
         with:
           name: packages
           path: dist/packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/python
 
       - name: Verify archives before publishing
         working-directory: dist/packages
         run: sha256sum --check --strict SHA256SUMS
+
+      - name: Verify tested Python distribution checksums
+        working-directory: dist/python
+        run: sha256sum --check --strict PYTHON-SHA256SUMS
 
       - name: Write the release notes
         run: scripts/release-notes.sh "${{ needs.verify.outputs.version }}" > "$RUNNER_TEMP/notes.md"
@@ -129,7 +146,9 @@ jobs:
             'dist/packages/foxmcp@codemud.org.xpi' \
             dist/packages/foxmcp-server.zip \
             dist/packages/SHA256SUMS \
-            scripts/install-from-github.sh
+            scripts/install-from-github.sh \
+            dist/python/packages/* \
+            dist/python/PYTHON-SHA256SUMS
 
   amo:
     name: Submit to addons.mozilla.org
@@ -175,3 +194,28 @@ jobs:
             --source-dir=dist/extension \
             --artifacts-dir=dist/signed \
             --approval-timeout=0
+
+  pypi:
+    name: Publish Python distributions to PyPI
+    needs: [verify, build, github-release]
+    if: needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/foxmcp
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/python
+      - name: Verify tested distributions before publishing
+        working-directory: dist/python
+        run: sha256sum --check --strict PYTHON-SHA256SUMS
+      # Configure a pending Trusted Publisher for ThinkerYzu/foxmcp,
+      # workflow release.yml, environment pypi. No API token is needed.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/python/packages/
+          attestations: true

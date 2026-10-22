@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pingTimeoutInput = document.getElementById('pingTimeout');
 
   // Load configuration from storage and background script
-  async function updateDisplay() {
+  async function updateDisplay(loadConfig = true) {
     try {
       // Get connection status from background script
       const connectionResponse = await new Promise((resolve) => {
@@ -46,11 +46,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       updateStatus(connectionResponse.connected, connectionResponse.retryAttempts, storageConfig);
-      loadConfigToUI(storageConfig);
+      updateVersionDisplay(connectionResponse);
+      if (loadConfig) loadConfigToUI(storageConfig);
 
     } catch (error) {
       console.error('Error updating display:', error);
       updateStatus(false, 0, {});
+      updateVersionDisplay({ connected: false });
     }
   }
 
@@ -78,6 +80,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initial display update
   await updateDisplay();
+  const refreshTimer = setInterval(() => updateDisplay(false), 1000);
+  window.addEventListener('unload', () => clearInterval(refreshTimer));
 
   // Handle force reconnect button
   forceReconnectButton.addEventListener('click', () => {
@@ -189,5 +193,22 @@ function updateStatus(connected, retryAttempts, config) {
     } else {
       retryInfo.textContent = '';
     }
+  }
+}
+
+function updateVersionDisplay(connection) {
+  const element = document.getElementById('versionInfo');
+  const extension = connection.extensionVersion || browser.runtime.getManifest().version;
+  const server = connection.connected ? connection.serverVersion : null;
+  element.style.color = '#666';
+  if (!connection.connected) {
+    element.textContent = `Extension ${extension}; server disconnected.`;
+  } else if (!server) {
+    element.textContent = `Extension ${extension}; server version unavailable. Older servers may not report a version. Update both together to check versions.`;
+  } else if (server !== extension) {
+    element.style.color = '#854d0e';
+    element.textContent = `Version mismatch: extension ${extension}, server ${server}. Update extension and server together. Browser tools remain available.`;
+  } else {
+    element.textContent = `Extension ${extension}; server ${server}.`;
   }
 }

@@ -450,6 +450,8 @@ class TestMonitorsFollowTheirClient:
             """Stand in for the extension: hand out a monitor id, note the stops"""
             while True:
                 request = json.loads(await extension.recv())
+                if request.get('type') == 'hello':
+                    continue
                 action = request['action']
 
                 if action == 'requests.start_monitoring':

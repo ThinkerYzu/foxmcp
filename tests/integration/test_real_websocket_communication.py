@@ -76,6 +76,7 @@ class TestRealWebSocketCommunication:
             # Try to connect as a client would
             uri = f"ws://localhost:{real_server._test_port}"
             async with connect_as_extension(uri) as websocket:
+                assert json.loads(await websocket.recv())["type"] == "hello"
                 logger.info("Successfully connected to server")
                 
                 # Send a test message

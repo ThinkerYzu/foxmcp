@@ -64,8 +64,10 @@ unless you can show the reasoning is wrong:
   See the threat model above.
 - **On a shared machine, another local user can reach both ports.** Localhost binding
   restricts by network interface, not by uid. FoxMCP assumes a single-user workstation.
-- **Predefined scripts run arbitrary programs by design.** They are disabled unless
-  `FOXMCP_EXT_SCRIPTS` is set, and are validated and logged
+- **Predefined scripts run arbitrary programs by design.** Direct source startup
+  requires `FOXMCP_EXT_SCRIPTS`; the installed console command defaults to the
+  bundled examples. An explicit directory replaces the bundle, and an empty
+  value disables scripts. All scripts are validated and logged
   ([`docs/scripts.md`](docs/scripts.md#security-features)), but a caller that can reach the
   MCP port can run anything in that directory.
 - **A malicious installed extension** can present a `moz-extension://` origin of its own.

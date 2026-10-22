@@ -7,6 +7,7 @@ Licensed under the MIT License - see LICENSE file for details
 """
 
 import argparse
+from contextlib import suppress
 import asyncio
 import json
 import logging
@@ -20,10 +21,12 @@ from typing import Dict, Any, Optional
 import websockets
 import uvicorn
 try:
+    from .version import VERSION
     from .mcp_tools import FoxMCPTools
     from .file_transfer import FileTransferServer
     from .browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN
 except ImportError:
+    from version import VERSION
     from mcp_tools import FoxMCPTools
     from file_transfer import FileTransferServer
     from browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN
@@ -86,6 +89,7 @@ def find_available_port(start_port=3000, max_attempts=100):
 class FoxMCPServer:
     # How often to check whether the MCP clients owning monitors are still there
     MONITOR_REAP_INTERVAL = 5.0
+    VERSION_REPORT_TIMEOUT = 5.0
 
     # Owner recorded for a monitor started outside any MCP session, which is what
     # a tool called in-process rather than over a transport gets. There is no
@@ -140,6 +144,7 @@ class FoxMCPServer:
 
         # SINGLE CONNECTION CONSTRAINT: Only one extension connection allowed
         self.extension_connection = None
+        self.extension_version = None
         self.pending_requests = {}  # Map of request IDs to Future objects
 
         # Connection event management
@@ -203,18 +208,26 @@ class FoxMCPServer:
                 logger.warning(f"Error closing existing connection: {e}")
 
         self.extension_connection = websocket
+        self.extension_version = None
+        version_timeout = asyncio.create_task(self._warn_missing_version(websocket))
 
         # Notify all waiters that a connection has been established
         self._notify_connection_waiters()
 
         try:
+            await websocket.send(json.dumps({"type": "hello", "data": {"version": VERSION}}))
             async for message in websocket:
+                if self.extension_connection is not websocket:
+                    break
                 await self.handle_extension_message(message)
         except ConnectionAbortedError:
             logger.info("Extension disconnected")
         except Exception as e:
             logger.error(f"Error handling extension connection: {e}")
         finally:
+            version_timeout.cancel()
+            with suppress(asyncio.CancelledError):
+                await version_timeout
             # Only the handler still holding the slot may clear it.
             #
             # An extension reconnecting closes its old socket and opens the new
@@ -226,6 +239,7 @@ class FoxMCPServer:
             # nothing to name.
             if self.extension_connection is websocket:
                 self.extension_connection = None
+                self.extension_version = None
                 self.monitor_owners.clear()
                 for future in list(self.pending_requests.values()):
                     if not future.done():
@@ -240,11 +254,38 @@ class FoxMCPServer:
         where = f" from {address[0]}:{address[1]}" if address else ""
         return f"Browser extension connected{where}"
 
+    async def _warn_missing_version(self, websocket):
+        """Older peers remain usable even when they cannot report a version."""
+        await asyncio.sleep(self.VERSION_REPORT_TIMEOUT)
+        if self.extension_connection is websocket and self.extension_version is None:
+            logger.warning(
+                "Extension version unavailable; server %s. Update extension and server "
+                "together to check versions. Browser tools remain available.", VERSION
+            )
+
     async def handle_extension_message(self, message: str):
         """Process message from browser extension"""
         try:
             data = json.loads(message)
+            if not isinstance(data, dict):
+                return
             message_type = data.get('type', 'unknown')
+            if message_type == 'hello':
+                payload = data.get('data')
+                version = payload.get('version') if isinstance(payload, dict) else None
+                if (isinstance(version, str) and len(version) <= 64
+                        and re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,3}', version)):
+                    if version != self.extension_version:
+                        if version != VERSION:
+                            logger.warning(
+                                "FoxMCP version mismatch: extension %s, server %s. "
+                                "Update extension and server together; browser tools remain available.",
+                                version, VERSION
+                            )
+                        else:
+                            logger.info("FoxMCP versions match: extension %s, server %s", version, VERSION)
+                    self.extension_version = version
+                return
             message_id = data.get('id')
             action = data.get('action', 'unknown')
 
@@ -1123,7 +1164,8 @@ async def main():
         return
     await server.start_server()
 
-if __name__ == "__main__":
+def run() -> None:
+    """Run the server with consistent exit codes for scripts and console entry points."""
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
@@ -1135,3 +1177,7 @@ if __name__ == "__main__":
         # launched the process reports what it exited with, and often shows
         # nothing else.
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    run()

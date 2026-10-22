@@ -35,6 +35,25 @@ make package    # build, then create the XPI and server ZIP, then clear the prof
 `package` produces `dist/packages/foxmcp@codemud.org.xpi` and
 `dist/packages/foxmcp-server.zip`.
 
+### Python distributions
+
+Hatchling maps the existing `server/` modules to the installed `foxmcp` package
+and `predefined-ex/` to executable package examples. No source relocation is
+needed. Runtime dependencies in `pyproject.toml` must match
+`server/requirements.txt`; the artifact check enforces this.
+
+```bash
+venv/bin/python -m pip install build twine
+venv/bin/python -m build --outdir dist/python/packages
+venv/bin/python -m twine check --strict dist/python/packages/*
+venv/bin/python scripts/check-python-dist.py dist/python/packages
+```
+
+Use a fresh output directory after changing versions. `build` creates the sdist,
+then builds the wheel from it. CI installs each artifact on Python 3.10 and 3.14
+and runs [Python package smoke checks](../tests/README.md#python-package-smoke-test)
+outside the checkout. Python archives are separate from `make package`'s ZIP/XPI.
+
 ### Test
 
 ```bash
@@ -288,11 +307,11 @@ test is fine.
 
 ## Release Process
 
-1. Bump the version in `extension/manifest.json`, `package.json`,
+1. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh` and the install URL in `README.md`
 2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.4.0] - <date>` and add
    the link reference at the bottom
-3. `scripts/check-version.sh 1.4.0` — fails unless all five files agree
+3. `scripts/check-version.sh 1.4.0` — fails unless all seven files agree
 4. Commit, then tag: `git tag -a v1.4.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
@@ -306,6 +325,11 @@ transport saves a tool-call report, completed feature checks and a screenshot;
 logs and upload receipts are also retained as Actions artifacts. See [Package smoke test](../tests/README.md#release-package-smoke-test).
 
 Only those tested archives are attested and published to the GitHub release.
+CI also builds and tests a Python wheel and sdist once. The release reuses those
+exact files, verifies `PYTHON-SHA256SUMS`, and includes them in GitHub provenance
+and release assets. A separate tag-only job publishes them to PyPI with OIDC
+Trusted Publishing and PyPI attestations. Manual rehearsals publish neither
+to PyPI nor GitHub.
 The AMO job unpacks the tested XPI for submission rather than rebuilding it.
 Release notes come from the changelog section. No publication happens if lint,
 installation, minimum-Python checks, the full suite or package smoke testing fails.
@@ -328,6 +352,32 @@ There is no release script to run. `release-commands.sh` used to sit in the
 repository root and was deleted in 1.2.0; if you find a copy, it is not the
 release path and running it would commit your working tree under a v1.1.0
 message.
+
+### First PyPI publication
+
+Before the first publishing tag, create the GitHub `pypi` environment and
+configure its release-tag deployment policy. In the owning PyPI account, create
+[a pending Trusted Publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+with these exact values:
+
+| Field | Value |
+|---|---|
+| Project name | `foxmcp` |
+| GitHub owner | `ThinkerYzu` |
+| Repository | `foxmcp` |
+| Workflow filename | `release.yml` |
+| Environment | `pypi` |
+
+No PyPI token belongs in GitHub secrets. Publication uses
+[`pypa/gh-action-pypi-publish`](https://github.com/pypa/gh-action-pypi-publish)
+in the release workflow, after all reusable CI checks and GitHub publication.
+The PyPI name returned 404 on 2026-10-21; PyPI can still reject a reserved name.
+
+Bump `pyproject.toml` with the extension and other version-bearing files before
+the next release. Rehearse first, then publish through a new version tag. After
+publication, verify `uvx --from foxmcp==VERSION foxmcp --help` from an empty
+directory and promote the README's uvx setup into Quick start. Do not describe
+the package as published until PyPI serves that tested version.
 
 ## Troubleshooting
 

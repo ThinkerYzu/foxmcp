@@ -256,3 +256,65 @@ jobs:
           name: packages
           path: dist/packages/
           if-no-files-found: error
+
+  python-build:
+    name: Build Python distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install build twine
+      # build creates an sdist, then builds the wheel from that sdist.
+      - run: python -m build --outdir dist/python/packages
+      - run: python -m twine check --strict dist/python/packages/*
+      - run: python scripts/check-python-dist.py dist/python/packages
+      - name: Record exact Python distribution checksums
+        working-directory: dist/python
+        run: sha256sum packages/* > PYTHON-SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/python/
+          if-no-files-found: error
+
+  python-install:
+    name: Install wheel and sdist (Python ${{ matrix.python }})
+    needs: python-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/python
+      - name: Verify the distributions
+        working-directory: dist/python
+        run: sha256sum --check --strict PYTHON-SHA256SUMS
+      - name: Install each distribution and test outside the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')
+          cp tests/python_package_smoke.py "$RUNNER_TEMP/python_package_smoke.py"
+          index=0
+          for archive in "$GITHUB_WORKSPACE"/dist/python/packages/*; do
+            index=$((index + 1))
+            install_env="$RUNNER_TEMP/python-install-$index"
+            python -m venv "$install_env"
+            "$install_env/bin/python" -m pip install "$archive"
+            "$install_env/bin/python" -m pip check
+            (cd "$RUNNER_TEMP" && env -u PYTHONPATH \
+              "$install_env/bin/python" python_package_smoke.py "$version")
+          done

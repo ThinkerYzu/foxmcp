@@ -2,7 +2,7 @@
 #
 # Fail unless every file that carries the version agrees with the one given.
 #
-# The version is written out by hand in five places, so a tag can disagree with
+# The version is written out by hand in seven places, so a tag can disagree with
 # the manifest and nothing notices until a user installs the result. The release
 # workflow runs this first and refuses to build when it fails. Run it yourself
 # after bumping, before tagging.
@@ -53,6 +53,14 @@ check extension/manifest.json \
 check package.json \
       "\"version\": \"$version\"" \
       "\"version\"[[:space:]]*:[[:space:]]*\"$escaped\""
+
+check pyproject.toml \
+      "version = \"$version\"" \
+      "^version[[:space:]]*=[[:space:]]*\"$escaped\"[[:space:]]*$"
+
+check server/version.py \
+      "VERSION = \"$version\"" \
+      "^VERSION[[:space:]]*=[[:space:]]*\"$escaped\"[[:space:]]*$"
 
 check scripts/install-from-github.sh \
       "VERSION=\"v$version\"" \

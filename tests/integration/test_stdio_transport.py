@@ -166,6 +166,8 @@ class TestServingOverStdio:
 
             call = asyncio.create_task(stdio_client.call_tool('tabs_list'))
 
+            greeting = json.loads(await asyncio.wait_for(extension.recv(), REPLY_TIMEOUT))
+            assert greeting['type'] == 'hello'
             request = json.loads(await asyncio.wait_for(extension.recv(), REPLY_TIMEOUT))
             assert request['action'] == 'tabs.list'
 
@@ -250,6 +252,8 @@ class TestBeforeTheExtensionConnects:
 
             call = asyncio.create_task(stdio_client.call_tool('tabs_list'))
 
+            greeting = json.loads(await asyncio.wait_for(extension.recv(), REPLY_TIMEOUT))
+            assert greeting['type'] == 'hello'
             request = json.loads(await asyncio.wait_for(extension.recv(), REPLY_TIMEOUT))
             assert request['action'] == 'tabs.list'
 
@@ -303,6 +307,8 @@ class TestStdoutCarriesOnlyTheProtocol:
 
             call = asyncio.create_task(stdio_client.call_tool('history_get_recent',
                                                               {'count': 1}))
+            greeting = json.loads(await asyncio.wait_for(extension.recv(), REPLY_TIMEOUT))
+            assert greeting['type'] == 'hello'
             request = json.loads(await asyncio.wait_for(extension.recv(), REPLY_TIMEOUT))
             await extension.send(json.dumps({
                 'id': request['id'],

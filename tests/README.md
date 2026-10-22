@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**471 collected, 0 skipped** — 284 unit and 187 integration.
+**496 collected, 0 skipped** — 307 unit and 189 integration.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
@@ -42,12 +42,12 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 
 `run_tests.py` collects `unit/` and `integration/` only. The `test_*.py` files that sit
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
-and are **not** part of the 471. Run them by hand if you need them.
+and are **not** part of the 496. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 284 | no |
-| `integration/` | 187 | yes |
+| `unit/` | 307 | no |
+| `integration/` | 189 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
@@ -65,6 +65,7 @@ Selected test modules, including local-file coverage:
 | `test_predefined_script_logging.py` | 14 | The audit log around `content_execute_predefined`, and the validation chain behind it |
 | `test_request_monitoring.py` | 11 | Web request capture logic |
 | `test_ping_pong.py` | 8 | Ping-pong protocol |
+| `test_connection_versions.py` | 12 | Advisory version matching/mismatch, malformed peers, legacy ping and replacement/reset cleanup |
 | `test_server.py` | 10 | Server init, connection handling, message processing |
 | `test_screenshot_filename.py` | 5 | Screenshot filename generation |
 
@@ -74,6 +75,7 @@ Selected test modules:
 
 | File | Tests | Covers |
 |---|---|---|
+| `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: mismatch, legacy tools, stale sockets, reset and edit-preserving refresh |
 | `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
 | `test_history_management.py` | 10 | History query, recent, time ranges, concurrency |
@@ -385,7 +387,7 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 471 must pass.
+- **Run the suite before committing.** All 496 must pass.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem
@@ -410,3 +412,24 @@ Reports land in `tests/htmlcov/`.
 | `AttributeError: ... '_tool_manager'` | Private attribute, gone in 3.x | Use `get_tool()` |
 | Extension change has no effect | Stale cached profile | `make clean && make package && rm -rf dist/profile-cache/*` |
 | Import errors | Missing symlinks | `make setup-test-imports` |
+
+## Python package smoke test
+
+`ci.yml` builds a wheel and sdist once with `python -m build`; the wheel is built
+from the sdist. `scripts/check-python-dist.py` checks the shared extension and runtime server versions,
+Python floor, dependencies against `server/requirements.txt`, module/resource
+contents, license, entry point, and executable modes of all bundled examples.
+Twine validates the metadata and README.
+
+The `python-install` matrix installs both artifacts in fresh environments on
+Python 3.10 and 3.14, copies `python_package_smoke.py` outside the checkout, and
+runs it there with the installed Python and expected version as its sole argument.
+It checks help, invalid options, occupied-port exit codes, all 41 tools over HTTP
+and stdio, version announcements, request/response bridging, executable bundled examples, a custom script
+directory, and an explicit empty override. A simulated extension answers requests;
+this check covers packaging and startup. The Firefox suite and ZIP/XPI smoke test
+separately cover browser behavior. The packaged command receives no test fixtures.
+
+Python distributions and `PYTHON-SHA256SUMS` are retained as the
+`python-distributions` Actions artifact and reused by release publication; neither
+a manual rehearsal nor ordinary CI publishes to PyPI.

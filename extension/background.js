@@ -7,6 +7,8 @@
 // SINGLE CONNECTION CONSTRAINT: Only one WebSocket connection to MCP server allowed
 let websocket = null;
 let isConnected = false;
+const EXTENSION_VERSION = browser.runtime.getManifest().version;
+let serverVersion = null;
 
 
 // Debug logging configuration - set to true to send extension logs to server
@@ -126,8 +128,11 @@ function connectToMCPServer() {
 
     const socket = new WebSocket(WS_URL);
     websocket = socket;
+    serverVersion = null;
 
     socket.onopen = () => {
+      if (websocket !== socket) return;
+      socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION } }));
       console.log('Connected to MCP server');
       isConnected = true;
       retryAttempts = 0; // Reset retry counter on successful connection
@@ -147,6 +152,7 @@ function connectToMCPServer() {
     };
 
     socket.onmessage = async (event) => {
+      if (websocket !== socket) return;
       // Test debug message right when we receive a message
       console.log('📨 Extension received message from server');
       await handleMessage(JSON.parse(event.data));
@@ -167,6 +173,7 @@ function connectToMCPServer() {
 
       console.log('Disconnected from MCP server');
       isConnected = false;
+      serverVersion = null;
       clearAllMonitors('the connection to the server dropped');
       scheduleReconnect();
     };
@@ -273,11 +280,23 @@ function disconnect() {
     websocket = null;
   }
   isConnected = false;
+  serverVersion = null;
   clearAllMonitors('the connection to the server was closed');
 }
 
 async function handleMessage(message) {
   const { id, type, action, data } = message;
+
+  if (type === 'hello') {
+    const version = data && data.version;
+    if (typeof version === 'string' && version.length <= 64 && version.trim() === version && /^[0-9]+(?:\.[0-9]+){0,3}$/.test(version)) {
+      serverVersion = version;
+      if (serverVersion !== EXTENSION_VERSION) {
+        console.warn(`FoxMCP version mismatch: extension ${EXTENSION_VERSION}, server ${serverVersion}. Update both together.`);
+      }
+    }
+    return;
+  }
 
   if (type !== 'request') return;
 
@@ -418,6 +437,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getConnectionStatus') {
     sendResponse({
       connected: isConnected,
+      extensionVersion: EXTENSION_VERSION,
+      serverVersion: serverVersion,
       retryAttempts: retryAttempts,
       config: CONFIG
     });
