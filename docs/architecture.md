@@ -123,6 +123,22 @@ Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.cre
   beside the WebSocket server rather than a thread, since the stdio transport is
   asyncio throughout. The WebSocket half is identical either way
 
+#### Shared stdio server
+
+With `--stdio --single-instance`, each client process is a FastMCP stdio proxy
+with its own upstream MCP session. The first launch starts a detached worker;
+subsequent launches discover it through a private per-user file keyed by the
+extension's WebSocket port. An OS file lock elects the worker and is released
+automatically if it crashes.
+
+The worker runs the extension WebSocket and an authenticated internal MCP HTTP
+endpoint in one asyncio loop. The kernel assigns the HTTP port; the usual MCP
+port 3000 is unused. A separate authenticated WebSocket tracks each proxy's
+lifetime, so even a killed proxy releases its MCP sessions and request monitors.
+The worker stops after 60 seconds with no proxies. Server code and tool/script
+configuration must match when joining an existing worker. See
+[configuration](configuration.md#sharing-one-server-across-chats).
+
 ## Data Flow
 
 ### 1. MCP Client → Browser

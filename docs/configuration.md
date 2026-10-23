@@ -12,6 +12,7 @@ make run-server
 python server/server.py --port 9000 --mcp-port 4000
 python server/server.py --no-mcp  # WebSocket only, disable MCP server
 python server/server.py --stdio   # MCP on stdin/stdout, for a client that launches it
+python server/server.py --stdio --single-instance  # Share across chats; start automatically
 ```
 
 ## Command Line Options
@@ -25,6 +26,9 @@ Options:
   --mcp-port MCP_PORT  MCP server port (default: 3000)
   --no-mcp             Disable MCP server
   --stdio              Serve MCP on stdin/stdout instead of HTTP
+  --single-instance    Automatically start or join a shared server (requires --stdio)
+  --single-instance-idle-timeout SECONDS
+                       Stop the shared server after this long without clients (default: 60)
   --disable-tools GROUP[,GROUP...]
                        Tool groups to leave unregistered (default: none)
   --enable-tools TOOL[,TOOL...]
@@ -43,7 +47,7 @@ exits — the way most clients expect to manage a server.
 
 ```bash
 claude mcp add --scope project foxmcp -- /path/to/foxmcp/venv/bin/python \
-  /path/to/foxmcp/server/server.py --stdio
+  /path/to/foxmcp/server/server.py --stdio --single-instance
 ```
 
 which writes a `.mcp.json` any MCP client can read:
@@ -54,7 +58,7 @@ which writes a `.mcp.json` any MCP client can read:
     "foxmcp": {
       "type": "stdio",
       "command": "/path/to/foxmcp/venv/bin/python",
-      "args": ["/path/to/foxmcp/server/server.py", "--stdio"],
+      "args": ["/path/to/foxmcp/server/server.py", "--stdio", "--single-instance"],
       "env": {}
     }
   }
@@ -66,9 +70,42 @@ environment's packages, and a client launches the command with its own
 environment, not your shell's. On Windows the interpreter is
 `venv\Scripts\python.exe`.
 
+### Sharing one server across chats
+
+`--stdio --single-instance` gives each chat its own stdio proxy and one shared
+background server holding the Firefox connection. The first launch starts that
+server automatically. Later launches discover and authenticate it; an OS file
+lock prevents simultaneous launches from creating two owners.
+
+The background server runs independently of the first chat. Closing or killing
+one proxy leaves the others working. After the last proxy disconnects, it stops
+after 60 seconds; change this with `--single-instance-idle-timeout SECONDS`.
+A new chat during that interval reuses the server and its Firefox connection.
+Network monitors belong to the chat that started them and are cleaned up when
+that chat disconnects, including when its proxy is killed.
+
+The shared server is scoped to the current OS user and WebSocket port. It uses
+an internal HTTP endpoint on an automatically assigned IPv4 loopback port,
+protected by a random token; port 3000 is unused. Discovery, lock and log files
+are in `%LOCALAPPDATA%\foxmcp` on Windows, or `$XDG_RUNTIME_DIR/foxmcp`
+(`~/.cache/foxmcp` when unset) on Unix. Logs are named `instance-PORT.log`.
+
+Clients must use the same checkout, server code, tool selection and
+`FOXMCP_EXT_SCRIPTS` directory. Incompatible settings fail with an error instead
+of silently using another client's tools. The first launch sets the idle timeout.
+After changing shared settings, close the clients and wait for idle shutdown.
+
+A crashed background server is replaced on the next launch; existing MCP
+clients need restarting. In-flight browser actions are never replayed. A plain
+HTTP or stdio server already holding the browser port must be stopped before
+switching to this mode. The extension's reconnect delay still applies after the
+shared server has stopped.
+
+### Plain stdio
+
 The extension side does not change. The WebSocket server still listens on 8765,
 the extension still connects to it, and every tool works as it does over HTTP.
-Three things are different:
+Without `--single-instance`, three things are different:
 
 - **No MCP HTTP listener.** Nothing serves port 3000, so `--mcp-port` is refused
   rather than silently ignored. `--no-mcp` is refused too, since it would leave
@@ -96,13 +133,14 @@ terminal 1:  claude  ->  server starts, binds 8765, extension attaches
 terminal 2:  claude  ->  server exits: "Cannot listen on localhost:8765"
 ```
 
-That is a normal way to work rather than a misconfiguration, and the server
-cannot solve it. A second server on another port would have nothing to serve,
+Use `--stdio --single-instance` to share the browser server automatically.
+A second independent server on another port would have nothing to serve,
 because the extension is configured to dial one address.
 
 Mixing modes collides the same way: a standing HTTP-mode server holds 8765, so a
-client's `--stdio` server cannot start. If you want several clients at once, run
-one server in HTTP mode and point them all at `http://localhost:3000/mcp/`.
+client's plain `--stdio` server cannot start. For several clients, use
+`--stdio --single-instance` everywhere, or run one server in HTTP mode and point
+them all at `http://localhost:3000/mcp/`.
 
 ### The reconnect gap
 
@@ -158,13 +196,11 @@ extension has reconnected long before you ask for anything.
 
 A terminal client is the opposite. Every `claude` invocation starts a server and
 kills it on exit, so a morning of short sessions cycles the server all morning.
-Each session pays the first-call gap, and after a break of more than a few
-minutes the extension can take up to 30 seconds to notice the new server. This
-is the case the example command at the top of this section configures, which is
-why it is worth saying plainly.
+Each plain stdio session pays the first-call gap, and after a break of more than
+a few minutes the extension can take up to 30 seconds to notice the new server.
 
-If that is how you work, HTTP mode avoids all of it: one server, started once,
-outliving every client and every session, with no port to contend for.
+Use `--single-instance` to share an automatically started server, or keep an HTTP
+server running if the browser connection should stay up between work sessions.
 
 ## Reducing the Tool Surface
 

@@ -902,7 +902,9 @@ class FoxMCPServer:
                 self.handle_extension_connection,
                 self.host,
                 self.port,
-                reuse_address=True,  # Enable SO_REUSEADDR for immediate port reuse
+                # Windows SO_REUSEADDR permits stealing an occupied listening
+                # port; Unix needs it to reuse a port after a clean shutdown.
+                reuse_address=os.name != 'nt',
                 # Rejected during the handshake, so a non-extension client never
                 # reaches handle_extension_connection - which would otherwise close
                 # the real extension's socket to make room for it.
@@ -992,6 +994,15 @@ async def main():
                         help='Serve MCP over stdin/stdout instead of HTTP, so an MCP '
                              'client can launch the server itself. The WebSocket port '
                              'for the extension is unchanged.')
+    parser.add_argument('--single-instance', action='store_true',
+                        help='With --stdio, automatically start or join one shared browser '
+                             'server for all chats using this WebSocket port.')
+    parser.add_argument('--single-instance-idle-timeout', type=float, default=60.0,
+                        metavar='SECONDS',
+                        help='Stop the shared server after this long without clients '
+                             '(default: 60 seconds; requires --single-instance).')
+    parser.add_argument('--single-instance-worker', action='store_true',
+                        help=argparse.SUPPRESS)
     parser.add_argument('--disable-tools', default=None, metavar='GROUP[,GROUP...]',
                         help='Comma-separated tool groups to leave unregistered, so their '
                              'descriptions never reach the client. Groups: '
@@ -1003,6 +1014,15 @@ async def main():
                              '(e.g. tabs_capture_screenshot). Overrides FOXMCP_ENABLE_TOOLS.')
 
     args = parser.parse_args()
+
+    if args.single_instance and not args.stdio:
+        parser.error('--single-instance requires --stdio')
+    if args.single_instance_worker and not args.single_instance:
+        parser.error('--single-instance-worker requires --stdio --single-instance')
+    if (not args.single_instance and args.single_instance_idle_timeout != 60.0):
+        parser.error('--single-instance-idle-timeout requires --single-instance')
+    if not 0 < args.single_instance_idle_timeout < float('inf'):
+        parser.error('--single-instance-idle-timeout must be a positive finite number')
 
     # Both of these are silent no-ops rather than errors if left to run, and a
     # user who typed them meant something by them. --no-mcp with --stdio asks for
@@ -1059,6 +1079,17 @@ async def main():
         )
     except ValueError as e:
         parser.error(str(e))
+    if args.single_instance:
+        try:
+            from .single_instance import run_proxy, run_worker
+        except ImportError:
+            from single_instance import run_proxy, run_worker
+        if args.single_instance_worker:
+            server.start_mcp = False
+            await run_worker(server, args.single_instance_idle_timeout)
+        else:
+            await run_proxy(server, args.single_instance_idle_timeout)
+        return
     await server.start_server()
 
 if __name__ == "__main__":

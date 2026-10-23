@@ -125,11 +125,13 @@ then start the server with `make run-server`. Continue with
 
 ### Let your client start the server
 
-For a single client, you can use stdio instead of running an HTTP server yourself.
-Configure the client to launch `venv/bin/python server/server.py --stdio`, using
-absolute paths. Only one server can serve the extension at a time, so concurrent
-stdio clients conflict; after an idle period, reconnecting can take up to 30 seconds.
-See [stdio setup and tradeoffs](docs/configuration.md#serving-mcp-over-stdio).
+Use stdio with `--single-instance` to start the server automatically and share it
+across chats. Configure each client to launch
+`venv/bin/python server/server.py --stdio --single-instance`, using absolute paths.
+The first client starts a background server; later clients connect to it. Closing
+one chat leaves the others connected. The server stops after 60 seconds without
+clients. On Windows, use `venv\Scripts\python.exe`.
+See [stdio setup](docs/configuration.md#serving-mcp-over-stdio).
 
 ## Configuration
 
