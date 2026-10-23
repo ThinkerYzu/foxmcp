@@ -131,6 +131,11 @@ subsequent launches discover it through a private per-user file keyed by the
 extension's WebSocket port. An OS file lock elects the worker and is released
 automatically if it crashes.
 
+On Windows, the local WMI provider starts the worker outside the client's Job
+Object. Detaching its console alone would still let an SDK client kill the
+shared worker when it cleans up its process tree. A hidden PowerShell broker
+passes the environment over stdin and waits for the worker's exit.
+
 The worker runs the extension WebSocket and an authenticated internal MCP HTTP
 endpoint in one asyncio loop. The kernel assigns the HTTP port; the usual MCP
 port 3000 is unused. A separate authenticated WebSocket tracks each proxy's

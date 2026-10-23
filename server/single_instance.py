@@ -264,12 +264,66 @@ def spawn_worker(server, idle_timeout, log_path):
                "--single-instance-idle-timeout", str(idle_timeout),
                "--disable-tools", ",".join(sorted(server.mcp_tools.disabled_groups)),
                "--enable-tools", ",".join(sorted(server.mcp_tools.enabled_tools))]
-    options = {"start_new_session": True} if os.name != "nt" else {
-        "creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-    }
+    if os.name == "nt":
+        return spawn_windows_worker(command, log_path)
     with open(log_path, "ab") as log:
         return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                stderr=log, close_fds=True, **options)
+                                stderr=log, close_fds=True, start_new_session=True)
+
+
+def spawn_windows_worker(command, log_path):
+    """Let WMI own the worker outside the MCP client's Windows Job Object.
+
+    DETACHED_PROCESS only detaches a console: the worker still inherits the
+    client's kill-on-close job. The local WMI provider launches independently.
+    A small PowerShell broker waits for its exit so discovery can still detect
+    startup failures. Killing that broker does not kill the shared worker.
+    """
+    bootstrap = (
+        "import os,runpy,sys; "
+        "sys.stdin=open(os.devnull); sys.stdout=open(os.devnull,'w'); "
+        "sys.stderr=open(sys.argv[1],'a',encoding='utf-8'); "
+        "sys.argv=sys.argv[2:]; sys.path.insert(0,os.path.dirname(sys.argv[0])); "
+        "runpy.run_path(sys.argv[0],run_name='__main__')"
+    )
+    payload = {
+        "command": subprocess.list2cmdline(
+            [command[0], "-c", bootstrap, str(log_path), *command[1:]]),
+        "cwd": os.getcwd(),
+        "environment": [f"{name}={value}" for name, value in os.environ.items()],
+    }
+    # Data goes over stdin, never interpolated into PowerShell or exposed in its
+    # command line. Preserve the caller's environment, including script settings.
+    script = r"""$ErrorActionPreference = 'Stop'
+$settings = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{
+    ShowWindow = [uint16]0
+    CreateFlags = [uint32]0x01000608
+    EnvironmentVariables = [string[]]$settings.environment
+}
+$created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+    CommandLine = [string]$settings.command
+    CurrentDirectory = [string]$settings.cwd
+    ProcessStartupInformation = $startup
+}
+if ($created.ReturnValue -ne 0) {
+    throw "Cannot start shared FoxMCP server: WMI error $($created.ReturnValue)"
+}
+$worker = [Diagnostics.Process]::GetProcessById($created.ProcessId)
+$worker.WaitForExit()
+exit $worker.ExitCode
+"""
+    with open(log_path, "ab") as log:
+        broker = subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log,
+            creationflags=subprocess.CREATE_NO_WINDOW, close_fds=True,
+        )
+    try:
+        broker.stdin.write(json.dumps(payload).encode("ascii"))
+    finally:
+        broker.stdin.close()
+    return broker
 
 
 async def discover(server, idle_timeout):

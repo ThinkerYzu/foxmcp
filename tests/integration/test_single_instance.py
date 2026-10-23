@@ -4,10 +4,13 @@ import asyncio
 import json
 import os
 import signal
+import sys
 
 import httpx
 import pytest
 import pytest_asyncio
+from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
 
 import test_imports
 from server.single_instance import runtime_directory
@@ -94,6 +97,28 @@ async def test_simultaneous_clients_share_browser_and_route_replies(shared):
         assert "ID 8" in await call
         assert not extension.close_code
         assert json.loads(metadata_path.read_text())["pid"] == metadata["pid"]
+
+
+@pytest.mark.asyncio
+async def test_sdk_client_cleanup_does_not_kill_shared_worker(shared):
+    """Windows SDK clients kill their Job Object, including detached children."""
+    _, metadata_path, port = shared
+
+    def client():
+        return Client(StdioTransport(
+            command=sys.executable,
+            args=[stdio_tests.SERVER_SCRIPT, "--stdio", "--single-instance",
+                  "--single-instance-idle-timeout", "2", "--port", str(port)],
+            env={name: os.environ[name] for name in ("LOCALAPPDATA", "XDG_RUNTIME_DIR")},
+        ), init_timeout=30)
+
+    first, second = client(), client()
+    async with first:
+        owner = json.loads(metadata_path.read_text())["pid"]
+        async with second:
+            await first.close()
+            assert "tabs_list" in {tool.name for tool in await second.list_tools()}
+            assert json.loads(metadata_path.read_text())["pid"] == owner
 
 
 @pytest.mark.asyncio
