@@ -30,6 +30,9 @@ class StubWebSocketServer:
     async def send_request_and_wait(self, request):
         return {"type": "response", "data": {}}
 
+    async def get_extension_status(self):
+        return "No browser extension is connected"
+
 
 async def tool_names(disabled_groups=None, enabled_tools=None):
     """Names of the tools registered with a given set of groups disabled

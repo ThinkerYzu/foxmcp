@@ -123,6 +123,30 @@ Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.cre
   beside the WebSocket server rather than a thread, since the stdio transport is
   asyncio throughout. The WebSocket half is identical either way
 
+#### Shared stdio server
+
+Each `--stdio --single-instance` process serves its own FastMCP tools and runs
+its own predefined scripts. `RemoteBrowser` forwards only browser requests to
+the extension port. `/discovery` identifies the server and forwarding protocol;
+`/proxy` carries requests and replies; `/` remains the extension connection.
+These routes are available on manual HTTP and plain stdio servers as well.
+
+`BrowserProxyHub` assigns fresh upstream IDs and restores each client's original
+ID in its reply. Proxy connections are tracked separately from the extension
+and MCP HTTP sessions. Monitor ownership follows the proxy socket, with cleanup
+after outstanding requests have finished so a late monitor-creation reply cannot
+leave an abandoned capture running.
+
+When discovery finds no owner, a detached worker tries to bind the configured
+extension port. Losing that bind retries discovery. There is no discovery file,
+file lock or separate internal listener. Automatic workers exit after 60 seconds
+without proxies; manual servers keep their existing lifetime.
+
+On Windows, the local WMI provider starts the worker outside the client's Job
+Object. A hidden PowerShell broker passes the environment over stdin and waits
+for the worker's exit. This prevents SDK process-tree cleanup from terminating
+the shared worker. See [configuration](configuration.md#sharing-one-server-across-chats).
+
 ## Data Flow
 
 ### 1. MCP Client → Browser
@@ -180,7 +204,7 @@ MCP Client
 
 | Port | What stops a web page |
 |---|---|
-| Extension WebSocket | An origin allowlist: `websockets.serve(origins=[...])` accepts only `moz-extension://` origins and rejects anything else with a 403 during the handshake. See [Extension Connection Origin](#4-extension-connection-origin) |
+| Browser port | Route checks require a loopback peer and a matching localhost Host. `/` requires a `moz-extension://` origin; `/discovery` and `/proxy` reject every Origin header. No CORS allowance is sent. Proxies cannot enter the extension handler. |
 | MCP HTTP | No CORS headers are sent, so preflighted requests are blocked; a `text/plain` request that would skip preflight is rejected for its content type; and the transport requires a session id that cross-origin JavaScript cannot read. These come from `fastmcp`/uvicorn rather than from FoxMCP, so `tests/integration/test_mcp_port_not_web_reachable.py` asserts them — a dependency upgrade that re-opens the port fails the suite |
 
 Neither port authenticates local processes, which is deliberate — a process running as the user already has the browser profile and the script directory, so a shared secret between two components under that user's control would guard nothing.
@@ -203,7 +227,7 @@ Enforced in `mcp_tools.py` before a predefined script runs:
 
 ### 4. Extension Connection Origin
 
-Only browser extensions may connect to the WebSocket port. `server.py` passes an allowlist to `websockets.serve()`:
+Only browser extensions may connect to `/`. The origin pattern is:
 
 ```python
 EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')

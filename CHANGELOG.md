@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`--stdio --single-instance` shares the Firefox connection across chats.** Clients discover and forward browser commands on the existing extension port, joining a manually started server or starting a detached worker. The port binding arbitrates startup, with no discovery files or file locks. Each chat keeps its own MCP tools and scripts. Automatic workers stop after 60 seconds without clients; manual servers retain their lifetime. Windows workers survive client Job Object cleanup. Use `--single-instance-idle-timeout` to change the idle interval.
 - **`tabs_capture_screenshot` takes a `tab_id`, so a background tab can be captured.** The tool used `tabs.captureVisibleTab`, which only sees the tab a window is showing, so capturing a page meant making it the active tab first, or opening a window just to have somewhere to point `window_id`. With `tab_id` the extension asks Firefox's `tabs.captureTab` for that one tab, wherever it is, and nothing is switched. It is a new action in the extension, so against an older extension the tool says it is too old and what to do instead; without `tab_id` nothing changes.
 
 ## [1.4.0] - 2026-10-18

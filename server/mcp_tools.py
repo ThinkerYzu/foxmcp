@@ -1793,25 +1793,7 @@ class FoxMCPTools:
             Says whether the browser extension is connected, and from where. Every
             other tool fails with a timeout when it is not, so check here first.
             """
-            # The server holds one connection, not a set: an arriving extension
-            # closes the previous one. This used to look for a `connected_clients`
-            # collection, which FoxMCPServer has never had, so the tool answered
-            # "doesn't track connected clients" whether or not anything was
-            # connected -- an unhelpful answer from the tool you reach for when
-            # the connection is the thing in doubt.
-            connection = getattr(self.websocket_server, 'extension_connection', None)
-
-            if connection is None:
-                return "No browser extension is connected"
-
-            # close_code is None until the socket closes, which is the same
-            # liveness test the server itself makes before displacing a connection.
-            if getattr(connection, 'close_code', None) is not None:
-                return "No browser extension is connected (the last connection has closed)"
-
-            address = getattr(connection, 'remote_address', None)
-            where = f" from {address[0]}:{address[1]}" if address else ""
-            return f"Browser extension connected{where}"
+            return await self.websocket_server.get_extension_status()
 
     def _setup_navigation_tools(self):
         """Setup navigation tools"""

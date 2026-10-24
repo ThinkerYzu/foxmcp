@@ -5,9 +5,56 @@
 **IMPORTANT: Only one extension connection is allowed at a time.**
 
 - The FoxMCP server accepts only one active WebSocket connection from a browser extension
-- If a new connection arrives, the existing connection is automatically closed
+- If a new extension connection arrives at `/`, the existing extension is automatically closed
 - The extension disconnects any existing connection before creating a new one
 - This prevents connection races, resource conflicts, and multiple extension instances
+
+## Discovery and proxy routes
+
+The configured extension port also serves local clients:
+
+| Route | Purpose | Access |
+|---|---|---|
+| `/` | Existing Firefox extension WebSocket | `moz-extension://` Origin required |
+| `/discovery` | HTTP GET identifying the forwarding protocol | Origin headers refused |
+| `/proxy` | Browser-command WebSocket for stdio clients | Origin headers refused |
+
+All routes require a loopback peer and a matching localhost Host header. No CORS
+allowance is sent. Proxy connections never enter the extension handler or replace
+the current extension. Local callers are trusted, as on the ordinary MCP HTTP port.
+
+`GET /discovery` returns:
+
+```json
+{
+  "server": "FoxMCP",
+  "protocol_version": 1,
+  "proxy_path": "/proxy",
+  "pid": 1234,
+  "lifetime": "automatic"
+}
+```
+
+`lifetime` is `manual` for an explicitly started server. Such a server keeps its
+existing lifetime when proxies disconnect. An automatically started worker stops
+after its configured idle interval with no proxy connections.
+
+After upgrading `/proxy`, the server sends the same fields with `"type": "hello"`.
+Clients send browser requests in the message format below, with a nonempty string
+`id`. An optional `timeout` is a positive finite number of seconds, up to 300;
+the default is 30. `proxy.status` returns `data.status` describing the current
+Firefox connection without sending a command to the extension.
+
+The server assigns a fresh ID before forwarding each command to Firefox, then
+restores the originating client's ID in its reply. IDs may coincide across
+different clients, but cannot be reused while still in flight on one connection.
+Transport failures return `{"id": "original-id", "error": "description"}`;
+extension responses and errors retain the structures below. Commands are never
+replayed after a disconnection.
+
+Request monitors are owned by the proxy that starts them. On disconnect, pending
+requests finish before cleanup, including monitor-creation replies that arrive
+after the caller has gone. Only that proxy's monitors are stopped.
 
 ## Message Structure
 
