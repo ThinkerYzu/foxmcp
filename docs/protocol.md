@@ -59,6 +59,30 @@ Request monitors are owned by the proxy that starts them. On disconnect, pending
 requests finish before cleanup, including monitor-creation replies that arrive
 after the caller has gone. Only that proxy's monitors are stopped.
 
+## Protocol ID compatibility policy
+
+The checked protocol ID is `PROTOCOL_VERSION` in `server/browser_proxy.py`,
+exposed as `protocol_version` in discovery and the proxy greeting. It identifies
+the forwarding contract, including the browser API requests and responses
+carried between the extension and MCP server. It is independent of the release
+version in the extension's advisory `hello` announcement. The extension does
+not currently exchange or enforce this protocol ID itself.
+
+Increase the protocol ID whenever an existing extension/server API is modified
+or removed. This includes changes to action names, parameter types, defaults or
+requiredness, response formats, error meanings and observable API behavior.
+Update the implementation, protocol documentation and compatibility tests in
+the same change. Adding a new API without changing existing contracts, or fixing
+an implementation while preserving its contract, does not alone require a bump.
+
+Before every release, review API changes since the previous released tag and
+explicitly decide whether the protocol ID must increase. Record the baseline
+tag, changed or removed APIs, previous/current IDs and the decision's rationale
+in the release preparation record; describe any bump and affected APIs in the
+changelog. Even when retaining the ID, record why no bump is required. Complete
+this review before tagging or publishing; release-version consistency checks
+do not replace it.
+
 ## Connection version announcement
 
 Immediately after opening the extension WebSocket at `/`, each peer sends its

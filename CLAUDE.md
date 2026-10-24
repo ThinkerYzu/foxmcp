@@ -46,6 +46,19 @@ Apply these rules to merge and squash messages too, and check line lengths
 before committing.
 NEVER add Claude Code attribution or "Generated with Claude Code" footer in git commit messages.
 
+# Protocol Compatibility Rules
+
+Increase the checked protocol ID whenever an existing API between the Firefox
+extension and MCP server is modified or removed. This includes changes to
+parameters, responses, errors and observable behavior. Keep protocol docs and
+compatibility tests aligned. See `docs/protocol.md#protocol-id-compatibility-policy`
+for the authoritative policy and current ID location.
+
+Before every release, compare API changes with the previous released tag and
+record whether the protocol ID must increase, including the rationale if it
+stays unchanged. Do not tag or publish until this review is complete. A release
+version bump or version-consistency check does not replace this review.
+
 # Testing Guidelines
 ALWAYS use example.org for test URLs instead of httpbin.org or any other service.
 - example.org is the official reserved domain for testing and documentation

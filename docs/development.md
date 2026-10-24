@@ -307,12 +307,22 @@ test is fine.
 
 ## Release Process
 
-1. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
+Complete the [protocol ID compatibility review](protocol.md#protocol-id-compatibility-policy)
+before every release. Compare the extension/server API with the previous released
+tag, identify every modified or removed existing API, and confirm that the
+protocol ID has increased when required. Record the baseline tag, affected APIs,
+previous/current IDs and rationale in the release preparation record. Explicitly
+record an unchanged-ID decision too. This is a required manual check before
+tagging or publishing; `scripts/check-version.sh` checks release-version
+consistency, not API compatibility.
+
+1. Complete and record the protocol ID compatibility review described above.
+2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh` and the install URL in `README.md`
-2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.4.0] - <date>` and add
+3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.4.0] - <date>` and add
    the link reference at the bottom
-3. `scripts/check-version.sh 1.4.0` — fails unless all seven files agree
-4. Commit, then tag: `git tag -a v1.4.0 -m "..."` and push the tag
+4. `scripts/check-version.sh 1.4.0` — fails unless all seven files agree
+5. Commit, then tag: `git tag -a v1.4.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,

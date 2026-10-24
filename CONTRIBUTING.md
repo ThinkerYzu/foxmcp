@@ -133,6 +133,13 @@ async def test_tab_creation_with_valid_url(self, server_with_extension):
 - **Include code examples** where helpful
 - **Keep documentation up to date** with code changes
 
+## Protocol Compatibility
+
+Increase the checked protocol ID when modifying or removing an existing API
+between the extension and MCP server. Update the protocol documentation and
+compatibility tests with the change. The complete rule is in
+[Protocol ID compatibility policy](docs/protocol.md#protocol-id-compatibility-policy).
+
 ## Commit Messages
 
 Use clear, descriptive commit messages:
@@ -157,6 +164,10 @@ Format:
 - **Use bullet points** for multiple changes
 
 ## Release Process
+
+Before tagging or publishing, maintainers must review changes since the previous
+released tag and record whether the protocol ID must increase, with a rationale
+for retaining it. Follow the [release checklist](docs/development.md#release-process).
 
 Releases are handled by maintainers, but contributors should:
 - **Update version numbers** in relevant files when making breaking changes
