@@ -72,34 +72,36 @@ environment, not your shell's. On Windows the interpreter is
 
 ### Sharing one server across chats
 
-`--stdio --single-instance` gives each chat its own stdio proxy and one shared
-background server holding the Firefox connection. The first launch starts that
-server automatically. Later launches discover and authenticate it; an OS file
-lock prevents simultaneous launches from creating two owners.
+`--stdio --single-instance` serves MCP in each chat's own process and forwards
+browser commands to the server holding the Firefox connection. It queries
+`/discovery` on the configured extension port, checks the forwarding protocol
+version, then connects to `/proxy` on that same port. No discovery files, file
+locks or internal MCP HTTP port are needed.
 
-The background server runs independently of the first chat. Closing or killing
-one proxy leaves the others working. After the last proxy disconnects, it stops
-after 60 seconds; change this with `--single-instance-idle-timeout SECONDS`.
-A new chat during that interval reuses the server and its Firefox connection.
-Network monitors belong to the chat that started them and are cleaned up when
-that chat disconnects, including when its proxy is killed.
+If no server is running, the client starts a detached background worker. Binding
+the extension port elects the owner; a contender that loses retries discovery.
+On Windows, the local WMI provider starts the worker outside the client's Job
+Object so closing or killing the first chat leaves the others connected.
 
-The shared server is scoped to the current OS user and WebSocket port. It uses
-an internal HTTP endpoint on an automatically assigned IPv4 loopback port,
-protected by a random token; port 3000 is unused. Discovery, lock and log files
-are in `%LOCALAPPDATA%\foxmcp` on Windows, or `$XDG_RUNTIME_DIR/foxmcp`
-(`~/.cache/foxmcp` when unset) on Unix. Logs are named `instance-PORT.log`.
+An automatically started worker stops 60 seconds after its last proxy leaves.
+Change that interval with `--single-instance-idle-timeout SECONDS`; the first
+launch sets it. A new chat during that interval reuses the Firefox connection.
+If a manually started HTTP or plain stdio server already owns the port, clients
+join it instead. Proxy disconnects never change a manual server's lifetime.
 
-Clients must use the same checkout, server code, tool selection and
-`FOXMCP_EXT_SCRIPTS` directory. Incompatible settings fail with an error instead
-of silently using another client's tools. The first launch sets the idle timeout.
-After changing shared settings, close the clients and wait for idle shutdown.
+Each client keeps its own tool selection, `FOXMCP_EXT_SCRIPTS` directory and
+local-file transfer service. Shared browser servers need a compatible forwarding
+protocol, not identical tool settings or the same checkout. Monitors belong to
+the proxy that started them and are stopped when it disconnects, including when
+a reply creating the monitor arrives after the client has gone.
 
-A crashed background server is replaced on the next launch; existing MCP
-clients need restarting. In-flight browser actions are never replayed. A plain
-HTTP or stdio server already holding the browser port must be stopped before
-switching to this mode. The extension's reconnect delay still applies after the
-shared server has stopped.
+A crashed worker is replaced on the next launch; existing MCP clients need
+reconnecting. Browser actions are never replayed. An older server without
+`/discovery` and `/proxy` must be restarted before it can be shared. The
+extension's reconnect delay still applies after a worker has stopped.
+
+Worker logs are `instance-PORT.log` in `%LOCALAPPDATA%\foxmcp` on Windows,
+or `$XDG_RUNTIME_DIR/foxmcp` (`~/.cache/foxmcp` when unset) on Unix.
 
 ### Plain stdio
 
@@ -137,8 +139,8 @@ Use `--stdio --single-instance` to share the browser server automatically.
 A second independent server on another port would have nothing to serve,
 because the extension is configured to dial one address.
 
-Mixing modes collides the same way: a standing HTTP-mode server holds 8765, so a
-client's plain `--stdio` server cannot start. For several clients, use
+A second plain `--stdio` process still collides with a standing HTTP server
+on 8765. A `--stdio --single-instance` client joins that server instead. For several clients, use
 `--stdio --single-instance` everywhere, or run one server in HTTP mode and point
 them all at `http://localhost:3000/mcp/`.
 

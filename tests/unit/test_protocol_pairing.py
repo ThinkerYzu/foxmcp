@@ -47,7 +47,7 @@ def _actions_sent_by_server():
     """
     actions = set()
     for name in SENDER_FILES:
-        source = (_repo_root() / name).read_text()
+        source = (_repo_root() / name).read_text(encoding='utf-8')
         actions |= set(re.findall(r'"action":\s*"([A-Za-z_]+\.[A-Za-z_]+)"', source))
     return actions
 
@@ -58,7 +58,7 @@ def _actions_handled_by_extension():
     'ping' is matched by an if above the switch rather than a case, so it is
     outside this scan; every other action reaches the extension through a case.
     """
-    source = (_repo_root() / HANDLER_FILE).read_text()
+    source = (_repo_root() / HANDLER_FILE).read_text(encoding='utf-8')
     return set(re.findall(r"case\s*'([A-Za-z_]+\.[A-Za-z_]+)'", source))
 
 

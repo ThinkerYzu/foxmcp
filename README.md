@@ -128,9 +128,10 @@ then start the server with `make run-server`. Continue with
 Use stdio with `--single-instance` to start the server automatically and share it
 across chats. Configure each client to launch
 `venv/bin/python server/server.py --stdio --single-instance`, using absolute paths.
-The first client starts a background server; later clients connect to it. Closing
-one chat leaves the others connected. The server stops after 60 seconds without
-clients. On Windows, use `venv\Scripts\python.exe`.
+Clients discover and share the browser connection on the extension port. They
+join an existing server or start a background worker automatically. Closing one
+chat leaves the others connected. Automatic workers stop after 60 seconds without
+clients; manually started servers keep running. On Windows, use `venv\Scripts\python.exe`.
 See [stdio setup](docs/configuration.md#serving-mcp-over-stdio).
 
 ## Configuration

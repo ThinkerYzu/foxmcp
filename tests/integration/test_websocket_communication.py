@@ -8,6 +8,7 @@ import asyncio
 import websockets
 import time
 import re
+import os
 from unittest.mock import Mock, patch, AsyncMock
 from server.server import FoxMCPServer, EXTENSION_ORIGIN_PATTERN
 
@@ -51,11 +52,12 @@ class TestWebSocketCommunication:
 
             # Verify websockets.serve was called with correct parameters
             mock_serve.assert_called_once_with(
-                server.handle_extension_connection,
+                server.browser_hub.handle_connection,
                 "localhost",
                 8767,
-                reuse_address=True,
-                origins=[EXTENSION_ORIGIN_PATTERN],
+                reuse_address=os.name != 'nt',
+                origins=[EXTENSION_ORIGIN_PATTERN, None],
+                process_request=server.browser_hub.process_request,
                 process_response=server.log_rejected_handshake
             )
 
@@ -63,8 +65,8 @@ class TestWebSocketCommunication:
             # taking the socket, so assert what it accepts, not just that it
             # was passed through.
             origins = mock_serve.call_args.kwargs['origins']
-            assert any(p.fullmatch('moz-extension://abc-123') for p in origins)
-            assert not any(p.fullmatch('https://evil.example.com') for p in origins)
+            assert any(p.fullmatch('moz-extension://abc-123') for p in origins if p is not None)
+            assert not any(p.fullmatch('https://evil.example.com') for p in origins if p is not None)
 
     @pytest.mark.asyncio
     async def test_message_exchange(self):
