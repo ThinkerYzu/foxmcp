@@ -28,14 +28,18 @@ class BrowserProxyHub:
         self.idle_timeout = None  # Manually started servers have no idle shutdown.
         self.last_departure = time.monotonic()
         self.stopping = False
-        self._allowed_hosts = {server.port: self._hosts_for_port(server.port)}
 
     @staticmethod
-    def _hosts_for_port(port):
-        hosts = {f"localhost:{port}", f"127.0.0.1:{port}", f"[::1]:{port}"}
-        if port == 80:
-            hosts.update(("localhost", "127.0.0.1", "[::1]"))
-        return frozenset(hosts)
+    def _is_local_host(authority):
+        # Validate the authority independently of the listener port: a local
+        # TCP forwarder preserves Host while connecting to a different port.
+        match = re.fullmatch(
+            r"(?:localhost|127\.0\.0\.1|\[::1\])(?::([0-9]{1,5}))?",
+            authority.lower(),
+        )
+        return match is not None and (
+            match[1] is None or 1 <= int(match[1]) <= 65535
+        )
 
     def discovery(self):
         return {
@@ -48,14 +52,10 @@ class BrowserProxyHub:
 
     def process_request(self, connection, request):
         """Apply route-specific access checks before a socket can replace Firefox."""
-        port = connection.local_address[1]
-        hosts = self._allowed_hosts.get(port)
-        if hosts is None:  # Port 0 may assign different IPv4 and IPv6 listener ports.
-            hosts = self._allowed_hosts[port] = self._hosts_for_port(port)
         host = request.headers.get_all("Host")
         origin = request.headers.get_all("Origin")
         remote = ipaddress.ip_address(connection.remote_address[0])
-        if not remote.is_loopback or len(host) != 1 or host[0].lower() not in hosts:
+        if not remote.is_loopback or len(host) != 1 or not self._is_local_host(host[0]):
             return connection.respond(HTTPStatus.FORBIDDEN, "Localhost clients only\n")
 
         if request.path == "/":

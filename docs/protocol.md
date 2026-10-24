@@ -19,9 +19,12 @@ The configured extension port also serves local clients:
 | `/discovery` | HTTP GET identifying the forwarding protocol | Origin headers refused |
 | `/proxy` | Browser-command WebSocket for stdio clients | Origin headers refused |
 
-All routes require a loopback peer and a matching localhost Host header. No CORS
-allowance is sent. Proxy connections never enter the extension handler or replace
-the current extension. Local callers are trusted, as on the ordinary MCP HTTP port.
+All routes require a loopback peer and exactly one well-formed Host header.
+Only the literal hostnames `localhost`, `127.0.0.1` and `[::1]` are accepted
+(case-insensitive), optionally followed by a decimal port from 1 to 65535.
+The port may differ from the listener's port to support local TCP forwarding.
+No CORS allowance is sent. Proxy connections never enter the extension handler
+or replace the current extension. Local callers are trusted, as on the ordinary MCP HTTP port.
 
 `GET /discovery` returns:
 

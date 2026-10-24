@@ -51,7 +51,7 @@ excluded deliberately:
 | Surface | How pages are kept out |
 |---|---|
 | Extension WebSocket | An origin allowlist. Handshakes that are not `moz-extension://` are rejected with a `403`. WebSockets are exempt from the same-origin policy and are never preflighted, so the server has to do this itself |
-| `/discovery` and `/proxy` on the extension port | A loopback peer and matching localhost Host are required; every Origin header, including `null` and extension origins, is refused. No CORS headers are sent. These routes never replace the extension connection |
+| `/discovery` and `/proxy` on the extension port | A loopback peer and a valid localhost Host (forwarded ports allowed) are required; every Origin header, including `null` and extension origins, is refused. No CORS headers are sent. These routes never replace the extension connection |
 | MCP HTTP port | No CORS headers, so the browser blocks preflighted requests; `Content-Type` enforcement, which closes the `text/plain` path that would skip the preflight; and a session id cross-origin JavaScript cannot read |
 
 **Consequences accepted on purpose**, so please do not report these as vulnerabilities

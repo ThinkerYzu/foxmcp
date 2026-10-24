@@ -54,6 +54,13 @@ async def shared(tmp_path, monkeypatch, free_tcp_port):
         pytest.fail("Shared server did not stop after its last client left")
 
 
+async def exchange_extension_versions(extension):
+    """Consume the server announcement and simulate a matching extension."""
+    greeting = json.loads(await asyncio.wait_for(extension.recv(), 10))
+    assert greeting["type"] == "hello"
+    await extension.send(json.dumps(greeting))
+
+
 async def answer_tabs(extension, request, tab_id):
     await extension.send(json.dumps({
         "id": request["id"], "type": "response", "action": "tabs.list",
@@ -72,6 +79,7 @@ async def test_simultaneous_clients_share_browser_and_route_replies(shared):
     assert metadata["pid"] not in (first.process.pid, second.process.pid)
 
     async with connect_as_extension(f"ws://localhost:{port}") as extension:
+        await exchange_extension_versions(extension)
         calls = [asyncio.create_task(client.call_tool("tabs_list"))
                  for client in (first, second)]
         requests = [json.loads(await asyncio.wait_for(extension.recv(), 10)) for _ in calls]
@@ -172,6 +180,7 @@ async def test_discovery_and_proxy_reject_page_origins_and_spoofed_hosts(shared)
     client = await start()
     await client.initialize()
     async with connect_as_extension(f"ws://localhost:{port}") as extension:
+        await exchange_extension_versions(extension)
         async with httpx.AsyncClient(trust_env=False) as http:
             for headers in ({"Origin": "https://example.org"}, {"Origin": "null"},
                             {"Host": "example.org"}):
@@ -191,6 +200,7 @@ async def test_monitors_are_cleaned_up_per_chat(shared):
     first, second = await asyncio.gather(start(), start())
     await asyncio.gather(first.initialize(), second.initialize())
     async with connect_as_extension(f"ws://localhost:{port}") as extension:
+        await exchange_extension_versions(extension)
         for client, monitor_id in ((first, "monitor-first"), (second, "monitor-second")):
             call = asyncio.create_task(client.call_tool("requests_start_monitoring",
                                                         {"url_patterns": ["<all_urls>"]}))

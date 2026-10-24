@@ -14,8 +14,70 @@ from fastmcp import Client
 import test_imports
 from server.single_instance import probe, runtime_directory
 from test_config import connect_as_extension
-from test_single_instance import shared, answer_tabs
+from test_single_instance import shared, answer_tabs, exchange_extension_versions
 import test_stdio_transport as stdio_tests
+
+
+@pytest.mark.asyncio
+async def test_all_routes_work_through_a_local_tcp_forwarder(shared):
+    start, port = shared
+    client = await start()
+    await client.initialize()
+    connections = set()
+
+    async def copy(reader, writer):
+        try:
+            while chunk := await reader.read(65536):
+                writer.write(chunk)
+                await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def forward(reader, writer):
+        task = asyncio.current_task()
+        connections.add(task)
+        try:
+            upstream_reader, upstream_writer = await asyncio.open_connection(
+                "localhost", port
+            )
+            await asyncio.gather(copy(reader, upstream_writer),
+                                 copy(upstream_reader, writer))
+        finally:
+            writer.close()
+            connections.discard(task)
+
+    relay = await asyncio.start_server(forward, "127.0.0.1", 0)
+    forwarded_port = relay.sockets[0].getsockname()[1]
+    assert forwarded_port != port
+    try:
+        address = f"127.0.0.1:{forwarded_port}"
+        async with httpx.AsyncClient(trust_env=False) as http:
+            response = await http.get(f"http://{address}/discovery")
+            assert response.status_code == 200
+            assert response.json()["server"] == "FoxMCP"
+            assert "access-control-allow-origin" not in response.headers
+        async with connect_as_extension(f"ws://{address}/", proxy=None) as extension:
+            await exchange_extension_versions(extension)
+            async with websockets.connect(f"ws://{address}/proxy", proxy=None) as proxy:
+                assert json.loads(await proxy.recv())["type"] == "hello"
+                await proxy.send(json.dumps({
+                    "id": "forwarded", "type": "request",
+                    "action": "tabs.list", "data": {},
+                }))
+                request = json.loads(await asyncio.wait_for(extension.recv(), 5))
+                await answer_tabs(extension, request, 44)
+                reply = json.loads(await asyncio.wait_for(proxy.recv(), 5))
+                assert reply["id"] == "forwarded"
+                assert reply["data"]["tabs"][0]["id"] == 44
+                assert extension.close_code is None
+    finally:
+        relay.close()
+        await relay.wait_closed()
+        tasks = list(connections)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -24,6 +86,7 @@ async def test_colliding_ids_are_remapped_and_replies_can_arrive_out_of_order(sh
     client = await start()
     await client.initialize()
     async with connect_as_extension(f"ws://localhost:{port}") as extension:
+        await exchange_extension_versions(extension)
         async with (
             websockets.connect(f"ws://localhost:{port}/proxy") as first,
             websockets.connect(f"ws://localhost:{port}/proxy") as second,
@@ -67,6 +130,7 @@ async def test_local_file_transfer_stays_in_the_stdio_process(shared, tmp_path):
     path = tmp_path / "upload.txt"
     path.write_bytes(b"local upload data")
     async with connect_as_extension(f"ws://localhost:{port}") as extension:
+        await exchange_extension_versions(extension)
         call = asyncio.create_task(
             client.call_tool("content_load_file", {"tab_id": 1, "path": str(path)})
         )
@@ -136,6 +200,7 @@ async def test_proxy_joins_manual_http_server_without_changing_its_lifetime(
                         tool.name for tool in await http.list_tools()
                     }
                 async with connect_as_extension(f"ws://localhost:{port}") as extension:
+                    await exchange_extension_versions(extension)
                     call = asyncio.create_task(client.call_tool("tabs_list"))
                     request = json.loads(await asyncio.wait_for(extension.recv(), 10))
                     await answer_tabs(extension, request, 33)
@@ -189,6 +254,7 @@ async def test_monitor_started_after_disconnect_is_still_stopped(shared):
     first, second = await asyncio.gather(start(), start())
     await asyncio.gather(first.initialize(), second.initialize())
     async with connect_as_extension(f"ws://localhost:{port}") as extension:
+        await exchange_extension_versions(extension)
         await first._send(
             {
                 "jsonrpc": "2.0",
