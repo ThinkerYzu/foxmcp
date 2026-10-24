@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 41 tools are offered by default. Each section below corresponds to a *group*
+All 45 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -15,10 +15,16 @@ tool out of a group you disabled. See
 and what each group costs.
 
 ### Tab Management
-- `tabs_list(window_id=None)` - List open tabs, in every window or in one window
-  - Each line ends with `[window {window_id}, index {index}]`; the index is the tab's
-    position in its window, counting from 0
-- `tabs_create(url, active=True, pinned=False, window_id=None)` - Create new tab (optionally in specific window)
+- `tabs_list(window_id=None, cookie_store_id=None)` - List tabs with optional
+  window and cookie-store filters, applied together
+  - Each line includes `[window {window_id}, index {index}]` followed by
+    `[cookie store {cookie_store_id}]`; the index counts from 0
+  - Store metadata from an older extension is reported as unavailable. An
+    unverifiable store filter fails instead of returning an unfiltered listing.
+- `tabs_create(url, active=True, pinned=False, window_id=None, cookie_store_id=None)`
+  - Create a tab, optionally selecting a window and cookie store
+  - Reports the actual store. Explicit selection requires an updated extension
+    and never falls back to the default store.
 - `tabs_close(tab_id)` - Close specific tab
 - `tabs_switch(tab_id)` - Switch to specific tab
 - `tabs_move(tab_ids, window_id=None, index=-1)` - Move tabs to a position, optionally into another window
@@ -42,6 +48,33 @@ and what each group costs.
   - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
     not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
     has `tabs.captureTab`; an older one answers that it is too old
+
+### Firefox Containers
+
+- `containers_list()` returns JSON with `containers` (named identities with
+  `cookie_store_id`, `name`, `color`, `icon`) and `default_cookie_store_id`.
+- `containers_create(name, color="blue", icon="fingerprint")` returns
+  `{container: {cookie_store_id, name, color, icon}}` as JSON.
+- `containers_update(cookie_store_id, name=None, color=None, icon=None)` requires
+  at least one property; unspecified properties and identity are preserved.
+- `containers_remove(cookie_store_id)` returns `{removed: true, cookie_store_id}`.
+  Refuses open tabs (`CONTAINER_IN_USE` with `tab_ids`) and default/private stores.
+  Removal clears stored site data. The open-tab check cannot exclude races with
+  browser UI or other extensions. Containers are never cleaned up on disconnect.
+
+Use opaque IDs from discovery, not names or numeric suffixes. Names may repeat;
+IDs belong to the connected profile. `firefox-default` selects normal browsing;
+`firefox-private` can only filter listings with existing private access. Explicit
+store creation into a private window is refused. Omission preserves existing tab
+creation behavior. Invalid/deleted selections fail without opening a fallback tab.
+Older extensions must be updated for explicit selection and verified filtering.
+Existing tabs cannot change containers in place. Other tools continue by tab ID.
+
+The `containers` group is enabled by default and supports `--disable-tools` and
+`--enable-tools`. Disabling discovery does not prevent tab tools from accepting
+known store IDs. Required `cookies` permission supports store selection/query;
+there are no cookie export/edit tools. Installation can enable Firefox containers;
+subsequent user disabling is respected. History and bookmarks remain shared.
 
 ### History Operations
 - `history_query(query, max_results=50)` - Search browser history

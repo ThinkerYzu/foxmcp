@@ -70,10 +70,20 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 - **Lifecycle**: Graceful startup and shutdown, including cleanup of the extension connection
 
 #### MCP Tools (`mcp_tools.py`)
-- **MCP Tool Definitions**: 41 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
+- **MCP Tool Definitions**: 45 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
 - **Parameter Validation**: Type-annotated tool signatures; FastMCP derives the schema
 - **Response Formatting**: Each tool turns the raw browser response into a human-readable string
 - **Error Handling**: Every tool checks for `error` in the response before reading data
+
+### Firefox containers
+
+The extension resolves opaque cookie-store IDs against the connected profile.
+Tab listings carry store metadata, and explicit tab creation uses
+`tabs.create_in_store`, allowing older extensions to reject it before navigation.
+The server verifies the actual returned store. Container lifecycle tools use
+`contextualIdentities`; no per-client container registry or cleanup is required.
+Containers and their tabs survive client and forwarding-worker lifetimes.
+Protocol ID 2 covers the changed tab-list contract. See [protocol](protocol.md#firefox-container-contract-protocol-id-2).
 
 ### 3. Communication Protocols
 

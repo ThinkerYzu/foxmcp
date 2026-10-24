@@ -181,9 +181,25 @@ venv/bin/python server/server.py --disable-tools bookmarks,history
 venv/bin/python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
 ```
 
-All **41 tools** are enabled by default. Available groups are `windows`, `tabs`,
-`bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.
+All **45 tools** are enabled by default. Available groups are `windows`, `tabs`,
+`containers`, `bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.
 See [configuration](docs/configuration.md) for client examples and other options.
+
+## Firefox containers
+
+Use `containers_list` to discover named containers and their opaque
+`cookie_store_id` values. Pass one to `tabs_create` to open in that container,
+or to `tabs_list` to filter. Use `firefox-default` for normal browsing. Omission
+keeps existing behavior; invalid selections fail without opening a fallback tab.
+
+`containers_create`, `containers_update` and `containers_remove` manage persistent
+profile containers. Removal clears stored site data and refuses containers with
+open tabs. Containers survive client disconnects. See the
+[API reference](docs/api-reference.md#firefox-containers) for details.
+
+The extension requires `contextualIdentities` and `cookies` permissions for
+container APIs and tab selection. Installation can enable Firefox containers;
+subsequent disabling is respected. Update both extension and server together.
 
 ## Predefined scripts
 

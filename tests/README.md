@@ -424,7 +424,7 @@ Twine validates the metadata and README.
 The `python-install` matrix installs both artifacts in fresh environments on
 Python 3.10 and 3.14, copies `python_package_smoke.py` outside the checkout, and
 runs it there with the installed Python and expected version as its sole argument.
-It checks help, invalid options, occupied-port exit codes, all 41 tools over HTTP
+It checks help, invalid options, occupied-port exit codes, all 45 tools over HTTP
 and stdio, version announcements, request/response bridging, executable bundled examples, a custom script
 directory, and an explicit empty override. A simulated extension answers requests;
 this check covers packaging and startup. The Firefox suite and ZIP/XPI smoke test
@@ -433,3 +433,24 @@ separately cover browser behavior. The packaged command receives no test fixture
 Python distributions and `PYTHON-SHA256SUMS` are retained as the
 `python-distributions` Actions artifact and reused by release publication; neither
 a manual rehearsal nor ordinary CI publishes to PyPI.
+
+### Firefox container coverage
+
+`unit/test_containers.py` verifies opaque-ID validation, request payloads,
+registration overrides, missing/mismatched store responses, no replay to older
+extensions and protocol ID 1/2 rejection.
+
+`integration/test_containers_end_to_end.py` uses isolated Firefox profiles and a
+controlled local origin. It checks cookie/localStorage separation in two named
+containers and the default store through HTTP MCP, combined filters, lifecycle
+and in-use removal errors. Disposable database snapshots also verify that
+removal clears a persistent test cookie. Two real shared-stdio clients verify same-store sharing,
+different-store separation and persistence after client disconnects and a worker
+restart. Complete background JavaScript is also executed with controlled browser
+APIs for absent/disabled containers, private-window refusal and post-creation
+store mismatch. Those failure simulations do not modify browser preferences.
+
+Final archive smoke tests exercise all 45 tools over HTTP and stdio, using
+container tabs for navigation, groups, screenshots, request capture and actual
+file upload. Signed AMO upgrade prompts and enterprise policy effects remain a
+manual pre-release check; see [development](../docs/development.md#container-permission-upgrade-check).

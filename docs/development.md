@@ -85,7 +85,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 41 MCP tool definitions
+│   └── mcp_tools.py # The 45 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -436,7 +436,7 @@ The default startup script was also tried, exposing the occupied-MCP-port
 behavior described above. This check did not repeat the interactive installer
 prompts, manual Firefox Add-ons installation, Claude Code registration, or the
 natural-language examples through an AI assistant. The release package smoke
-tests separately exercise all 41 tools over HTTP and stdio with an unsigned XPI
+tests separately exercise all 45 tools over HTTP and stdio with an unsigned XPI
 in Firefox Developer Edition; they do not verify the signed Add-ons installation.
 
 ## Security Notes
@@ -444,3 +444,17 @@ in Firefox Developer Edition; they do not verify the signed Add-ons installation
 The server binds to localhost only and is never exposed to a network. Predefined
 scripts pass through a path validation chain before execution — see
 [`scripts.md`](scripts.md). Error messages should not leak internal paths or state.
+
+### Container permission upgrade check
+
+Before releasing container support, rehearse upgrading the signed extension from
+v1.4.0 to the release candidate in a separate standard-Firefox profile. Record
+the actual permission prompt and enterprise-policy effects of adding required
+`contextualIdentities` and `cookies`. Automated tests install an unsigned XPI in
+Developer Edition; they do not verify the signed AMO update flow. Container APIs
+may enable the feature during installation. Respect later user disabling.
+
+Protocol review for the current work: baseline v1.4.0, previous ID 1, current ID
+2. `tabs.list` now returns cookie-store metadata and accepts a filter. New
+container lifecycle actions alone do not require another bump. Repeat the review
+against the final release diff before tagging.

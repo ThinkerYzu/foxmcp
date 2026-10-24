@@ -101,7 +101,7 @@ async def check_client(client: Client, port: int, script_name: str | None) -> No
     try:
         await asyncio.wait_for(ready.wait(), 25)
         tools = {tool.name: tool for tool in await client.list_tools()}
-        assert len(tools) == 41, sorted(tools)
+        assert len(tools) == 45, sorted(tools)
         description = tools["content_execute_predefined"].description
         if script_name == "dom-summarize.sh":
             assert all(name in description for name in EXAMPLES), description

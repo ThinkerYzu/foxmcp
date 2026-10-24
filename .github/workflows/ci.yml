@@ -136,7 +136,7 @@ jobs:
           import asyncio
           from fastmcp import Client
 
-          EXPECTED = 41
+          EXPECTED = 45
 
           async def main():
               async with Client("http://localhost:13000/mcp/") as client:
@@ -164,7 +164,7 @@ jobs:
           async def main():
               async with Client("http://localhost:13001/mcp/") as client:
                   names = {tool.name for tool in await client.list_tools()}
-                  assert len(names) == 31, f"expected 31 tools, got {len(names)}"
+                  assert len(names) == 35, f"expected 35 tools, got {len(names)}"
                   assert not [n for n in names if n.startswith(("bookmarks_", "history_"))]
                   assert "tabs_list" in names
 
@@ -181,7 +181,7 @@ jobs:
           from fastmcp import Client
           from fastmcp.client.transports import PythonStdioTransport
 
-          EXPECTED = 41
+          EXPECTED = 45
 
           async def main():
               transport = PythonStdioTransport(

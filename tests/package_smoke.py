@@ -89,8 +89,8 @@ class SmokeClient:
             self.save()
 
 
-async def call(client, name, **arguments):
-    return text(await client.call_tool(name, arguments))
+async def call(client, tool_name, **arguments):
+    return text(await client.call_tool(tool_name, arguments))
 
 
 async def script_value(client, tab_id, expression):
@@ -117,7 +117,7 @@ def matched(pattern, result):
     return match[1]
 
 
-async def browser_features(client, url):
+async def browser_features(client, url, cookie_store_id):
     for _ in range(120):
         status = await call(client, "debug_websocket_status")
         if status.startswith("Browser extension connected"):
@@ -146,9 +146,11 @@ async def browser_features(client, url):
         client.checked("windows")
 
         tab_id = int(matched(r"ID (\d+)", await call(
-            client, "tabs_create", url=first_url, window_id=window_id)))
+            client, "tabs_create", url=first_url, window_id=window_id, cookie_store_id=cookie_store_id)))
         other_id = int(matched(r"ID (\d+)", await call(
-            client, "tabs_create", url=second_url, window_id=window_id)))
+            client, "tabs_create", url=second_url, window_id=window_id, cookie_store_id=cookie_store_id)))
+        assert "CONTAINER_IN_USE" in await call(client, "containers_remove", cookie_store_id=cookie_store_id)
+        assert f"[cookie store {cookie_store_id}]" in await call(client, "tabs_list", cookie_store_id=cookie_store_id)
         await wait_page(client, tab_id, first_url)
         await wait_page(client, other_id, second_url)
         assert "Successfully switched" in await call(client, "tabs_switch", tab_id=tab_id)
@@ -277,15 +279,32 @@ async def browser_features(client, url):
 
 async def exercise(client, url, source, work, transport, receipts):
     recorded = SmokeClient(client, work, transport)
+    store = None
     try:
-        await browser_features(recorded, url)
+        # Match browser_features' initial connection wait before calling new APIs.
+        for _ in range(120):
+            if (await call(recorded, "debug_websocket_status")).startswith("Browser extension connected"):
+                break
+            await asyncio.sleep(.25)
+        discovery = json.loads(await call(recorded, "containers_list"))
+        assert discovery["default_cookie_store_id"] == "firefox-default", discovery
+        created = json.loads(await call(recorded, "containers_create", name="Package test"))["container"]
+        store = created["cookie_store_id"]
+        updated = json.loads(await call(recorded, "containers_update", cookie_store_id=store,
+                                       name="Package updated", color="red"))["container"]
+        assert updated["cookie_store_id"] == store and updated["name"] == "Package updated"
+        await browser_features(recorded, url, store)
         before_upload = len(receipts)
-        await upload(recorded, url, source)
+        await upload(recorded, url, source, store)
         expected = {"name": source.name, "type": "application/x-foxmcp-release-test",
                     "sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "changes": 1}
         assert len(receipts) == before_upload + 1 and receipts[-1] == expected, receipts
         recorded.checked("file upload, exact bytes and handle release")
+        assert json.loads(await call(recorded, "containers_remove", cookie_store_id=store))["removed"]
+        store = None
+        recorded.checked("container discovery, lifecycle and tab selection")
         names = {tool.name for tool in await client.list_tools()}
+        assert len(names) == 45, names
         called = {call["tool"] for call in recorded.report["calls"]}
         assert not names - called, f"Tools missing package smoke coverage: {sorted(names - called)}"
         recorded.report["passed"] = True
@@ -294,10 +313,12 @@ async def exercise(client, url, source, work, transport, receipts):
         recorded.report["error"] = str(error)
         raise
     finally:
+        if store is not None:
+            await call(recorded, "containers_remove", cookie_store_id=store)
         recorded.save()
 
 
-async def upload(client, url, source):
+async def upload(client, url, source, cookie_store_id):
     names = {tool.name for tool in await client.list_tools()}
     assert {"content_load_file", "content_execute_script", "tabs_create"} <= names
     for _ in range(120):
@@ -307,7 +328,7 @@ async def upload(client, url, source):
         await asyncio.sleep(.25)
     else:
         raise AssertionError("Packaged extension did not connect")
-    created = text(await client.call_tool("tabs_create", {"url": url + "/page"}))
+    created = text(await client.call_tool("tabs_create", {"url": url + "/page", "cookie_store_id": cookie_store_id}))
     match = re.search(r"ID (\d+)", created)
     assert match, created
     tab_id = int(match[1])

@@ -7,6 +7,7 @@ edited in separate sessions, so the pairing is what drifts. These tests read
 the names out of both sides and compare the sets.
 """
 
+import ast
 import re
 from pathlib import Path
 
@@ -42,13 +43,25 @@ def _actions_sent_by_server():
     """Action strings the server puts on the wire
 
     Read from source rather than by calling the tools, because the action is a
-    literal inside each request dict and never appears in a signature or a
-    return value.
+    literal inside request dicts (including conditional values) or in calls
+    to the container request helper. It never appears in a tool signature.
     """
     actions = set()
     for name in SENDER_FILES:
         source = (_repo_root() / name).read_text(encoding='utf-8')
-        actions |= set(re.findall(r'"action":\s*"([A-Za-z_]+\.[A-Za-z_]+)"', source))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "container_request"):
+                actions.add(node.args[0].value)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values):
+                    if isinstance(key, ast.Constant) and key.value == "action":
+                        actions.update(item.value for item in ast.walk(value)
+                                       if isinstance(item, ast.Constant)
+                                       and isinstance(item.value, str)
+                                       and re.fullmatch(r"[A-Za-z_]+\.[A-Za-z_]+", item.value))
     return actions
 
 

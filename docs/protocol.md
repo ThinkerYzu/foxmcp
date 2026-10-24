@@ -31,7 +31,7 @@ or replace the current extension. Local callers are trusted, as on the ordinary 
 ```json
 {
   "server": "FoxMCP",
-  "protocol_version": 1,
+  "protocol_version": 2,
   "proxy_path": "/proxy",
   "pid": 1234,
   "lifetime": "automatic"
@@ -82,6 +82,53 @@ in the release preparation record; describe any bump and affected APIs in the
 changelog. Even when retaining the ID, record why no bump is required. Complete
 this review before tagging or publishing; release-version consistency checks
 do not replace it.
+
+## Firefox container contract (protocol ID 2)
+
+ID 2 adds `cookieStoreId` to serialized `tabs.list` records and an optional
+`data.cookieStoreId` query filter, combined with `windowId`. Missing metadata
+from an older extension is unavailable, never assumed to be the default store.
+A selected-store listing must verify every returned record's store.
+
+`tabs.create` retains its existing payload and defaults. Explicit store selection
+uses **`tabs.create_in_store`**, with the same fields plus a required nonempty
+string `cookieStoreId`. Validate the current identity and target window before
+opening the URL. Never fall back, retry creation, or report success when the
+returned tab's store differs. An old extension's unknown-action error requires
+an extension update, without opening any tab. Private-store selection for
+creation is refused, as is named/default selection into a private window.
+
+The `containers` namespace uses required `contextualIdentities` and `cookies`
+permissions. IDs are opaque, profile-scoped strings; duplicate display names
+are valid. Default (`firefox-default`) and private (`firefox-private`) stores
+are not named identities. Responses contain:
+
+| Action | Request data | Response data |
+|---|---|---|
+| `containers.list` | `{}` | `{containers: [{cookie_store_id, name, color, icon}], default_cookie_store_id: "firefox-default"}` |
+| `containers.create` | `{name, color, icon}` | `{container: {cookie_store_id, name, color, icon}}` |
+| `containers.update` | `{cookieStoreId, name?, color?, icon?}` | `{container: {cookie_store_id, name, color, icon}}` |
+| `containers.remove` | `{cookieStoreId}` | `{removed: true, cookie_store_id}` |
+
+Update requires at least one property. Firefox's supported styling values are
+authoritative; use feature detection for its newer enumeration APIs. Removal
+rejects default/private stores and identities with open tabs, returning
+`details.tab_ids`. It clears stored container data, and its open-tab precheck
+cannot be atomic with browser UI or other extensions. Containers persist across
+client disconnects and worker restarts; no automatic container cleanup occurs.
+
+Errors: `INVALID_PARAMETER`, `UNSUPPORTED_API`, `CONTAINERS_UNAVAILABLE`,
+`CONTAINER_NOT_FOUND`, `CONTAINER_IN_USE`, and unexpected `API_ERROR`.
+Availability is probed with `contextualIdentities.query`, never by changing
+preferences. Firefox exposes no structured disabled-feature error: recognize
+its fixed, nonlocalized implementation message (Mozilla's `checkAPIEnabled`),
+and preserve unknown failures as `API_ERROR`. Do not match translated text.
+
+Compatibility review against v1.4.0: checked ID increases from 1 to 2 for the
+existing tab-list response and filter contract. New lifecycle actions alone do
+not require a further bump. Extension/server release matching remains advisory;
+only forwarding peers enforce this ID. Reassess against the final release base
+before publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
 
 ## Connection version announcement
 
@@ -215,7 +262,8 @@ only that window's tabs.
   "type": "request",
   "action": "tabs.list",
   "data": {
-    "windowId": 1
+    "windowId": 1,
+    "cookieStoreId": "firefox-default"
   },
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
@@ -236,7 +284,8 @@ only that window's tabs.
         "title": "Example Page",
         "active": true,
         "index": 0,
-        "pinned": false
+        "pinned": false,
+        "cookieStoreId": "firefox-default"
       },
       {
         "id": 124,
@@ -245,7 +294,8 @@ only that window's tabs.
         "title": "GitHub",
         "active": false,
         "index": 1,
-        "pinned": false
+        "pinned": false,
+        "cookieStoreId": "firefox-default"
       }
     ],
     "debug": {
@@ -259,6 +309,8 @@ only that window's tabs.
 
 `index` is the tab's position within its window, counting from 0. It is what
 `tabs.move` takes as a destination.
+
+The optional `cookieStoreId` filter is combined with `windowId`.
 
 #### Create New Tab
 **Request:**
@@ -291,12 +343,17 @@ only that window's tabs.
       "title": "Loading...",
       "active": true,
       "index": 2,
-      "pinned": false
+      "pinned": false,
+      "cookieStoreId": "firefox-default"
     }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
+
+For explicit store selection, send `tabs.create_in_store` instead and add
+`cookieStoreId` to `data`. The response action matches that action and the tab
+includes its actual store. `tabs.create` does not accept store selection.
 
 #### Close Tab
 **Request:**

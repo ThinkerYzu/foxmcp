@@ -209,11 +209,30 @@ a few minutes the extension can take up to 30 seconds to notice the new server.
 Use `--single-instance` to share an automatically started server, or keep an HTTP
 server running if the browser connection should stay up between work sessions.
 
+## Firefox container selection
+
+Call `containers_list` for opaque `cookie_store_id` values scoped to the connected
+profile. Supply an ID to `tabs_create` or `tabs_list`; the latter combines it with
+any window filter. `firefox-default` is the normal store. Omission preserves
+existing behavior. Named/default selection into private windows and explicit
+`firefox-private` creation are refused; private filtering requires existing access.
+
+The extension requires `contextualIdentities` and `cookies` permissions. Installing
+it can enable Firefox containers. If the feature is disabled later, container
+operations return `CONTAINERS_UNAVAILABLE`; FoxMCP does not change preferences.
+Update the extension and server together, and restart existing shared workers
+when upgrading from protocol ID 1 to 2. The tab-list response contract changed.
+
+`--disable-tools containers` hides container discovery/management tools. Tab
+selection remains available with known IDs. Containers are persistent profile
+resources shared across clients; disconnects never remove them. Removal clears
+stored site data and refuses open tabs. See [API reference](api-reference.md#firefox-containers).
+
 ## Reducing the Tool Surface
 
 Every tool's description sits in an MCP client's context for the whole session,
 whether or not the tool is ever called. With no predefined scripts listed, the
-full set of 41 tools costs roughly 6,700 tokens. `--disable-tools` leaves a group unregistered, so a client never
+full set of 45 tools costs roughly 7,243 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -227,7 +246,8 @@ token, so treat them as proportions rather than exact counts:
 
 | Group | Tools | ~Tokens |
 |---|---|---|
-| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,214 |
+| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,320 |
+| `containers` | list, create, update, remove | 437 |
 | `bookmarks` | list, search, create, create_folder, update, move, delete | 1,118 |
 | `windows` | list, get, get_current, create, close, focus, update | 1,029 |
 | `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 795 |

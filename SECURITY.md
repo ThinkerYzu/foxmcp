@@ -79,6 +79,19 @@ lower-privileged local user reach either port or influence what the extension do
 way to escape the predefined-script directory; any way to make the server execute
 JavaScript in a tab the caller should not reach.
 
+## Firefox container permissions
+
+`contextualIdentities` permits listing and changing persistent profile containers;
+`cookies` enables selecting/querying tab cookie stores. FoxMCP does not expose
+cookie export or editing tools, although the permission itself is broad.
+Installation can enable Firefox containers. Disabling the `containers` tool
+group does not revoke extension permissions or prevent selection through tab tools.
+
+Containers isolate site cookies and storage, not shared history or bookmarks.
+They are profile resources shared by all local MCP clients. Explicit removal
+clears stored site data and refuses open tabs, but the check cannot exclude
+concurrent browser UI activity. Disconnecting clients never removes containers.
+
 ## Past Reports
 
 - [Issue #5](https://github.com/ThinkerYzu/foxmcp/issues/5) — response to the 2026-05-07
