@@ -62,8 +62,17 @@ See [protocol policy](docs/protocol.md#protocol-id-compatibility-policy).
 ### Preparation gates
 
 Before tagging, require successful full regression, final-archive HTTP/stdio
-smoke checks, clean wheel/sdist installs, a non-publishing workflow rehearsal,
-PyPI publisher setup if included, and signed permission-upgrade verification.
+smoke checks, clean wheel/sdist installs, a non-publishing workflow rehearsal
+and the recorded protocol review.
+
+Publication is staged: GitHub publishes tested, attested artifacts first; AMO
+submission and PyPI publication follow in separate jobs. Verify each channel
+independently. PyPI requires the owning account's Trusted Publisher; a setup
+failure there does not undo GitHub publication and can be retried after setup.
+
+The workflow obtains a signed extension through AMO after GitHub publication.
+Rehearse the signed standard-Firefox permission upgrade and enterprise-policy
+behavior when that artifact is available, and record the result separately.
 The temporary browser test confirms local loading, not signed upgrade prompts.
 
 ## v1.4.0 - Local files, tab groups and release verification (2026-10-18)

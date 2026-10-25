@@ -403,7 +403,7 @@ message.
 
 ### First PyPI publication
 
-Before the first publishing tag, create the GitHub `pypi` environment and
+Before the first PyPI publication, create the GitHub `pypi` environment and
 configure its release-tag deployment policy. In the owning PyPI account, create
 [a pending Trusted Publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
 with these exact values:
@@ -420,6 +420,11 @@ No PyPI token belongs in GitHub secrets. Publication uses
 [`pypa/gh-action-pypi-publish`](https://github.com/pypa/gh-action-pypi-publish)
 in the release workflow, after all reusable CI checks and GitHub publication.
 The PyPI name returned 404 on 2026-10-21; PyPI can still reject a reserved name.
+
+The GitHub release and AMO submission are separate from the PyPI job. If first
+publication fails on publisher configuration, keep the verified GitHub release,
+complete the owning account setup and rerun the failed publishing job. Confirm
+PyPI actually serves the version before recommending `uvx foxmcp`.
 
 Bump `pyproject.toml` with the extension and other version-bearing files before
 the next release. Rehearse first, then publish through a new version tag. After
@@ -485,12 +490,15 @@ scripts pass through a path validation chain before execution — see
 
 ### Container permission upgrade check
 
-Before releasing container support, rehearse upgrading the signed extension from
-v1.4.0 to the release candidate in a separate standard-Firefox profile. Record
-the actual permission prompt and enterprise-policy effects of adding required
-`contextualIdentities` and `cookies`. Automated tests install an unsigned XPI in
-Developer Edition; they do not verify the signed AMO update flow. Container APIs
-may enable the feature during installation. Respect later user disabling.
+When AMO provides the signed container-support artifact, rehearse upgrading
+from signed v1.4.0 in a separate standard-Firefox profile. Record the actual
+permission prompt and enterprise-policy effects of adding required
+`contextualIdentities` and `cookies`. The release workflow submits to AMO after
+GitHub publication, so this is a post-signing check, as described in the general
+release procedure. Do not mark it complete from temporary-loading tests.
+Automated tests install an unsigned XPI in Developer Edition; they do not verify
+the signed AMO update flow. Container APIs may enable the feature during
+installation. Respect later user disabling.
 
 The v1.5.0 [release compatibility review](../RELEASES.md#protocol-compatibility-review)
 uses released v1.4.0 as its baseline. That tag predates checked forwarding IDs;
