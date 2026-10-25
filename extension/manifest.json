@@ -5,7 +5,6 @@
   "description": "Browser extension that exposes data and functions to MCP clients via WebSocket",
   "author": "FoxMCP Project",
   "homepage_url": "https://github.com/ThinkerYzu/foxmcp",
-  "license": "MIT",
   "permissions": [
     "contextualIdentities",
     "cookies",

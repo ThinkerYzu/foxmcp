@@ -128,7 +128,14 @@ unsigned installation requires Developer Edition, Nightly, or an unbranded build
 
 **Temporary add-on:** Open `about:debugging` → **This Firefox** →
 **Load Temporary Add-on**, and select `dist/packages/foxmcp@codemud.org.xpi`.
-Repeat after Firefox restarts.
+Repeat after Firefox restarts. If the signed release is already installed,
+the temporary build with the same add-on ID takes its place for the session;
+restarting Firefox restores the installed release. Reload existing page tabs
+before testing content-script changes. Temporary loading does not verify the
+permission prompts shown during a signed extension upgrade.
+
+Keep licensing declarations in `LICENSE` and package metadata. `license` is not
+a supported WebExtension manifest key and produces a Firefox loading warning.
 
 **Install from file:** On a channel that permits unsigned extensions, open
 `about:config` and set `xpinstall.signatures.required` to `false`. Then open
