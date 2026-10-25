@@ -265,7 +265,11 @@ The install job is the one that follows README rather than the test harness. It
 runs `make install` on a clean checkout — which nothing else does, since the other
 jobs create the venv themselves — then starts the server and asks it for its tools
 over HTTP as a real MCP client would, checking the count with every group enabled
-and with two groups disabled. To do the same by hand:
+and with two groups disabled. It also checks stdio startup and that an individually
+enabled tool survives its disabled group. With 45 tools and 10 in the tabs group,
+`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 36 tools.
+When adding or removing tools, update all affected counts in the install job,
+including this override check. To check the default HTTP tool count by hand:
 
 ```bash
 venv/bin/python server/server.py --port 18765 --mcp-port 13000 &
