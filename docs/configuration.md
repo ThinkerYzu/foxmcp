@@ -5,8 +5,8 @@ Complete guide to configuring and running the FoxMCP server.
 ## Starting the Server
 
 The Python distribution provides the `foxmcp` command (also run by
-`uvx foxmcp`) with the same options below. PyPI publication is still pending;
-see the [README](../README.md#run-with-uvx-next-release). Source and GitHub archive
+`uvx foxmcp`) with the same options below. Install from PyPI with uvx;
+see the [README](../README.md#run-with-uvx-over-stdio). Source and GitHub archive
 installations continue to use `python server/server.py`.
 
 ```bash

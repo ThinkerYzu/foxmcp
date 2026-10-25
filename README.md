@@ -17,19 +17,24 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ## Quick start
 
-v1.5.0 is available on GitHub, including Python wheel and source packages.
-PyPI publication is pending Trusted Publisher setup. Use the GitHub installer
-below today. The [uvx setup](#run-with-uvx-after-pypi-publication) becomes
-available after PyPI publication.
+v1.5.0 is available on [PyPI](https://pypi.org/project/foxmcp/1.5.0/) and
+GitHub. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+to run the server with `uvx`, which manages its Python environment for you.
+The GitHub installer is also available below.
 
-You need Firefox, an MCP client, Python **3.10+** with `venv`, and the commands
-`bash`, `curl`, `unzip`, and `sha256sum`. The commands below use a Bash shell.
+You need Firefox, an MCP client and Python **3.10+**. The GitHub installer also
+requires `venv`, `bash`, `curl`, `unzip` and `sha256sum`. The commands below use
+a Bash shell.
 On Debian/Ubuntu, install missing prerequisites with
 `sudo apt install python3 python3-venv curl unzip coreutils`.
 
 ### 1. Install the server
 
-Run this in a new directory where you want FoxMCP installed:
+With uv installed, `uvx` downloads FoxMCP when you start it in step 3. No separate
+installation directory is needed.
+
+For the GitHub archive installation, run this in a new directory where you want
+FoxMCP installed:
 
 ```bash
 mkdir foxmcp && cd foxmcp
@@ -57,7 +62,13 @@ version after a GitHub release; to try a version awaiting approval, use the
 
 ### 3. Start the server
 
-From your installation directory:
+With uvx, run:
+
+```bash
+uvx --from foxmcp==1.5.0 foxmcp
+```
+
+With the GitHub archive installation, run from your installation directory:
 
 ```bash
 ./start-foxmcp.sh
@@ -119,9 +130,9 @@ See the [API reference](docs/api-reference.md) for tool names and parameters.
 
 ## Other setup options
 
-### Run with uvx (after PyPI publication)
+### Run with uvx over stdio
 
-After the first PyPI release, install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 and the [Firefox extension](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
 For one Claude Code client, register a server it launches itself:
 

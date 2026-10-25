@@ -15,10 +15,10 @@ generated from.
   checksum and provenance verification against the tagged workflow and commit.
 - Mozilla accepted version 6620640 for review. The public AMO listing still
   serves v1.4.0; signed v1.5.0 upgrade verification awaits approval.
-- PyPI rejected publication with `invalid-publisher`: no matching Trusted
-  Publisher is configured. Complete the owning-account setup described in
-  [development guidance](docs/development.md#first-pypi-publication), then retry
-  the failed PyPI job. GitHub downloads are available now.
+- [PyPI v1.5.0](https://pypi.org/project/foxmcp/1.5.0/) published after configuring
+  the owning account's Trusted Publisher and retrying the PyPI job. Wheel and
+  source distribution match the verified GitHub release byte for byte. Fresh
+  uvx installation, CLI startup and stdio discovery of all 45 tools passed.
 
 ### Highlights
 
@@ -46,9 +46,9 @@ The forwarding protocol ships as ID 2. Restart old shared workers before joining
 with updated clients. `--single-instance` remains an opt-in stdio mode; ordinary
 HTTP and dedicated stdio remain available. Version warnings are advisory.
 
-PyPI publication is not yet confirmed. The GitHub installer remains the usable
-installation path until the version is available on PyPI. The known HTTP bind
-failure issue remains: if the MCP port is occupied, use an unused `--mcp-port`.
+Install the server with `uvx --from foxmcp==1.5.0 foxmcp` or the GitHub
+installer. The known HTTP bind failure issue remains: if the MCP port is occupied,
+use an unused `--mcp-port`.
 See [development troubleshooting](docs/development.md#troubleshooting).
 
 ### Protocol compatibility review

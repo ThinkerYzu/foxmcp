@@ -414,7 +414,7 @@ make run-server         # Start server
 
 ### 2. Distribution
 - **Extension Packaging**: XPI file, published to the Firefox Add-ons store and attached to GitHub releases
-- **Server**: The Python wheel/sdist installs the existing `server/` modules as `foxmcp`, with executable examples under `foxmcp/examples` and a `foxmcp` console entry point. Source startup and `scripts/install-from-github.sh` remain supported; PyPI publication status is in the [README](../README.md#run-with-uvx-next-release).
+- **Server**: The Python wheel/sdist installs the existing `server/` modules as `foxmcp`, with executable examples under `foxmcp/examples` and a `foxmcp` console entry point. Source startup and `scripts/install-from-github.sh` remain supported; PyPI publication status is in the [README](../README.md#run-with-uvx-over-stdio).
 - **Versioning**: Extension and server are released together — the WebSocket protocol is the compatibility boundary between them
 
 ### 3. Observability
