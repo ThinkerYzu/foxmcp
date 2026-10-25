@@ -6,7 +6,19 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
-## v1.5.0 - Containers, shared connections and Python packaging (prepared 2026-10-25)
+## v1.5.0 - Containers, shared connections and Python packaging (2026-10-25)
+
+### Publication status
+
+- [GitHub release](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0)
+  published. Public XPI, server archive, wheel and source distribution passed
+  checksum and provenance verification against the tagged workflow and commit.
+- Mozilla accepted version 6620640 for review. The public AMO listing still
+  serves v1.4.0; signed v1.5.0 upgrade verification awaits approval.
+- PyPI rejected publication with `invalid-publisher`: no matching Trusted
+  Publisher is configured. Complete the owning-account setup described in
+  [development guidance](docs/development.md#first-pypi-publication), then retry
+  the failed PyPI job. GitHub downloads are available now.
 
 ### Highlights
 

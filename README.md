@@ -17,9 +17,10 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ## Quick start
 
-PyPI packaging is prepared for the next release; `foxmcp` has not yet been
-published to PyPI. Use the GitHub installer below today. The upcoming
-[uvx setup](#run-with-uvx-next-release) removes the server installation directory.
+v1.5.0 is available on GitHub, including Python wheel and source packages.
+PyPI publication is pending Trusted Publisher setup. Use the GitHub installer
+below today. The [uvx setup](#run-with-uvx-after-pypi-publication) becomes
+available after PyPI publication.
 
 You need Firefox, an MCP client, Python **3.10+** with `venv`, and the commands
 `bash`, `curl`, `unzip`, and `sha256sum`. The commands below use a Bash shell.
@@ -118,7 +119,7 @@ See the [API reference](docs/api-reference.md) for tool names and parameters.
 
 ## Other setup options
 
-### Run with uvx (next release)
+### Run with uvx (after PyPI publication)
 
 After the first PyPI release, install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 and the [Firefox extension](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
