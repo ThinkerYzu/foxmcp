@@ -434,21 +434,22 @@ function Create-StartScript {
 Write-Host "Starting FoxMCP Server..." -ForegroundColor Cyan
 
 # Check if virtual environment exists
-if (!(Test-Path "venv")) {
+$venvDir = Join-Path $PSScriptRoot "venv"
+if (!(Test-Path $venvDir)) {
     Write-Host "[ERROR] Virtual environment not found. Run install-from-github.ps1 first." -ForegroundColor Red
     exit 1
 }
 
 # Activate virtual environment
-$activateScript = Join-Path (Get-Location) "venv\Scripts\Activate.ps1"
+$activateScript = Join-Path $venvDir "Scripts\Activate.ps1"
 & $activateScript
 
 # Set predefined scripts directory
-$env:FOXMCP_EXT_SCRIPTS = (Join-Path (Get-Location) "predefined-scripts\")
+$env:FOXMCP_EXT_SCRIPTS = Join-Path $PSScriptRoot "predefined-scripts"
 
 Write-Host "Starting WebSocket (8765) and MCP (3000) servers..." -ForegroundColor Cyan
 Write-Host ("Predefined scripts directory: " + $env:FOXMCP_EXT_SCRIPTS) -ForegroundColor Cyan
-python server/server.py
+python (Join-Path $PSScriptRoot "..\server\server.py")
 
 # Deactivate when done
 deactivate
