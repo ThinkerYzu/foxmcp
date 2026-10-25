@@ -109,6 +109,21 @@ tracked by git.
 
 ## Extension Development
 
+### Icon artwork
+
+`assets/foxmcp-icon-source.png` is the original generated fox artwork. Its
+built-in image generation prompt is recorded in `assets/foxmcp-icon-prompt.txt`.
+The extension bundles transparent PNGs in `extension/icons/` at 16, 32, 48, 64, 96,
+128 and 256 pixels. Manifest `icons` selects extension-manager artwork;
+`browser_action.default_icon` selects toolbar artwork. Both use the same mark.
+The normal build copies these assets into the XPI automatically.
+
+To regenerate an individual size with ImageMagick:
+
+```bash
+magick assets/foxmcp-icon-source.png -resize 32x32 -strip extension/icons/foxmcp-32.png
+```
+
 ### Loading in Firefox
 
 Build the extension with `make package` first. If you used the release installer,

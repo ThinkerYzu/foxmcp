@@ -1,0 +1,9 @@
+Generated with the built-in image_gen tool, 2026-10-24.
+
+Use case: logo-brand
+Asset type: production Firefox browser extension icon for FoxMCP, a fox-named browser automation tool.
+Primary request: create one original, beautifully simple fox head symbol, recognizable at just 16 pixels.
+Subject: front-facing fox head, upright pointed ears, broad warm orange forehead and cheeks, cream-white lower face, dark charcoal eyes and nose. Confident, friendly, clever expression.
+Style: crisp flat geometric icon, bold contiguous shapes, restrained details, professional software identity. No fur texture, no thin lines, no glow, no shadows, no gradients, no lettering or wordmark.
+Composition: one centered standalone fox head only, square 1024x1024 image with a genuinely transparent background, fox occupies about 88 percent of canvas width, balanced padding, no clipping. Strong silhouette with just a few large color regions. No circle, square badge, globe, or background shape.
+Constraints: original design distinct from the Firefox browser logo; no text, no watermark, no mockup or multiple variations. Must remain readable on both light and dark toolbars.

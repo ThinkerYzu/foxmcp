@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **FoxMCP extension icon.** An original fox mark appears in the Firefox toolbar and extension manager.
 - **Firefox containers.** Discover, create, update and explicitly remove persistent containers. `tabs_create` accepts `cookie_store_id`, and `tabs_list` reports and filters by store. Invalid selections never open fallback tabs; removal refuses open tabs and clears stored site data. Adds required `contextualIdentities` and `cookies` permissions. Containers survive client disconnects and worker restarts.
 - **`--stdio --single-instance` shares the Firefox connection across chats.** Clients discover and forward browser commands on the existing extension port, joining a manually started server or starting a detached worker. The port binding arbitrates startup, with no discovery files or file locks. Each chat keeps its own MCP tools and scripts. Automatic workers stop after 60 seconds without clients; manual servers retain their lifetime. Windows workers survive client Job Object cleanup. Use `--single-instance-idle-timeout` to change the idle interval.
 - **Extension/server version warnings.** Both peers announce their release version on WebSocket connection. The toolbar popup displays both versions and refreshes while open; mismatches warn inside it and in the server log, without opening an automatic dialog or notification. Older peers remain usable with unavailable-version diagnostics, and reconnecting clears the previous server's version.

@@ -21,18 +21,30 @@
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"],
+    "scripts": [
+      "background.js"
+    ],
     "persistent": true
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ]
     }
   ],
   "browser_action": {
     "default_popup": "popup/popup.html",
-    "default_title": "FoxMCP"
+    "default_title": "FoxMCP",
+    "default_icon": {
+      "16": "icons/foxmcp-16.png",
+      "32": "icons/foxmcp-32.png",
+      "48": "icons/foxmcp-48.png",
+      "64": "icons/foxmcp-64.png"
+    }
   },
   "options_ui": {
     "page": "options.html",
@@ -42,5 +54,14 @@
     "gecko": {
       "id": "foxmcp@codemud.org"
     }
+  },
+  "icons": {
+    "16": "icons/foxmcp-16.png",
+    "32": "icons/foxmcp-32.png",
+    "48": "icons/foxmcp-48.png",
+    "64": "icons/foxmcp-64.png",
+    "96": "icons/foxmcp-96.png",
+    "128": "icons/foxmcp-128.png",
+    "256": "icons/foxmcp-256.png"
   }
 }
