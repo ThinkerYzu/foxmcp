@@ -7,6 +7,7 @@ Licensed under the MIT License - see LICENSE file for details
 """
 
 import argparse
+from contextlib import suppress
 import asyncio
 import json
 import logging
@@ -21,11 +22,15 @@ from typing import Dict, Any, Optional
 import websockets
 import uvicorn
 try:
+    from .version import VERSION
     from .mcp_tools import FoxMCPTools
     from .file_transfer import FileTransferServer
+    from .browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN
 except ImportError:
+    from version import VERSION
     from mcp_tools import FoxMCPTools
     from file_transfer import FileTransferServer
+    from browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN
 
 # Try to import port coordinator for dynamic port allocation
 try:
@@ -45,7 +50,7 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
-# Only browser extensions may open the extension WebSocket.
+# Only browser extensions may open the extension WebSocket at `/`.
 #
 # WebSocket handshakes are exempt from the same-origin policy and are never
 # preflighted, so without this any web page the user visits could connect to
@@ -57,9 +62,8 @@ logger = logging.getLogger(__name__)
 # more than one profile. A page's origin is always http:// or https://, which
 # the pattern excludes, and page JavaScript cannot suppress or forge it.
 #
-# The trailing .+ is required: websockets matches this with fullmatch(), so a
-# bare prefix pattern would reject every origin including the extension's.
-EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')
+# BrowserProxyHub applies separate checks to `/discovery` and `/proxy` before
+# either can reach the extension handler. Local proxies have no Origin header.
 
 def find_available_port(start_port=3000, max_attempts=100):
     """Find an available port starting from start_port"""
@@ -86,6 +90,7 @@ def find_available_port(start_port=3000, max_attempts=100):
 class FoxMCPServer:
     # How often to check whether the MCP clients owning monitors are still there
     MONITOR_REAP_INTERVAL = 5.0
+    VERSION_REPORT_TIMEOUT = 5.0
 
     # Owner recorded for a monitor started outside any MCP session, which is what
     # a tool called in-process rather than over a transport gets. There is no
@@ -140,6 +145,7 @@ class FoxMCPServer:
 
         # SINGLE CONNECTION CONSTRAINT: Only one extension connection allowed
         self.extension_connection = None
+        self.extension_version = None
         self.pending_requests = {}  # Map of request IDs to Future objects
 
         # Connection event management
@@ -163,6 +169,8 @@ class FoxMCPServer:
         self.monitor_reaper_task = None
         self._shutdown_event = None
         self.websocket_server = None
+        self._browser_loop = None
+        self.browser_hub = BrowserProxyHub(self)
 
     def log_rejected_handshake(self, connection, request, response):
         """Log handshakes the library refused, and let the refusal stand
@@ -176,10 +184,9 @@ class FoxMCPServer:
         hook observes, it never decides.
         """
         if response.status_code == 403:
-            origin = request.headers.get('Origin')
+            origin = request.headers.get_all('Origin')
             logger.warning(
-                f"Rejected WebSocket handshake from {origin!r} - only "
-                f"moz-extension:// origins may connect as the extension"
+                f"Rejected request to {request.path} from Origin {origin!r}"
             )
         return None
 
@@ -202,18 +209,26 @@ class FoxMCPServer:
                 logger.warning(f"Error closing existing connection: {e}")
 
         self.extension_connection = websocket
+        self.extension_version = None
+        version_timeout = asyncio.create_task(self._warn_missing_version(websocket))
 
         # Notify all waiters that a connection has been established
         self._notify_connection_waiters()
 
         try:
+            await websocket.send(json.dumps({"type": "hello", "data": {"version": VERSION}}))
             async for message in websocket:
+                if self.extension_connection is not websocket:
+                    break
                 await self.handle_extension_message(message)
         except ConnectionAbortedError:
             logger.info("Extension disconnected")
         except Exception as e:
             logger.error(f"Error handling extension connection: {e}")
         finally:
+            version_timeout.cancel()
+            with suppress(asyncio.CancelledError):
+                await version_timeout
             # Only the handler still holding the slot may clear it.
             #
             # An extension reconnecting closes its old socket and opens the new
@@ -225,13 +240,53 @@ class FoxMCPServer:
             # nothing to name.
             if self.extension_connection is websocket:
                 self.extension_connection = None
+                self.extension_version = None
                 self.monitor_owners.clear()
+                for future in list(self.pending_requests.values()):
+                    if not future.done():
+                        future.set_result({"error": "Browser extension disconnected"})
+
+    async def get_extension_status(self):
+        """Report the actual browser connection for local and forwarded tools."""
+        connection = self.extension_connection
+        if connection is None or connection.close_code is not None:
+            return "No browser extension is connected"
+        address = connection.remote_address
+        where = f" from {address[0]}:{address[1]}" if address else ""
+        return f"Browser extension connected{where}"
+
+    async def _warn_missing_version(self, websocket):
+        """Older peers remain usable even when they cannot report a version."""
+        await asyncio.sleep(self.VERSION_REPORT_TIMEOUT)
+        if self.extension_connection is websocket and self.extension_version is None:
+            logger.warning(
+                "Extension version unavailable; server %s. Update extension and server "
+                "together to check versions. Browser tools remain available.", VERSION
+            )
 
     async def handle_extension_message(self, message: str):
         """Process message from browser extension"""
         try:
             data = json.loads(message)
+            if not isinstance(data, dict):
+                return
             message_type = data.get('type', 'unknown')
+            if message_type == 'hello':
+                payload = data.get('data')
+                version = payload.get('version') if isinstance(payload, dict) else None
+                if (isinstance(version, str) and len(version) <= 64
+                        and re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,3}', version)):
+                    if version != self.extension_version:
+                        if version != VERSION:
+                            logger.warning(
+                                "FoxMCP version mismatch: extension %s, server %s. "
+                                "Update extension and server together; browser tools remain available.",
+                                version, VERSION
+                            )
+                        else:
+                            logger.info("FoxMCP versions match: extension %s, server %s", version, VERSION)
+                    self.extension_version = version
+                return
             message_id = data.get('id')
             action = data.get('action', 'unknown')
 
@@ -350,6 +405,14 @@ class FoxMCPServer:
 
     async def send_request_and_wait(self, request: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Send request to extension and wait for response"""
+        # HTTP MCP runs on uvicorn's thread. Browser sockets and their reply
+        # futures must stay on the listener's loop, also when HTTP and stdio
+        # clients share the same browser connection.
+        if self._browser_loop is not None and asyncio.get_running_loop() is not self._browser_loop:
+            result = asyncio.run_coroutine_threadsafe(
+                self.send_request_and_wait(request, timeout), self._browser_loop
+            )
+            return await asyncio.wrap_future(result)
         request_id = request.get('id')
         if not request_id:
             raise ValueError("Request must have an ID")
@@ -378,6 +441,8 @@ class FoxMCPServer:
         except Exception as e:
             self.pending_requests.pop(request_id, None)
             return {"error": f"Request failed: {str(e)}"}
+        finally:
+            self.pending_requests.pop(request_id, None)
 
     def register_monitor(self, monitor_id: str, session_id: str):
         """Record the MCP client a newly started request monitor belongs to
@@ -438,11 +503,13 @@ class FoxMCPServer:
             return
 
         live_sessions = self._live_mcp_session_ids()
-        if live_sessions is None:
-            return
-
-        abandoned = [monitor_id for monitor_id, session_id in self.monitor_owners.items()
-                     if session_id != self.NO_MCP_SESSION and session_id not in live_sessions]
+        proxy_sessions = set(self.browser_hub.clients.values())
+        abandoned = [
+            monitor_id for monitor_id, session_id in self.monitor_owners.items()
+            if (session_id.startswith('proxy:') and session_id not in proxy_sessions)
+            or (not session_id.startswith('proxy:') and live_sessions is not None
+                and session_id != self.NO_MCP_SESSION and session_id not in live_sessions)
+        ]
 
         for monitor_id in abandoned:
             self.monitor_owners.pop(monitor_id, None)
@@ -883,7 +950,11 @@ class FoxMCPServer:
         """Start both WebSocket and MCP servers"""
         logger.info(f"Starting FoxMCP server on {self.host}:{self.port}")
 
-        # Start MCP server first (if enabled)
+        # Own the browser port before starting an MCP listener. A failed bind
+        # must not leave an unrelated HTTP listener alive in a losing process.
+        await self.start_browser_listener()
+
+        # Start MCP server (if enabled)
         #
         # stdio is the exception, and starts below instead: HTTP mode hands
         # uvicorn a thread and returns, while the stdio transport runs in this
@@ -895,18 +966,30 @@ class FoxMCPServer:
         elif not self.start_mcp:
             logger.info("MCP server disabled for this instance")
 
-        # Use modern websockets API with SO_REUSEADDR
-        import socket
+        if self.start_mcp and not self.use_stdio:
+            self.monitor_reaper_task = asyncio.create_task(self._reap_monitors())
+
+        if self.start_mcp and self.use_stdio:
+            await self._serve_mcp_over_stdio()
+        else:
+            await self.websocket_server.wait_closed()
+
+    async def start_browser_listener(self):
+        """Bind the common discovery, proxy and extension port atomically."""
+        self._browser_loop = asyncio.get_running_loop()
         try:
             self.websocket_server = await websockets.serve(
-                self.handle_extension_connection,
+                self.browser_hub.handle_connection,
                 self.host,
                 self.port,
-                reuse_address=True,  # Enable SO_REUSEADDR for immediate port reuse
+                # Windows SO_REUSEADDR permits stealing an occupied listening
+                # port; Unix needs it to reuse a port after a clean shutdown.
+                reuse_address=os.name != 'nt',
                 # Rejected during the handshake, so a non-extension client never
                 # reaches handle_extension_connection - which would otherwise close
                 # the real extension's socket to make room for it.
-                origins=[EXTENSION_ORIGIN_PATTERN],
+                origins=[EXTENSION_ORIGIN_PATTERN, None],
+                process_request=self.browser_hub.process_request,
                 process_response=self.log_rejected_handshake
             )
         except OSError as e:
@@ -921,14 +1004,6 @@ class FoxMCPServer:
             raise
 
         logger.info("FoxMCP WebSocket server is running...")
-
-        if self.start_mcp and not self.use_stdio:
-            self.monitor_reaper_task = asyncio.create_task(self._reap_monitors())
-
-        if self.start_mcp and self.use_stdio:
-            await self._serve_mcp_over_stdio()
-        else:
-            await self.websocket_server.wait_closed()
 
     async def _serve_mcp_over_stdio(self):
         """Serve MCP on stdin/stdout until the client hangs up, then release the port
@@ -992,6 +1067,15 @@ async def main():
                         help='Serve MCP over stdin/stdout instead of HTTP, so an MCP '
                              'client can launch the server itself. The WebSocket port '
                              'for the extension is unchanged.')
+    parser.add_argument('--single-instance', action='store_true',
+                        help='With --stdio, automatically start or join one shared browser '
+                             'server for all chats using this WebSocket port.')
+    parser.add_argument('--single-instance-idle-timeout', type=float, default=60.0,
+                        metavar='SECONDS',
+                        help='Stop the shared server after this long without clients '
+                             '(default: 60 seconds; requires --single-instance).')
+    parser.add_argument('--single-instance-worker', action='store_true',
+                        help=argparse.SUPPRESS)
     parser.add_argument('--disable-tools', default=None, metavar='GROUP[,GROUP...]',
                         help='Comma-separated tool groups to leave unregistered, so their '
                              'descriptions never reach the client. Groups: '
@@ -1003,6 +1087,15 @@ async def main():
                              '(e.g. tabs_capture_screenshot). Overrides FOXMCP_ENABLE_TOOLS.')
 
     args = parser.parse_args()
+
+    if args.single_instance and not args.stdio:
+        parser.error('--single-instance requires --stdio')
+    if args.single_instance_worker and not args.single_instance:
+        parser.error('--single-instance-worker requires --stdio --single-instance')
+    if (not args.single_instance and args.single_instance_idle_timeout != 60.0):
+        parser.error('--single-instance-idle-timeout requires --single-instance')
+    if not 0 < args.single_instance_idle_timeout < float('inf'):
+        parser.error('--single-instance-idle-timeout must be a positive finite number')
 
     # Both of these are silent no-ops rather than errors if left to run, and a
     # user who typed them meant something by them. --no-mcp with --stdio asks for
@@ -1059,9 +1152,21 @@ async def main():
         )
     except ValueError as e:
         parser.error(str(e))
+    if args.single_instance:
+        try:
+            from .single_instance import run_proxy, run_worker
+        except ImportError:
+            from single_instance import run_proxy, run_worker
+        if args.single_instance_worker:
+            server.start_mcp = False
+            await run_worker(server, args.single_instance_idle_timeout)
+        else:
+            await run_proxy(server, args.single_instance_idle_timeout)
+        return
     await server.start_server()
 
-if __name__ == "__main__":
+def run() -> None:
+    """Run the server with consistent exit codes for scripts and console entry points."""
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
@@ -1073,3 +1178,7 @@ if __name__ == "__main__":
         # launched the process reports what it exited with, and often shows
         # nothing else.
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    run()

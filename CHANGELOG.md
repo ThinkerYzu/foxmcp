@@ -5,10 +5,30 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] - 2026-10-25
 
 ### Added
+- **FoxMCP extension icon.** An original fox mark appears in the Firefox toolbar and extension manager.
+- **Firefox containers.** Discover, create, update and explicitly remove persistent containers. `tabs_create` accepts `cookie_store_id`, and `tabs_list` reports and filters by store. Invalid selections never open fallback tabs; removal refuses open tabs and clears stored site data. Adds required `contextualIdentities` and `cookies` permissions. Containers survive client disconnects and worker restarts.
+- **`--stdio --single-instance` shares the Firefox connection across chats.** Clients discover and forward browser commands on the existing extension port, joining a manually started server or starting a detached worker. The port binding arbitrates startup, with no discovery files or file locks. Each chat keeps its own MCP tools and scripts. Automatic workers stop after 60 seconds without clients; manual servers retain their lifetime. Windows workers survive client Job Object cleanup. Use `--single-instance-idle-timeout` to change the idle interval.
+- **Extension/server version warnings.** Both peers announce their release version on WebSocket connection. The toolbar popup displays both versions and refreshes while open; mismatches warn inside it and in the server log, without opening an automatic dialog or notification. Older peers remain usable with unavailable-version diagnostics, and reconnecting clears the previous server's version.
+- **Installable Python distribution and `foxmcp` command.** The server can run through `uvx foxmcp` after the first PyPI publication, with `--stdio` for a client-managed process or HTTP by default. Executable examples ship in the package and are enabled unless `FOXMCP_EXT_SCRIPTS` is explicitly set. Source and GitHub archive startup keep their existing behavior. CI tests wheel and sdist installation outside the checkout on Python 3.10/3.14; tag releases reuse those artifacts for GitHub provenance and PyPI Trusted Publishing with attestations.
 - **`tabs_capture_screenshot` takes a `tab_id`, so a background tab can be captured.** The tool used `tabs.captureVisibleTab`, which only sees the tab a window is showing, so capturing a page meant making it the active tab first, or opening a window just to have somewhere to point `window_id`. With `tab_id` the extension asks Firefox's `tabs.captureTab` for that one tab, wherever it is, and nothing is switched. It is a new action in the extension, so against an older extension the tool says it is too old and what to do instead; without `tab_id` nothing changes.
+
+### Changed
+- **Forwarding protocol ID increases from 1 to 2.** The existing tab-list response now includes cookie-store metadata and supports a store filter. Explicit container creation uses a new browser action so older extensions reject it before opening a URL. Update both halves together; existing shared workers must be restarted before new clients can join them.
+
+
+### Fixed
+- **Firefox manifest warning.** Removed unsupported `license` metadata; MIT licensing remains in LICENSE and package metadata.
+- **Source-install CI tool count.** The screenshot override check includes the four new container tools.
+
+### Upgrade notes
+- Update the Python server and Firefox extension together. Python 3.10+ is required; native tab groups require Firefox 139+.
+- The extension adds required `contextualIdentities` and `cookies` permissions. Review any Firefox permission prompt before enabling the updated extension. Containers belong to the Firefox profile. Installing the extension may enable Firefox's container feature; later user disabling is respected.
+- Container removal refuses open tabs and clears that container's stored site data. It does not remove the default or private cookie store.
+- Restart existing shared workers when upgrading to protocol ID 2. `--single-instance` is opt-in with `--stdio`; manually started servers keep their independent lifetime.
+- The Python package and console command are prepared for first publication. Use `uvx foxmcp` only after the release's package is available on PyPI; the GitHub installer remains supported.
 
 ## [1.4.0] - 2026-10-18
 
@@ -258,7 +278,8 @@ error. See **Removed** below.
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
-[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.2.0

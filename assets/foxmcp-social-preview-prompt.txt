@@ -1,0 +1,8 @@
+Generated with the built-in image_gen tool, 2026-10-24.
+
+Use case: logo-brand
+Asset type: GitHub repository social preview card, landscape aspect ratio exactly 2:1, target 1280 by 640 pixels.
+Input image: the provided transparent fox head is the existing FoxMCP identity; use this exact fox artwork as the logo, preserving its shape, colors and expression, without adding details or redesigning it.
+Primary request: a polished, restrained repository sharing card for FoxMCP. Warm off-white solid background, original orange fox head large at the left with generous margins, simple dark charcoal typography at the right.
+Text verbatim: "FoxMCP" as a large bold clean sans-serif heading, below it "Firefox browser automation" and on a separate line "via Model Context Protocol" in smaller easy-to-read type. No other text.
+Composition: wide 2:1 canvas, fox occupying roughly left third with ample safe margins, text comfortably fits right two-thirds; subtle orange accent rule if useful. Elegant minimal flat layout, clear hierarchy. No browser screenshots, no extra symbols, no mockups, no watermark, no gradients. Fully opaque background; do not copy black background from image viewer, the reference is transparent.

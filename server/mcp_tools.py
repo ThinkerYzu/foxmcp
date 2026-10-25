@@ -273,6 +273,23 @@ def parse_group_properties(title=None, color=None, collapsed=None):
     return properties
 
 
+def validate_cookie_store_id(value):
+    """Validate the opaque string without coercion or parsing profile-specific IDs."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("cookie_store_id must be a nonempty string")
+    return value
+
+
+def browser_tool_error(response):
+    """Preserve browser error codes and details in public tool diagnostics."""
+    if "error" in response:
+        return str(response["error"])
+    if response.get("type") == "error":
+        data = response.get("data", {})
+        return f"{data.get('code', 'API_ERROR')}: {data.get('message', 'Browser error')} {json.dumps(data.get('details', {}))}"
+    return None
+
+
 class TabInfo(TypedDict):
     """Type definition for tab information from browser extension"""
     url: str
@@ -282,6 +299,7 @@ class TabInfo(TypedDict):
     windowId: int
     pinned: bool
     index: int
+    cookieStoreId: str
 
 class TabsListResponse(TypedDict):
     """Type definition for tabs.list response from browser extension"""
@@ -305,6 +323,7 @@ class FoxMCPTools:
     TOOL_GROUPS = {
         'windows': '_setup_window_tools',
         'tabs': '_setup_tab_tools',
+        'containers': '_setup_container_tools',
         'history': '_setup_history_tools',
         'bookmarks': '_setup_bookmark_tools',
         'navigation': '_setup_navigation_tools',
@@ -752,16 +771,99 @@ class FoxMCPTools:
 
             return f"Unable to update window {window_id}"
 
+    def _setup_container_tools(self):
+        """Container discovery and profile resources, independent of client lifetime."""
+        @self._tool()
+        async def containers_list() -> str:
+            """List Firefox containers as JSON with opaque cookie_store_id, name, color
+            and icon; default_cookie_store_id identifies normal browsing separately.
+            IDs belong to the connected profile. Names may repeat.
+            """
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()), "type": "request", "action": "containers.list",
+                "data": {}, "timestamp": datetime.now().isoformat(),
+            })
+            error = browser_tool_error(response)
+            if error:
+                return f"Error listing containers: {error}"
+            return json.dumps(response.get("data", {}))
+
+        async def container_request(action, data):
+            response = await self.websocket_server.send_request_and_wait({
+                "id": str(uuid.uuid4()), "type": "request", "action": action,
+                "data": data, "timestamp": datetime.now().isoformat(),
+            })
+            error = browser_tool_error(response)
+            if error:
+                return f"Error managing container: {error}"
+            return json.dumps(response.get("data", {}))
+
+        def properties(name=None, color=None, icon=None):
+            result = {}
+            for key, value in (("name", name), ("color", color), ("icon", icon)):
+                if value is not None:
+                    if not isinstance(value, str) or not value.strip():
+                        raise ValueError(f"{key} must be a nonempty string")
+                    result[key] = value
+            return result
+
+        def named_store(value):
+            validate_cookie_store_id(value)
+            if value in ("firefox-default", "firefox-private"):
+                raise ValueError("Default and private stores are not named containers")
+            return value
+
+        @self._tool()
+        async def containers_create(name: str, color: str = "blue", icon: str = "fingerprint") -> str:
+            """Create a persistent Firefox container. Return JSON container metadata.
+            Duplicate names are permitted. Firefox validates color and icon.
+            """
+            try:
+                if name is None or color is None or icon is None:
+                    raise ValueError("name, color and icon must be nonempty strings")
+                data = properties(name, color, icon)
+            except ValueError as error:
+                return f"Error: INVALID_PARAMETER: {error}"
+            return await container_request("containers.create", data)
+
+        @self._tool()
+        async def containers_update(cookie_store_id: str, name: Optional[str] = None,
+                                    color: Optional[str] = None, icon: Optional[str] = None) -> str:
+            """Update a named Firefox container, preserving its ID and omitted properties.
+            Supply at least one of name, color or icon. Return JSON container metadata.
+            """
+            try:
+                store = named_store(cookie_store_id)
+                data = properties(name, color, icon)
+                if not data:
+                    raise ValueError("Supply at least one of name, color or icon")
+            except ValueError as error:
+                return f"Error: INVALID_PARAMETER: {error}"
+            return await container_request("containers.update", {"cookieStoreId": store, **data})
+
+        @self._tool()
+        async def containers_remove(cookie_store_id: str) -> str:
+            """Remove a named Firefox container and its stored site data. Refuses open
+            tabs with CONTAINER_IN_USE and tab_ids. Close tabs explicitly first.
+            The check cannot exclude races with browser UI. No automatic cleanup.
+            """
+            try:
+                store = named_store(cookie_store_id)
+            except ValueError as error:
+                return f"Error: INVALID_PARAMETER: {error}"
+            return await container_request("containers.remove", {"cookieStoreId": store})
+
     def _setup_tab_tools(self):
         """Setup tab management tools"""
 
         # Tab List Tool
         @self._tool()
-        async def tabs_list(window_id: Optional[Union[int, str]] = None) -> str:
+        async def tabs_list(window_id: Optional[Union[int, str]] = None,
+                            cookie_store_id: Optional[str] = None) -> str:
             """
-            List open browser tabs, across every window or within one window
+            List open browser tabs, optionally filtered by window and cookie store
 
-            Each line ends with "[window {id}, index {n}]", and carries "(active)" for the
+            Each line includes "[window {id}, index {n}] [cookie store {cookie_store_id}]", and carries "(active)" for the
             active tab of its window and "(pinned)" for a pinned one. The window, the index
             and the pinned mark are what tabs_move needs: the window to move a tab out of or
             into, the position it currently holds, and whether a leading run of pinned tabs
@@ -770,6 +872,7 @@ class FoxMCPTools:
             Args:
                 window_id: Restrict the listing to this window (optional, accepts int or
                     string). Omit it to list tabs in every window.
+                cookie_store_id: Opaque store ID to filter by, combined with window_id.
 
             Returns:
                 Formatted string with tab information:
@@ -788,24 +891,36 @@ class FoxMCPTools:
                 except (ValueError, TypeError):
                     return f"Error: Invalid window_id '{window_id}'. Must be a valid integer."
 
+            if cookie_store_id is not None:
+                try:
+                    validate_cookie_store_id(cookie_store_id)
+                except ValueError as error:
+                    return f"Error: INVALID_PARAMETER: {error}"
+
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "tabs.list",
                 "data": {
-                    **({"windowId": window_id} if window_id else {})
+                    **({"windowId": window_id} if window_id else {}),
+                    **({"cookieStoreId": cookie_store_id} if cookie_store_id is not None else {})
                 },
                 "timestamp": datetime.now().isoformat()
             }
 
             response = await self.websocket_server.send_request_and_wait(request)
 
-            if "error" in response:
-                return f"Error getting tabs: {response['error']}"
+            error = browser_tool_error(response)
+            if error:
+                return f"Error getting tabs: {error}"
 
             if response.get("type") == "response" and "data" in response:
                 tabs_data: TabsListResponse = response["data"]
                 tabs: List[TabInfo] = tabs_data.get("tabs", [])
+                if cookie_store_id is not None and any(
+                    tab.get("cookieStoreId") != cookie_store_id for tab in tabs
+                ):
+                    return "Error: UNSUPPORTED_API: Cannot verify cookie-store filter. Update the extension."
                 if not tabs:
                     # More informative message for debugging
                     return f"No tabs found. Extension response: {response.get('data', {})}"
@@ -822,7 +937,7 @@ class FoxMCPTools:
                     active = " (active)" if tab.get("active") else ""
                     pinned = " (pinned)" if tab.get("pinned") else ""
                     location = f" [window {tab.get('windowId')}, index {tab.get('index')}]"
-                    result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}{pinned}{location}\n"
+                    result += f"- ID {tab.get('id')}: {tab.get('title', 'No title')} - {tab.get('url', 'No URL')}{active}{pinned}{location} [cookie store {tab.get('cookieStoreId', 'unavailable')}]\n"
                 return result
 
             return "Unable to retrieve tabs"
@@ -833,7 +948,8 @@ class FoxMCPTools:
             url: str,
             active: bool = True,
             pinned: bool = False,
-            window_id: Optional[Union[int, str]] = None
+            window_id: Optional[Union[int, str]] = None,
+            cookie_store_id: Optional[str] = None
         ) -> str:
             """Create a new browser tab
 
@@ -842,6 +958,8 @@ class FoxMCPTools:
                 active: Whether the tab should be active (default: True)
                 pinned: Whether the tab should be pinned (default: False)
                 window_id: Window ID to create tab in (optional, accepts int or string)
+                cookie_store_id: Opaque store ID from containers_list, or firefox-default.
+                    Omit for existing behavior. Explicit selection never falls back.
             """
             # Convert window_id to int if it's a string (for MCP client compatibility)
             if window_id is not None and isinstance(window_id, str):
@@ -850,27 +968,40 @@ class FoxMCPTools:
                 except (ValueError, TypeError):
                     return f"Error: Invalid window_id '{window_id}'. Must be a valid integer."
             
+            if cookie_store_id is not None:
+                try:
+                    validate_cookie_store_id(cookie_store_id)
+                except ValueError as error:
+                    return f"Error: INVALID_PARAMETER: {error}"
+
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
-                "action": "tabs.create",
+                "action": "tabs.create_in_store" if cookie_store_id is not None else "tabs.create",
                 "data": {
                     "url": url,
                     "active": active,
                     "pinned": pinned,
-                    **({"windowId": window_id} if window_id else {})
+                    **({"windowId": window_id} if window_id else {}),
+                    **({"cookieStoreId": cookie_store_id} if cookie_store_id is not None else {})
                 },
                 "timestamp": datetime.now().isoformat()
             }
 
             response = await self.websocket_server.send_request_and_wait(request)
 
-            if "error" in response:
-                return f"Error creating tab: {response['error']}"
+            error = browser_tool_error(response)
+            if error:
+                if cookie_store_id is not None and response.get("data", {}).get("code") == "UNKNOWN_ACTION":
+                    return "Error: UNSUPPORTED_API: Update the extension for container tab creation. No fallback attempted."
+                return f"Error creating tab: {error}"
 
             if response.get("type") == "response" and "data" in response:
                 tab = response["data"].get("tab", {})
-                return f"Created tab: ID {tab.get('id')} - {tab.get('title', 'Loading...')} - {tab.get('url', url)}"
+                if cookie_store_id is not None and tab.get("cookieStoreId") != cookie_store_id:
+                    return (f"Error: API_ERROR: Created tab ID {tab.get('id')} has cookie store "
+                            f"{tab.get('cookieStoreId', 'unavailable')}, expected {cookie_store_id}.")
+                return f"Created tab: ID {tab.get('id')} - {tab.get('title', 'Loading...')} - {tab.get('url', url)} [cookie store {tab.get('cookieStoreId', 'unavailable')}]"
 
             return "Unable to create tab"
 
@@ -1793,25 +1924,7 @@ class FoxMCPTools:
             Says whether the browser extension is connected, and from where. Every
             other tool fails with a timeout when it is not, so check here first.
             """
-            # The server holds one connection, not a set: an arriving extension
-            # closes the previous one. This used to look for a `connected_clients`
-            # collection, which FoxMCPServer has never had, so the tool answered
-            # "doesn't track connected clients" whether or not anything was
-            # connected -- an unhelpful answer from the tool you reach for when
-            # the connection is the thing in doubt.
-            connection = getattr(self.websocket_server, 'extension_connection', None)
-
-            if connection is None:
-                return "No browser extension is connected"
-
-            # close_code is None until the socket closes, which is the same
-            # liveness test the server itself makes before displacing a connection.
-            if getattr(connection, 'close_code', None) is not None:
-                return "No browser extension is connected (the last connection has closed)"
-
-            address = getattr(connection, 'remote_address', None)
-            where = f" from {address[0]}:{address[1]}" if address else ""
-            return f"Browser extension connected{where}"
+            return await self.websocket_server.get_extension_status()
 
     def _setup_navigation_tools(self):
         """Setup navigation tools"""

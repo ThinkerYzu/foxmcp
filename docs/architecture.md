@@ -70,10 +70,20 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 - **Lifecycle**: Graceful startup and shutdown, including cleanup of the extension connection
 
 #### MCP Tools (`mcp_tools.py`)
-- **MCP Tool Definitions**: 41 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
+- **MCP Tool Definitions**: 45 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
 - **Parameter Validation**: Type-annotated tool signatures; FastMCP derives the schema
 - **Response Formatting**: Each tool turns the raw browser response into a human-readable string
 - **Error Handling**: Every tool checks for `error` in the response before reading data
+
+### Firefox containers
+
+The extension resolves opaque cookie-store IDs against the connected profile.
+Tab listings carry store metadata, and explicit tab creation uses
+`tabs.create_in_store`, allowing older extensions to reject it before navigation.
+The server verifies the actual returned store. Container lifecycle tools use
+`contextualIdentities`; no per-client container registry or cleanup is required.
+Containers and their tabs survive client and forwarding-worker lifetimes.
+Protocol ID 2 covers the changed tab-list contract. See [protocol](protocol.md#firefox-container-contract-protocol-id-2).
 
 ### 3. Communication Protocols
 
@@ -122,6 +132,30 @@ Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.cre
   for clients that launch their servers; there the MCP server is an asyncio task
   beside the WebSocket server rather than a thread, since the stdio transport is
   asyncio throughout. The WebSocket half is identical either way
+
+#### Shared stdio server
+
+Each `--stdio --single-instance` process serves its own FastMCP tools and runs
+its own predefined scripts. `RemoteBrowser` forwards only browser requests to
+the extension port. `/discovery` identifies the server and forwarding protocol;
+`/proxy` carries requests and replies; `/` remains the extension connection.
+These routes are available on manual HTTP and plain stdio servers as well.
+
+`BrowserProxyHub` assigns fresh upstream IDs and restores each client's original
+ID in its reply. Proxy connections are tracked separately from the extension
+and MCP HTTP sessions. Monitor ownership follows the proxy socket, with cleanup
+after outstanding requests have finished so a late monitor-creation reply cannot
+leave an abandoned capture running.
+
+When discovery finds no owner, a detached worker tries to bind the configured
+extension port. Losing that bind retries discovery. There is no discovery file,
+file lock or separate internal listener. Automatic workers exit after 60 seconds
+without proxies; manual servers keep their existing lifetime.
+
+On Windows, the local WMI provider starts the worker outside the client's Job
+Object. A hidden PowerShell broker passes the environment over stdin and waits
+for the worker's exit. This prevents SDK process-tree cleanup from terminating
+the shared worker. See [configuration](configuration.md#sharing-one-server-across-chats).
 
 ## Data Flow
 
@@ -180,7 +214,7 @@ MCP Client
 
 | Port | What stops a web page |
 |---|---|
-| Extension WebSocket | An origin allowlist: `websockets.serve(origins=[...])` accepts only `moz-extension://` origins and rejects anything else with a 403 during the handshake. See [Extension Connection Origin](#4-extension-connection-origin) |
+| Browser port | Route checks require a loopback peer and a valid localhost Host (forwarded ports allowed). `/` requires a `moz-extension://` origin; `/discovery` and `/proxy` reject every Origin header. No CORS allowance is sent. Proxies cannot enter the extension handler. |
 | MCP HTTP | No CORS headers are sent, so preflighted requests are blocked; a `text/plain` request that would skip preflight is rejected for its content type; and the transport requires a session id that cross-origin JavaScript cannot read. These come from `fastmcp`/uvicorn rather than from FoxMCP, so `tests/integration/test_mcp_port_not_web_reachable.py` asserts them — a dependency upgrade that re-opens the port fails the suite |
 
 Neither port authenticates local processes, which is deliberate — a process running as the user already has the browser profile and the script directory, so a shared secret between two components under that user's control would guard nothing.
@@ -193,7 +227,7 @@ Neither port authenticates local processes, which is deliberate — a process ru
 
 Enforced in `mcp_tools.py` before a predefined script runs:
 
-- **Opt-in**: Scripts are disabled unless `FOXMCP_EXT_SCRIPTS` is set
+- **Directory selection**: Source startup requires `FOXMCP_EXT_SCRIPTS`; the installed console command defaults to bundled examples when it is absent. An explicit value overrides the bundle, including an empty value to disable scripts.
 - **Name Filtering**: Script names must match `^[a-zA-Z0-9._-]+$` and may not contain `/`, `\`, or `..`
 - **Path Containment**: The resolved absolute path must stay inside the scripts directory
 - **Executable Check**: The file must exist and be executable
@@ -203,7 +237,7 @@ Enforced in `mcp_tools.py` before a predefined script runs:
 
 ### 4. Extension Connection Origin
 
-Only browser extensions may connect to the WebSocket port. `server.py` passes an allowlist to `websockets.serve()`:
+Only browser extensions may connect to `/`. The origin pattern is:
 
 ```python
 EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')
@@ -223,6 +257,7 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 ### 1. Connection Management
 - **Single Extension Connection**: One extension connection at a time. When a new one arrives, the server closes the existing connection first, which prevents connection races between two browsers or a stale socket.
 - **MCP Clients**: Served by FastMCP. There is no per-client state — all clients share the one extension connection, and requests from different clients interleave.
+- **Version Diagnostics**: On connection, both peers announce release versions through a standalone `hello`. The popup and server log warn on mismatch or unavailable legacy versions without blocking tools. State resets per connection; see [protocol](protocol.md#connection-version-announcement).
 - **Reconnection Logic**: The extension retries every `retryInterval` (5000 ms by default) and reconnects when settings change. `maxRetries: -1` retries forever, slowing from `retryInterval` to every 30 seconds after 50 attempts (`FAST_RETRIES` and `SLOW_RETRY_INTERVAL` in `background.js`); a positive `maxRetries` stops after that many attempts until **Reconnect** in the popup resets the counter.
 
 ### 2. Request Handling
@@ -358,11 +393,14 @@ python server/server.py --stdio           # MCP on stdin/stdout, no MCP HTTP lis
 ### 3. Environment Configuration
 
 ```bash
-# Required for predefined scripts; without it, the feature is disabled
+# Select custom predefined scripts (required for direct source startup)
 export FOXMCP_EXT_SCRIPTS="/path/to/scripts"
 ```
 
-This is the only environment variable the server reads. Host and ports are set through the constructor or the command-line flags above.
+The console wrapper defaults this variable to bundled examples only when it is
+absent. `FOXMCP_DISABLE_TOOLS` and `FOXMCP_ENABLE_TOOLS` select tools; see
+[configuration.md](configuration.md). Host and ports are set through the
+constructor or command-line flags above.
 
 ## Deployment
 
@@ -376,7 +414,7 @@ make run-server         # Start server
 
 ### 2. Distribution
 - **Extension Packaging**: XPI file, published to the Firefox Add-ons store and attached to GitHub releases
-- **Server**: Run from the checkout with its virtual environment; `scripts/install-from-github.sh` sets this up for end users
+- **Server**: The Python wheel/sdist installs the existing `server/` modules as `foxmcp`, with executable examples under `foxmcp/examples` and a `foxmcp` console entry point. Source startup and `scripts/install-from-github.sh` remain supported; PyPI publication status is in the [README](../README.md#run-with-uvx-next-release).
 - **Versioning**: Extension and server are released together — the WebSocket protocol is the compatibility boundary between them
 
 ### 3. Observability

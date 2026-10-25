@@ -35,6 +35,25 @@ make package    # build, then create the XPI and server ZIP, then clear the prof
 `package` produces `dist/packages/foxmcp@codemud.org.xpi` and
 `dist/packages/foxmcp-server.zip`.
 
+### Python distributions
+
+Hatchling maps the existing `server/` modules to the installed `foxmcp` package
+and `predefined-ex/` to executable package examples. No source relocation is
+needed. Runtime dependencies in `pyproject.toml` must match
+`server/requirements.txt`; the artifact check enforces this.
+
+```bash
+venv/bin/python -m pip install build twine
+venv/bin/python -m build --outdir dist/python/packages
+venv/bin/python -m twine check --strict dist/python/packages/*
+venv/bin/python scripts/check-python-dist.py dist/python/packages
+```
+
+Use a fresh output directory after changing versions. `build` creates the sdist,
+then builds the wheel from it. CI installs each artifact on Python 3.10 and 3.14
+and runs [Python package smoke checks](../tests/README.md#python-package-smoke-test)
+outside the checkout. Python archives are separate from `make package`'s ZIP/XPI.
+
 ### Test
 
 ```bash
@@ -66,7 +85,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 41 MCP tool definitions
+│   └── mcp_tools.py # The 45 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -90,6 +109,33 @@ tracked by git.
 
 ## Extension Development
 
+### Icon artwork
+
+`assets/foxmcp-icon-source.png` is the original generated fox artwork. Its
+built-in image generation prompt is recorded in `assets/foxmcp-icon-prompt.txt`.
+The extension bundles transparent PNGs in `extension/icons/` at 16, 32, 48, 64, 96,
+128 and 256 pixels. Manifest `icons` selects extension-manager artwork;
+`browser_action.default_icon` selects toolbar artwork. Both use the same mark.
+The normal build copies these assets into the XPI automatically.
+
+To regenerate an individual size with ImageMagick:
+
+```bash
+magick assets/foxmcp-icon-source.png -resize 32x32 -strip extension/icons/foxmcp-32.png
+```
+
+### GitHub repository artwork
+
+The README displays the existing 128-pixel fox icon. Its absolute GitHub raw URL
+also works when the README is displayed outside a source checkout, such as in
+Python package metadata.
+
+`assets/foxmcp-social-preview.png` is the repository sharing card, sized
+1280 by 640 pixels and kept below GitHub's 1 MB limit. Its image-generation
+prompt is in `assets/foxmcp-social-preview-prompt.txt`. Upload this image through
+repository **Settings > General > Social preview > Edit > Upload an image**.
+Committing the PNG alone does not change GitHub's configured social preview.
+
 ### Loading in Firefox
 
 Build the extension with `make package` first. If you used the release installer,
@@ -109,7 +155,14 @@ unsigned installation requires Developer Edition, Nightly, or an unbranded build
 
 **Temporary add-on:** Open `about:debugging` → **This Firefox** →
 **Load Temporary Add-on**, and select `dist/packages/foxmcp@codemud.org.xpi`.
-Repeat after Firefox restarts.
+Repeat after Firefox restarts. If the signed release is already installed,
+the temporary build with the same add-on ID takes its place for the session;
+restarting Firefox restores the installed release. Reload existing page tabs
+before testing content-script changes. Temporary loading does not verify the
+permission prompts shown during a signed extension upgrade.
+
+Keep licensing declarations in `LICENSE` and package metadata. `license` is not
+a supported WebExtension manifest key and produces a Firefox loading warning.
 
 **Install from file:** On a channel that permits unsigned extensions, open
 `about:config` and set `xpinstall.signatures.required` to `false`. Then open
@@ -246,7 +299,11 @@ The install job is the one that follows README rather than the test harness. It
 runs `make install` on a clean checkout — which nothing else does, since the other
 jobs create the venv themselves — then starts the server and asks it for its tools
 over HTTP as a real MCP client would, checking the count with every group enabled
-and with two groups disabled. To do the same by hand:
+and with two groups disabled. It also checks stdio startup and that an individually
+enabled tool survives its disabled group. With 45 tools and 10 in the tabs group,
+`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 36 tools.
+When adding or removing tools, update all affected counts in the install job,
+including this override check. To check the default HTTP tool count by hand:
 
 ```bash
 venv/bin/python server/server.py --port 18765 --mcp-port 13000 &
@@ -288,12 +345,22 @@ test is fine.
 
 ## Release Process
 
-1. Bump the version in `extension/manifest.json`, `package.json`,
+Complete the [protocol ID compatibility review](protocol.md#protocol-id-compatibility-policy)
+before every release. Compare the extension/server API with the previous released
+tag, identify every modified or removed existing API, and confirm that the
+protocol ID has increased when required. Record the baseline tag, affected APIs,
+previous/current IDs and rationale in the release preparation record. Explicitly
+record an unchanged-ID decision too. This is a required manual check before
+tagging or publishing; `scripts/check-version.sh` checks release-version
+consistency, not API compatibility.
+
+1. Complete and record the protocol ID compatibility review described above.
+2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh` and the install URL in `README.md`
-2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.4.0] - <date>` and add
+3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.5.0] - <date>` and add
    the link reference at the bottom
-3. `scripts/check-version.sh 1.4.0` — fails unless all five files agree
-4. Commit, then tag: `git tag -a v1.4.0 -m "..."` and push the tag
+4. `scripts/check-version.sh 1.5.0` — fails unless all seven files agree
+5. Commit, then tag: `git tag -a v1.5.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,
@@ -306,6 +373,11 @@ transport saves a tool-call report, completed feature checks and a screenshot;
 logs and upload receipts are also retained as Actions artifacts. See [Package smoke test](../tests/README.md#release-package-smoke-test).
 
 Only those tested archives are attested and published to the GitHub release.
+CI also builds and tests a Python wheel and sdist once. The release reuses those
+exact files, verifies `PYTHON-SHA256SUMS`, and includes them in GitHub provenance
+and release assets. A separate tag-only job publishes them to PyPI with OIDC
+Trusted Publishing and PyPI attestations. Manual rehearsals publish neither
+to PyPI nor GitHub.
 The AMO job unpacks the tested XPI for submission rather than rebuilding it.
 Release notes come from the changelog section. No publication happens if lint,
 installation, minimum-Python checks, the full suite or package smoke testing fails.
@@ -328,6 +400,37 @@ There is no release script to run. `release-commands.sh` used to sit in the
 repository root and was deleted in 1.2.0; if you find a copy, it is not the
 release path and running it would commit your working tree under a v1.1.0
 message.
+
+### First PyPI publication
+
+Before the first PyPI publication, create the GitHub `pypi` environment and
+configure its release-tag deployment policy. In the owning PyPI account, create
+[a pending Trusted Publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+with these exact values:
+
+| Field | Value |
+|---|---|
+| Project name | `foxmcp` |
+| GitHub owner | `ThinkerYzu` |
+| Repository | `foxmcp` |
+| Workflow filename | `release.yml` |
+| Environment | `pypi` |
+
+No PyPI token belongs in GitHub secrets. Publication uses
+[`pypa/gh-action-pypi-publish`](https://github.com/pypa/gh-action-pypi-publish)
+in the release workflow, after all reusable CI checks and GitHub publication.
+The PyPI name returned 404 on 2026-10-21; PyPI can still reject a reserved name.
+
+The GitHub release and AMO submission are separate from the PyPI job. If first
+publication fails on publisher configuration, keep the verified GitHub release,
+complete the owning account setup and rerun the failed publishing job. Confirm
+PyPI actually serves the version before recommending `uvx foxmcp`.
+
+Bump `pyproject.toml` with the extension and other version-bearing files before
+the next release. Rehearse first, then publish through a new version tag. After
+publication, verify `uvx --from foxmcp==VERSION foxmcp --help` from an empty
+directory and promote the README's uvx setup into Quick start. Do not describe
+the package as published until PyPI serves that tested version.
 
 ## Troubleshooting
 
@@ -376,7 +479,7 @@ The default startup script was also tried, exposing the occupied-MCP-port
 behavior described above. This check did not repeat the interactive installer
 prompts, manual Firefox Add-ons installation, Claude Code registration, or the
 natural-language examples through an AI assistant. The release package smoke
-tests separately exercise all 41 tools over HTTP and stdio with an unsigned XPI
+tests separately exercise all 45 tools over HTTP and stdio with an unsigned XPI
 in Firefox Developer Edition; they do not verify the signed Add-ons installation.
 
 ## Security Notes
@@ -384,3 +487,22 @@ in Firefox Developer Edition; they do not verify the signed Add-ons installation
 The server binds to localhost only and is never exposed to a network. Predefined
 scripts pass through a path validation chain before execution — see
 [`scripts.md`](scripts.md). Error messages should not leak internal paths or state.
+
+### Container permission upgrade check
+
+When AMO provides the signed container-support artifact, rehearse upgrading
+from signed v1.4.0 in a separate standard-Firefox profile. Record the actual
+permission prompt and enterprise-policy effects of adding required
+`contextualIdentities` and `cookies`. The release workflow submits to AMO after
+GitHub publication, so this is a post-signing check, as described in the general
+release procedure. Do not mark it complete from temporary-loading tests.
+Automated tests install an unsigned XPI in Developer Edition; they do not verify
+the signed AMO update flow. Container APIs may enable the feature during
+installation. Respect later user disabling.
+
+The v1.5.0 [release compatibility review](../RELEASES.md#protocol-compatibility-review)
+uses released v1.4.0 as its baseline. That tag predates checked forwarding IDs;
+unreleased forwarding introduced ID 1 and the candidate retains the required
+increase to ID 2. The review covers tab-list metadata/filtering, disconnect
+handling and listener validation. New container lifecycle actions alone do not
+require another bump. Recheck if the release diff changes before tagging.

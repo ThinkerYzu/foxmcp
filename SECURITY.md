@@ -51,6 +51,7 @@ excluded deliberately:
 | Surface | How pages are kept out |
 |---|---|
 | Extension WebSocket | An origin allowlist. Handshakes that are not `moz-extension://` are rejected with a `403`. WebSockets are exempt from the same-origin policy and are never preflighted, so the server has to do this itself |
+| `/discovery` and `/proxy` on the extension port | A loopback peer and a valid localhost Host (forwarded ports allowed) are required; every Origin header, including `null` and extension origins, is refused. No CORS headers are sent. These routes never replace the extension connection |
 | MCP HTTP port | No CORS headers, so the browser blocks preflighted requests; `Content-Type` enforcement, which closes the `text/plain` path that would skip the preflight; and a session id cross-origin JavaScript cannot read |
 
 **Consequences accepted on purpose**, so please do not report these as vulnerabilities
@@ -63,8 +64,10 @@ unless you can show the reasoning is wrong:
   See the threat model above.
 - **On a shared machine, another local user can reach both ports.** Localhost binding
   restricts by network interface, not by uid. FoxMCP assumes a single-user workstation.
-- **Predefined scripts run arbitrary programs by design.** They are disabled unless
-  `FOXMCP_EXT_SCRIPTS` is set, and are validated and logged
+- **Predefined scripts run arbitrary programs by design.** Direct source startup
+  requires `FOXMCP_EXT_SCRIPTS`; the installed console command defaults to the
+  bundled examples. An explicit directory replaces the bundle, and an empty
+  value disables scripts. All scripts are validated and logged
   ([`docs/scripts.md`](docs/scripts.md#security-features)), but a caller that can reach the
   MCP port can run anything in that directory.
 - **A malicious installed extension** can present a `moz-extension://` origin of its own.
@@ -75,6 +78,19 @@ unless you can show the reasoning is wrong:
 lower-privileged local user reach either port or influence what the extension does; any
 way to escape the predefined-script directory; any way to make the server execute
 JavaScript in a tab the caller should not reach.
+
+## Firefox container permissions
+
+`contextualIdentities` permits listing and changing persistent profile containers;
+`cookies` enables selecting/querying tab cookie stores. FoxMCP does not expose
+cookie export or editing tools, although the permission itself is broad.
+Installation can enable Firefox containers. Disabling the `containers` tool
+group does not revoke extension permissions or prevent selection through tab tools.
+
+Containers isolate site cookies and storage, not shared history or bookmarks.
+They are profile resources shared by all local MCP clients. Explicit removal
+clears stored site data and refuses open tabs, but the check cannot exclude
+concurrent browser UI activity. Disconnecting clients never removes containers.
 
 ## Past Reports
 

@@ -7,6 +7,8 @@
 // SINGLE CONNECTION CONSTRAINT: Only one WebSocket connection to MCP server allowed
 let websocket = null;
 let isConnected = false;
+const EXTENSION_VERSION = browser.runtime.getManifest().version;
+let serverVersion = null;
 
 
 // Debug logging configuration - set to true to send extension logs to server
@@ -126,8 +128,11 @@ function connectToMCPServer() {
 
     const socket = new WebSocket(WS_URL);
     websocket = socket;
+    serverVersion = null;
 
     socket.onopen = () => {
+      if (websocket !== socket) return;
+      socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION } }));
       console.log('Connected to MCP server');
       isConnected = true;
       retryAttempts = 0; // Reset retry counter on successful connection
@@ -147,6 +152,7 @@ function connectToMCPServer() {
     };
 
     socket.onmessage = async (event) => {
+      if (websocket !== socket) return;
       // Test debug message right when we receive a message
       console.log('📨 Extension received message from server');
       await handleMessage(JSON.parse(event.data));
@@ -167,6 +173,7 @@ function connectToMCPServer() {
 
       console.log('Disconnected from MCP server');
       isConnected = false;
+      serverVersion = null;
       clearAllMonitors('the connection to the server dropped');
       scheduleReconnect();
     };
@@ -273,11 +280,23 @@ function disconnect() {
     websocket = null;
   }
   isConnected = false;
+  serverVersion = null;
   clearAllMonitors('the connection to the server was closed');
 }
 
 async function handleMessage(message) {
   const { id, type, action, data } = message;
+
+  if (type === 'hello') {
+    const version = data && data.version;
+    if (typeof version === 'string' && version.length <= 64 && version.trim() === version && /^[0-9]+(?:\.[0-9]+){0,3}$/.test(version)) {
+      serverVersion = version;
+      if (serverVersion !== EXTENSION_VERSION) {
+        console.warn(`FoxMCP version mismatch: extension ${EXTENSION_VERSION}, server ${serverVersion}. Update both together.`);
+      }
+    }
+    return;
+  }
 
   if (type !== 'request') return;
 
@@ -291,6 +310,9 @@ async function handleMessage(message) {
   switch (action.split('.')[0]) {
     case 'history':
       await handleHistoryAction(id, action, data);
+      break;
+    case 'containers':
+      await handleContainersAction(id, action, data);
       break;
     case 'tabs':
       await handleTabsAction(id, action, data);
@@ -418,6 +440,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getConnectionStatus') {
     sendResponse({
       connected: isConnected,
+      extensionVersion: EXTENSION_VERSION,
+      serverVersion: serverVersion,
       retryAttempts: retryAttempts,
       config: CONFIG
     });
@@ -532,6 +556,144 @@ function readGroupProperties(data) {
   return properties;
 }
 
+// Cookie-store IDs are opaque identifiers issued by this Firefox profile.
+function containerError(code, message, details = {}) {
+  return Object.assign(new Error(message), {containerCode: code, details});
+}
+
+function requireStoreId(value) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw containerError('INVALID_PARAMETER', 'cookieStoreId must be a nonempty string');
+  }
+}
+
+async function queryContainers() {
+  if (typeof browser.contextualIdentities?.query !== 'function') {
+    throw containerError('UNSUPPORTED_API', 'Firefox contextualIdentities API is unavailable');
+  }
+  try {
+    return await browser.contextualIdentities.query({});
+  } catch (error) {
+    // Fixed nonlocalized ExtensionError from Gecko's checkAPIEnabled().
+    if (error.message === 'Contextual identities are currently disabled') {
+      throw containerError('CONTAINERS_UNAVAILABLE', 'Firefox containers are disabled');
+    }
+    throw error;
+  }
+}
+
+async function validateCookieStore(cookieStoreId, allowPrivate = false) {
+  requireStoreId(cookieStoreId);
+  if (cookieStoreId === 'firefox-private') {
+    if (!allowPrivate) {
+      throw containerError('INVALID_PARAMETER', 'Private stores cannot be selected for tab creation');
+    }
+    return;
+  }
+  if (cookieStoreId === 'firefox-default') return;
+  const identities = await queryContainers();
+  if (!identities.some(identity => identity.cookieStoreId === cookieStoreId)) {
+    throw containerError('CONTAINER_NOT_FOUND', 'No named container has this cookieStoreId');
+  }
+}
+
+function serializeContainer(identity) {
+  return {cookie_store_id: identity.cookieStoreId, name: identity.name,
+          color: identity.color, icon: identity.icon};
+}
+
+async function readContainerProperties(data) {
+  const properties = {};
+  if (data.name !== undefined) {
+    if (typeof data.name !== 'string' || !data.name.trim()) {
+      throw containerError('INVALID_PARAMETER', 'Container name must be a nonempty string');
+    }
+    properties.name = data.name;
+  }
+  // Older supported Firefox versions have no enumeration APIs. Keep their
+  // container values separate from the unrelated tab-group colors.
+  const defaults = {
+    color: ['blue', 'turquoise', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'toolbar'],
+    icon: ['fingerprint', 'briefcase', 'dollar', 'cart', 'circle', 'gift', 'vacation', 'food', 'fruit', 'pet', 'tree', 'chill']
+  };
+  for (const [field, method] of [['color', 'getSupportedColors'], ['icon', 'getSupportedIcons']]) {
+    if (data[field] === undefined) continue;
+    const supported = typeof browser.contextualIdentities[method] === 'function'
+      ? (await browser.contextualIdentities[method]()).map(value => value[field]) : defaults[field];
+    if (typeof data[field] !== 'string' || !supported.includes(data[field])) {
+      throw containerError('INVALID_PARAMETER', `Unsupported container ${field}`, {supported});
+    }
+    properties[field] = data[field];
+  }
+  return properties;
+}
+
+async function requireNamedContainer(cookieStoreId) {
+  requireStoreId(cookieStoreId);
+  if (cookieStoreId === 'firefox-default' || cookieStoreId === 'firefox-private') {
+    throw containerError('INVALID_PARAMETER', 'Default and private stores are not named containers');
+  }
+  await validateCookieStore(cookieStoreId);
+}
+
+async function handleContainersAction(id, action, data) {
+  try {
+    switch (action) {
+      case 'containers.list': {
+        const identities = await queryContainers();
+        sendResponse(id, action, {containers: identities.map(serializeContainer),
+                                 default_cookie_store_id: 'firefox-default'});
+        break;
+      }
+      case 'containers.create': {
+        await queryContainers(); // Check availability even on Firefox versions whose create skips it.
+        if (typeof browser.contextualIdentities.create !== 'function') {
+          throw containerError('UNSUPPORTED_API', 'Container creation is unavailable');
+        }
+        if (data.name === undefined) {
+          throw containerError('INVALID_PARAMETER', 'Container name is required');
+        }
+        const properties = await readContainerProperties({color:'blue', icon:'fingerprint', ...data});
+        const identity = await browser.contextualIdentities.create(properties);
+        sendResponse(id, action, {container: serializeContainer(identity)});
+        break;
+      }
+      case 'containers.update': {
+        await requireNamedContainer(data.cookieStoreId);
+        if (typeof browser.contextualIdentities.update !== 'function') {
+          throw containerError('UNSUPPORTED_API', 'Container updates are unavailable');
+        }
+        const properties = await readContainerProperties(data);
+        if (Object.keys(properties).length === 0) {
+          throw containerError('INVALID_PARAMETER', 'Supply at least one container property');
+        }
+        const identity = await browser.contextualIdentities.update(data.cookieStoreId, properties);
+        sendResponse(id, action, {container: serializeContainer(identity)});
+        break;
+      }
+      case 'containers.remove': {
+        await requireNamedContainer(data.cookieStoreId);
+        if (typeof browser.contextualIdentities.remove !== 'function') {
+          throw containerError('UNSUPPORTED_API', 'Container removal is unavailable');
+        }
+        const tabs = await browser.tabs.query({cookieStoreId: data.cookieStoreId});
+        if (tabs.length) {
+          throw containerError('CONTAINER_IN_USE', 'Close container tabs before removal',
+                               {tab_ids: tabs.map(tab => tab.id)});
+        }
+        // This cannot exclude a new tab opened concurrently by browser UI.
+        await browser.contextualIdentities.remove(data.cookieStoreId);
+        sendResponse(id, action, {removed: true, cookie_store_id: data.cookieStoreId});
+        break;
+      }
+      default:
+        sendError(id, 'UNKNOWN_ACTION', `Unknown containers action: ${action}`);
+    }
+  } catch (error) {
+    sendError(id, error.containerCode || 'API_ERROR', error.message, error.details || {});
+  }
+}
+
 // Tabs handlers
 async function handleTabsAction(id, action, data) {
   try {
@@ -544,10 +706,14 @@ async function handleTabsAction(id, action, data) {
         // `currentWindow: data.currentWindow || true`, where the `|| true` made the filter
         // unconditional and left no way to ask for anything but the current window.
         const tabQuery = data.windowId ? { windowId: data.windowId } : {};
+        if (data.cookieStoreId !== undefined) {
+          await validateCookieStore(data.cookieStoreId, true);
+          tabQuery.cookieStoreId = data.cookieStoreId;
+        }
         const tabs = await browser.tabs.query(tabQuery);
         // Include all tabs, even about:blank for debugging
         sendResponse(id, action, {
-          tabs: tabs.map(tab => ({url: tab.url, id: tab.id, title: tab.title, active: tab.active, windowId: tab.windowId, pinned: tab.pinned, index: tab.index})),
+          tabs: tabs.map(tab => ({url: tab.url, id: tab.id, title: tab.title, active: tab.active, windowId: tab.windowId, pinned: tab.pinned, index: tab.index, cookieStoreId: tab.cookieStoreId})),
           debug: {
             totalFound: tabs.length,
             tabUrls: tabs.map(tab => tab.url)
@@ -556,6 +722,7 @@ async function handleTabsAction(id, action, data) {
         break;
 
       case 'tabs.create':
+      case 'tabs.create_in_store':
         const createTabOptions = {
           url: data.url,
           active: data.active || false
@@ -571,7 +738,22 @@ async function handleTabsAction(id, action, data) {
           createTabOptions.pinned = data.pinned;
         }
         
+        if (action === 'tabs.create_in_store') {
+          await validateCookieStore(data.cookieStoreId);
+          const targetWindow = data.windowId !== undefined
+            ? await browser.windows.get(data.windowId) : await browser.windows.getLastFocused();
+          if (targetWindow.incognito) {
+            throw containerError('INVALID_PARAMETER', 'Explicit cookie-store selection requires a normal window');
+          }
+          // Pin the validated window, avoiding a focus change during creation.
+          createTabOptions.windowId = targetWindow.id;
+          createTabOptions.cookieStoreId = data.cookieStoreId;
+        }
         const newTab = await browser.tabs.create(createTabOptions);
+        if (action === 'tabs.create_in_store' && newTab.cookieStoreId !== data.cookieStoreId) {
+          throw containerError('API_ERROR', 'Created tab has an unexpected cookie store',
+                               {tab_id: newTab.id, actual_cookie_store_id: newTab.cookieStoreId});
+        }
         sendResponse(id, action, { tab: newTab });
         break;
 
@@ -722,7 +904,7 @@ async function handleTabsAction(id, action, data) {
         sendError(id, 'UNKNOWN_ACTION', `Unknown tabs action: ${action}`);
     }
   } catch (error) {
-    sendError(id, 'API_ERROR', `Tabs API error: ${error.message}`);
+    sendError(id, error.containerCode || 'API_ERROR', `Tabs API error: ${error.message}`, error.details || {});
   }
 }
 

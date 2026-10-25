@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/extension/icons/foxmcp-128.png" alt="FoxMCP fox logo" width="96" height="96">
+</p>
+
 # FoxMCP — Firefox Browser Automation via MCP
 
 Connect an MCP-compatible AI assistant to Firefox. Manage tabs and windows,
@@ -13,6 +17,10 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ## Quick start
 
+PyPI packaging is prepared for the next release; `foxmcp` has not yet been
+published to PyPI. Use the GitHub installer below today. The upcoming
+[uvx setup](#run-with-uvx-next-release) removes the server installation directory.
+
 You need Firefox, an MCP client, Python **3.10+** with `venv`, and the commands
 `bash`, `curl`, `unzip`, and `sha256sum`. The commands below use a Bash shell.
 On Debian/Ubuntu, install missing prerequisites with
@@ -24,7 +32,7 @@ Run this in a new directory where you want FoxMCP installed:
 
 ```bash
 mkdir foxmcp && cd foxmcp
-curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.4.0/install-from-github.sh | bash
+curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.5.0/install-from-github.sh | bash
 ```
 
 The installer verifies the release archive checksums, creates `venv/`, installs
@@ -48,7 +56,10 @@ For unattended setup, run `.\scripts\install-from-github.ps1 -NonInteractive` fr
 Open [FoxMCP on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
 and click **Add to Firefox**.
 
-Use matching server and extension versions. Mozilla review can delay the Add-ons
+Use matching server and extension versions. Click the FoxMCP toolbar icon to see
+a mismatch warning with both versions inside the popup. No automatic dialog or
+notification opens. The server also logs a warning; older peers may show a version
+as unavailable. Tools remain available while you update both together. Mozilla review can delay the Add-ons
 version after a GitHub release; to try a version awaiting approval, use the
 [temporary add-on instructions](docs/development.md#loading-in-firefox).
 
@@ -78,8 +89,16 @@ For Claude Code, run this in another terminal:
 claude mcp add --transport http foxmcp http://localhost:3000/mcp/
 ```
 
-If the installer already connected Claude Code, skip that command. For another
-MCP client, add an HTTP server with URL `http://localhost:3000/mcp/`.
+If the installer already connected Claude Code, skip that command.
+
+For Codex, run:
+
+```bash
+codex mcp add foxmcp --url http://localhost:3000/mcp/
+```
+
+For another MCP client, add an HTTP server with URL
+`http://localhost:3000/mcp/`.
 
 ### 5. Try it
 
@@ -114,6 +133,28 @@ See the [API reference](docs/api-reference.md) for tool names and parameters.
 
 ## Other setup options
 
+### Run with uvx (next release)
+
+After the first PyPI release, install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+and the [Firefox extension](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
+For one Claude Code client, register a server it launches itself:
+
+```bash
+claude mcp add foxmcp -- uvx foxmcp --stdio
+```
+
+For several clients, start one shared HTTP server with `uvx foxmcp`, then use
+[the HTTP registration commands](#4-connect-your-ai-client). The extension
+connects to WebSocket port 8765 in either mode. Separate stdio clients still
+conflict on that port, and the first browser call may need a retry while the
+extension reconnects; see [stdio tradeoffs](docs/configuration.md#serving-mcp-over-stdio).
+
+The packaged command includes and enables the example scripts. An explicit
+`FOXMCP_EXT_SCRIPTS` overrides them; an empty value disables scripts. To match a
+particular extension release, use `uvx --from foxmcp==VERSION foxmcp --stdio`,
+replacing `VERSION` with that release's version. Python 3.10+ and Bash for the
+shell examples are required.
+
 ### Install from source
 
 You also need Git, `make`, and `zip` (on Debian/Ubuntu:
@@ -132,11 +173,14 @@ then start the server with `make run-server`. Continue with
 
 ### Let your client start the server
 
-For a single client, you can use stdio instead of running an HTTP server yourself.
-Configure the client to launch `venv/bin/python server/server.py --stdio`, using
-absolute paths. Only one server can serve the extension at a time, so concurrent
-stdio clients conflict; after an idle period, reconnecting can take up to 30 seconds.
-See [stdio setup and tradeoffs](docs/configuration.md#serving-mcp-over-stdio).
+Use stdio with `--single-instance` to start the server automatically and share it
+across chats. Configure each client to launch
+`venv/bin/python server/server.py --stdio --single-instance`, using absolute paths.
+Clients discover and share the browser connection on the extension port. They
+join an existing server or start a background worker automatically. Closing one
+chat leaves the others connected. Automatic workers stop after 60 seconds without
+clients; manually started servers keep running. On Windows, use `venv\Scripts\python.exe`.
+See [stdio setup](docs/configuration.md#serving-mcp-over-stdio).
 
 ## Configuration
 
@@ -156,14 +200,31 @@ venv/bin/python server/server.py --disable-tools bookmarks,history
 venv/bin/python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
 ```
 
-All **41 tools** are enabled by default. Available groups are `windows`, `tabs`,
-`bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.
+All **45 tools** are enabled by default. Available groups are `windows`, `tabs`,
+`containers`, `bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.
 See [configuration](docs/configuration.md) for client examples and other options.
+
+## Firefox containers
+
+Use `containers_list` to discover named containers and their opaque
+`cookie_store_id` values. Pass one to `tabs_create` to open in that container,
+or to `tabs_list` to filter. Use `firefox-default` for normal browsing. Omission
+keeps existing behavior; invalid selections fail without opening a fallback tab.
+
+`containers_create`, `containers_update` and `containers_remove` manage persistent
+profile containers. Removal clears stored site data and refuses containers with
+open tabs. Containers survive client disconnects. See the
+[API reference](docs/api-reference.md#firefox-containers) for details.
+
+The extension requires `contextualIdentities` and `cookies` permissions for
+container APIs and tab selection. Installation can enable Firefox containers;
+subsequent disabling is respected. Update both extension and server together.
 
 ## Predefined scripts
 
 External executable scripts can generate JavaScript for FoxMCP to run in a tab.
-The release installer configures the examples in `predefined-scripts/`, including
+The release installer configures the examples in `predefined-scripts/`; the
+packaged `foxmcp` command uses its bundled examples by default. Both include
 DOM summaries, YouTube controls, calendar extraction, and a file-input helper.
 Ask your assistant which predefined scripts are available.
 

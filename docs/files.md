@@ -52,9 +52,11 @@ foxmcp/
     │   ├── test_ping_pong.py   # Ping-pong functionality tests
     │   ├── test_window_handlers.py # Window management message and MCP tool tests
     │   ├── test_tab_move.py    # Tab moving, and the window scoping on tabs_list
+    │   ├── test_containers.py # Store selection validation, lifecycle and compatibility
     │   ├── test_file_transfer.py # File HTTP grants, metadata, expiry and lifecycle
     │   └── test_protocol_pairing.py # Every action the server sends has a handler, and back
     ├── integration/   # Integration tests
+    │   ├── test_containers_end_to_end.py # Firefox storage isolation and shared-worker persistence
     │   ├── test_file_loading.py # File integrity, script assignment and navigation in Firefox
     │   ├── test_websocket_communication.py # WebSocket communication tests
     │   ├── test_ping_pong_integration.py  # End-to-end ping tests
@@ -76,7 +78,7 @@ foxmcp/
 - **Purpose**: Extension configuration file for Firefox
 - **Key Features**:
   - Manifest V2 format for Firefox WebExtensions compatibility
-  - Permissions for tabs, tab groups, the tab context menu, clipboard writes, windows, history, bookmarks, activeTab, storage, web requests, and all URLs
+  - Permissions for tabs, tab groups, contextual identities, cookies, the tab context menu, clipboard writes, windows, history, bookmarks, activeTab, storage, web requests, and all URLs
   - Persistent background script registration
   - Content script injection for all URLs
   - Browser action popup UI configuration

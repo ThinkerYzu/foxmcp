@@ -13,6 +13,12 @@ Predefined scripts are external executable scripts that generate JavaScript code
 
 ### 1. Setup Script Directory
 
+The installed `foxmcp` command uses its bundled examples when
+`FOXMCP_EXT_SCRIPTS` is absent. Set it to your own directory to replace that
+collection; set it to an empty string to disable scripts. Source startup still
+requires this variable, and the GitHub installer sets it in its startup script.
+Bash must be available to run the shell examples.
+
 Set the environment variable to point to your scripts directory:
 ```bash
 export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
@@ -283,8 +289,9 @@ deletion. Delete the
 entry after use with `globalThis.foxmcpFiles.delete(fileId)`. The page cannot
 read this map directly. Clone the File into the page before assigning it through
 the page's own DataTransfer; [set-file-input.py](../predefined-ex/set-file-input.py)
-demonstrates this and dispatches `input` and `change` events. Copy that executable
-example into `FOXMCP_EXT_SCRIPTS`, then call:
+demonstrates this and dispatches `input` and `change` events. The package and
+GitHub installer include it; for a custom collection, copy that executable
+example into `FOXMCP_EXT_SCRIPTS`. Then call:
 
 ```python
 content_load_file(tab_id=17, path="/home/me/reports/report.pdf",

@@ -69,7 +69,7 @@ class TestNothingWritesToStdout:
         Parsing rather than grepping is what excludes the two print() calls in
         server.py's docstrings, which are example code for a caller and never run.
         """
-        with open(path) as source:
+        with open(path, encoding='utf-8') as source:
             tree = ast.parse(source.read(), filename=path)
 
         return [node.lineno for node in ast.walk(tree)
