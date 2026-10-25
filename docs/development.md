@@ -124,6 +124,18 @@ To regenerate an individual size with ImageMagick:
 magick assets/foxmcp-icon-source.png -resize 32x32 -strip extension/icons/foxmcp-32.png
 ```
 
+### GitHub repository artwork
+
+The README displays the existing 128-pixel fox icon. Its absolute GitHub raw URL
+also works when the README is displayed outside a source checkout, such as in
+Python package metadata.
+
+`assets/foxmcp-social-preview.png` is the repository sharing card, sized
+1280 by 640 pixels and kept below GitHub's 1 MB limit. Its image-generation
+prompt is in `assets/foxmcp-social-preview-prompt.txt`. Upload this image through
+repository **Settings > General > Social preview > Edit > Upload an image**.
+Committing the PNG alone does not change GitHub's configured social preview.
+
 ### Loading in Firefox
 
 Build the extension with `make package` first. If you used the release installer,

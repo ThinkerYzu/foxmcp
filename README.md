@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/extension/icons/foxmcp-128.png" alt="FoxMCP fox logo" width="96" height="96">
+</p>
+
 # FoxMCP — Firefox Browser Automation via MCP
 
 Connect an MCP-compatible AI assistant to Firefox. Manage tabs and windows,
