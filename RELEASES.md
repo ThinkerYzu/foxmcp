@@ -6,6 +6,66 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
+## v1.5.0 - Containers, shared connections and Python packaging (prepared 2026-10-25)
+
+### Highlights
+
+- Discover, create, update and remove Firefox containers; select a cookie store
+  when opening a tab and filter tab listings by store. Existing page tools work
+  with the selected tab IDs.
+- `--stdio --single-instance` lets concurrent clients share one Firefox
+  connection. Clients join an existing server or start a worker that exits after
+  the last proxy disconnects and the idle interval expires.
+- Installable Python wheel/sdist and a `foxmcp` console command, prepared for
+  first PyPI publication. GitHub archive and source installs remain supported.
+- Extension/server version diagnostics in the toolbar popup and server logs.
+- Background-tab screenshots through `tabs_capture_screenshot(tab_id=...)`.
+- Original fox icons, README logo and repository social preview artwork.
+
+### Upgrade from v1.4.0
+
+Update both server and extension. Python 3.10+ is required; native tab groups
+require Firefox 139+. The extension adds `contextualIdentities` and `cookies`.
+Review any Firefox update prompt and enable the updated extension before testing
+containers. Containers are profile state and survive client/server restarts.
+Removing a container clears its stored site data and requires closing its tabs.
+
+The forwarding protocol ships as ID 2. Restart old shared workers before joining
+with updated clients. `--single-instance` remains an opt-in stdio mode; ordinary
+HTTP and dedicated stdio remain available. Version warnings are advisory.
+
+PyPI publication is not yet confirmed. The GitHub installer remains the usable
+installation path until the version is available on PyPI. The known HTTP bind
+failure issue remains: if the MCP port is occupied, use an unused `--mcp-port`.
+See [development troubleshooting](docs/development.md#troubleshooting).
+
+### Protocol compatibility review
+
+Baseline: released `v1.4.0` at `ed2ac3819aec89506ce6a5214cef610f2a5901fb`.
+That tag predates checked forwarding IDs. Forwarding introduced ID 1 during
+unreleased development; the candidate uses **ID 2**, retaining the required
+increase for changed existing contracts:
+
+- `tabs.list` includes cookie-store metadata and accepts a store filter. The
+  server checks metadata instead of assuming the default store for legacy peers.
+- Pending browser requests now fail promptly when their extension disconnects.
+- The extension listener checks route, loopback peer and Host alongside its
+  existing extension-Origin restriction; different loopback forwarding ports work.
+
+New container, explicit-store creation and background-screenshot actions,
+optional version greetings and new local proxy/discovery routes are additive.
+No existing action is removed. The full changed contract is covered by ID 2;
+no further increase is required for packaging, icons or release metadata.
+Extension hello remains advisory and does not enforce the forwarding ID.
+See [protocol policy](docs/protocol.md#protocol-id-compatibility-policy).
+
+### Preparation gates
+
+Before tagging, require successful full regression, final-archive HTTP/stdio
+smoke checks, clean wheel/sdist installs, a non-publishing workflow rehearsal,
+PyPI publisher setup if included, and signed permission-upgrade verification.
+The temporary browser test confirms local loading, not signed upgrade prompts.
+
 ## v1.4.0 - Local files, tab groups and release verification (2026-10-18)
 
 ### Highlights

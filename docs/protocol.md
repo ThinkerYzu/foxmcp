@@ -127,8 +127,10 @@ and preserve unknown failures as `API_ERROR`. Do not match translated text.
 Compatibility review against v1.4.0: checked ID increases from 1 to 2 for the
 existing tab-list response and filter contract. New lifecycle actions alone do
 not require a further bump. Extension/server release matching remains advisory;
-only forwarding peers enforce this ID. Reassess against the final release base
-before publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
+only forwarding peers enforce this ID. The complete v1.5.0 review is recorded in
+[release preparation](../RELEASES.md#protocol-compatibility-review), including
+other changes since the baseline. Reassess if the final diff changes before
+publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
 
 ## Connection version announcement
 

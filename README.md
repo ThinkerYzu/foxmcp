@@ -32,7 +32,7 @@ Run this in a new directory where you want FoxMCP installed:
 
 ```bash
 mkdir foxmcp && cd foxmcp
-curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.4.0/install-from-github.sh | bash
+curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.5.0/install-from-github.sh | bash
 ```
 
 The installer verifies the release archive checksums, creates `venv/`, installs

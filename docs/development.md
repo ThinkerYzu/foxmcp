@@ -357,10 +357,10 @@ consistency, not API compatibility.
 1. Complete and record the protocol ID compatibility review described above.
 2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh` and the install URL in `README.md`
-3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.4.0] - <date>` and add
+3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.5.0] - <date>` and add
    the link reference at the bottom
-4. `scripts/check-version.sh 1.4.0` — fails unless all seven files agree
-5. Commit, then tag: `git tag -a v1.4.0 -m "..."` and push the tag
+4. `scripts/check-version.sh 1.5.0` — fails unless all seven files agree
+5. Commit, then tag: `git tag -a v1.5.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,
@@ -492,7 +492,9 @@ the actual permission prompt and enterprise-policy effects of adding required
 Developer Edition; they do not verify the signed AMO update flow. Container APIs
 may enable the feature during installation. Respect later user disabling.
 
-Protocol review for the current work: baseline v1.4.0, previous ID 1, current ID
-2. `tabs.list` now returns cookie-store metadata and accepts a filter. New
-container lifecycle actions alone do not require another bump. Repeat the review
-against the final release diff before tagging.
+The v1.5.0 [release compatibility review](../RELEASES.md#protocol-compatibility-review)
+uses released v1.4.0 as its baseline. That tag predates checked forwarding IDs;
+unreleased forwarding introduced ID 1 and the candidate retains the required
+increase to ID 2. The review covers tab-list metadata/filtering, disconnect
+handling and listener validation. New container lifecycle actions alone do not
+require another bump. Recheck if the release diff changes before tagging.

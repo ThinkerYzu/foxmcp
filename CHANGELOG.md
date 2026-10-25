@@ -5,7 +5,7 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] - 2026-10-25
 
 ### Added
 - **FoxMCP extension icon.** An original fox mark appears in the Firefox toolbar and extension manager.
@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Forwarding protocol ID increases from 1 to 2.** The existing tab-list response now includes cookie-store metadata and supports a store filter. Explicit container creation uses a new browser action so older extensions reject it before opening a URL. Update both halves together; existing shared workers must be restarted before new clients can join them.
+
+
+### Fixed
+- **Firefox manifest warning.** Removed unsupported `license` metadata; MIT licensing remains in LICENSE and package metadata.
+- **Source-install CI tool count.** The screenshot override check includes the four new container tools.
+
+### Upgrade notes
+- Update the Python server and Firefox extension together. Python 3.10+ is required; native tab groups require Firefox 139+.
+- The extension adds required `contextualIdentities` and `cookies` permissions. Review any Firefox permission prompt before enabling the updated extension. Containers belong to the Firefox profile. Installing the extension may enable Firefox's container feature; later user disabling is respected.
+- Container removal refuses open tabs and clears that container's stored site data. It does not remove the default or private cookie store.
+- Restart existing shared workers when upgrading to protocol ID 2. `--single-instance` is opt-in with `--stdio`; manually started servers keep their independent lifetime.
+- The Python package and console command are prepared for first publication. Use `uvx foxmcp` only after the release's package is available on PyPI; the GitHub installer remains supported.
 
 ## [1.4.0] - 2026-10-18
 
@@ -266,7 +278,8 @@ error. See **Removed** below.
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
-[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.2.0
