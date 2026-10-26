@@ -1,3 +1,8 @@
+![Claude Code prepares Firefox for a FoxMCP meeting by organizing tabs, saving bookmarks, and closing distractions.](https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/assets/demo.gif)
+
+*Prepare for a FoxMCP meeting with Claude Code: organize tabs, save the project
+pages, and clear away distractions.*
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/extension/icons/foxmcp-128.png" alt="FoxMCP fox logo" width="96" height="96">
 </p>

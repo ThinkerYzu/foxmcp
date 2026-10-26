@@ -126,6 +126,20 @@ magick assets/foxmcp-icon-source.png -resize 32x32 -strip extension/icons/foxmcp
 
 ### GitHub repository artwork
 
+The README begins with `assets/demo.gif`, a recorded example of Claude Code
+preparing Firefox for a FoxMCP meeting. It shows tab reordering, duplicate
+removal, a bookmark folder containing the saved pages, and unrelated tabs
+closing. Its absolute GitHub raw URL also works in Python package metadata.
+The GIF is 1100 by 760 pixels, runs for 62.4 seconds, and is about 1.1 MB.
+
+Keep the GIF readable at README width and below 5 MB. Hold each full user prompt
+for at least 10 seconds and zoom in on browser changes. Name the actor in every
+bottom caption: “The user says:” for requests, “The agent ...” for agent actions,
+and “The user ...” for the user inspecting the results. Prompts should describe
+the task naturally, without naming an MCP server or tool alias. Link the preview
+to the full YouTube demo when its published URL is available; retain the
+high-quality video outside the repo.
+
 The README displays the existing 128-pixel fox icon. Its absolute GitHub raw URL
 also works when the README is displayed outside a source checkout, such as in
 Python package metadata.
