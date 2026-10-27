@@ -5,6 +5,16 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Consistent settings design.** Popup and Options share a minimal light/dark theme, neutral focus styling and a segmented **MCP Server URL** field containing `ws://`, Host and Port. Configuration is always visible. Removed popup boilerplate, the Firefox badge, routine save feedback and the footer divider; validation errors remain visible. Both footers show extension/server release diagnostics and the locally supported protocol ID. Reconnect Interval defaults to 1000ms and accepts 100–30000ms; previously saved longer intervals are capped at 30000ms.
+- **Extension settings apply automatically.** Popup and Options use separate Host/Port fields and a Reconnect Interval, saving valid edits after a 500ms pause. Reset immediately persists and applies defaults. Removed Save, Reconnect, Max Retry Attempts and the unused Ping Timeout setting. Retries continue indefinitely at the configured interval; old limits are ignored. The built-in server uses unencrypted WebSocket and does not support TLS configuration.
+
+### Fixed
+- **Reset works in toolbar popups.** Both views reset immediately without a native confirmation dialog, which could block the Firefox popup.
+- **Connection status and settings agree.** Both pages display live connection state, the actual endpoint including test overrides, and the real pending retry delay while preserving unfinished input. Strict validation rejects empty, fractional and out-of-range numeric values. Obsolete reconnect timers and stale socket callbacks cannot close a new connection or clear its request monitors. Background-owned pending saves survive popup closure, and storage failures are reported without claiming success.
+
 ## [1.5.0] - 2026-10-25
 
 ### Added

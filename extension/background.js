@@ -8,6 +8,8 @@
 let websocket = null;
 let isConnected = false;
 const EXTENSION_VERSION = browser.runtime.getManifest().version;
+// Supported browser API contract; pairing tests keep this aligned with the server.
+const EXTENSION_PROTOCOL_VERSION = 2;
 let serverVersion = null;
 
 
@@ -97,23 +99,36 @@ if (ENABLE_DEBUG_LOGGING_TO_SERVER) {
   window.flushDebugLogBuffer = flushLogBuffer;
 }
 
-// Default configuration - will be loaded from storage
-let CONFIG = {
-  hostname: 'localhost',
-  port: 8765,
-  retryInterval: 5000, // milliseconds (5 seconds default)
-  maxRetries: -1, // -1 for infinite retries, or set a number
-  pingTimeout: 5000 // ping timeout in milliseconds
-};
-
+let CONFIG = {...FoxMCPConfig.defaults};
+let configuredConfig = {...FoxMCPConfig.defaults};
+let hasTestOverrides = false;
+let initialized = false;
+let configError = null;
+let connectionState = 'initializing';
 let retryAttempts = 0;
-// After this many attempts at retryInterval, retries slow to SLOW_RETRY_INTERVAL.
-// Under --stdio the server is down whenever the MCP client is closed, so the
-// extension keeps dialing until the client starts a new one.
-const FAST_RETRIES = 50;
-const SLOW_RETRY_INTERVAL = 30000;
+let reconnectTimer = null;
+let reconnectEpoch = 0;
+let nextRetryAt = null;
+
+// All storage reads/writes and initialization share this queue. In particular,
+// our own storage.onChanged event cannot apply a stale configuration later.
+let configurationQueue = Promise.resolve();
+function serializeConfiguration(task) {
+  const result = configurationQueue.then(task);
+  configurationQueue = result.catch(error => console.error('Configuration operation failed:', error));
+  return result;
+}
+
+function cancelReconnect() {
+  if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  nextRetryAt = null;
+  reconnectEpoch++;
+}
 
 function connectToMCPServer() {
+  if (!initialized || configError) return;
+  cancelReconnect();
   try {
     // IMPORTANT: Only one WebSocket connection is allowed at a time
     // Disconnect any existing connection first to prevent multiple connections
@@ -123,9 +138,10 @@ function connectToMCPServer() {
     }
 
     // Compute WebSocket URL dynamically using current config
-    const WS_URL = `ws://${CONFIG.hostname}:${CONFIG.port}`;
+    const WS_URL = FoxMCPConfig.socketUrl(CONFIG);
     console.log(`🔗 Connecting to ${WS_URL} (attempt ${retryAttempts + 1})`);
 
+    connectionState = 'connecting';
     const socket = new WebSocket(WS_URL);
     websocket = socket;
     serverVersion = null;
@@ -135,19 +151,13 @@ function connectToMCPServer() {
       socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION } }));
       console.log('Connected to MCP server');
       isConnected = true;
-      retryAttempts = 0; // Reset retry counter on successful connection
-      connectionRetryAttempts = 0; // Reset connection retry counter
-
-      // Send an immediate debug message to test after a small delay
-      setTimeout(() => {
-        console.log('🔌 WebSocket connection established and ready');
-      }, 200);
+      connectionState = 'connected';
+      retryAttempts = 0;
+      cancelReconnect();
 
       // Flush any buffered debug logs
       if (typeof window.flushDebugLogBuffer === 'function') {
-        setTimeout(() => {
-          window.flushDebugLogBuffer();
-        }, 100);
+        window.flushDebugLogBuffer();
       }
     };
 
@@ -155,23 +165,22 @@ function connectToMCPServer() {
       if (websocket !== socket) return;
       // Test debug message right when we receive a message
       console.log('📨 Extension received message from server');
-      await handleMessage(JSON.parse(event.data));
+      try {
+        await handleMessage(JSON.parse(event.data));
+      } catch (error) {
+        console.error('Error handling server message:', error);
+      }
     };
 
     socket.onclose = () => {
-      // Reconnect only if this socket is still the live one.
-      //
-      // close() fires this handler for a deliberate disconnect as well, and
-      // every deliberate disconnect is already followed by a new connection.
-      // Without the guard, that close schedules a reconnect whose timer then
-      // closes the healthy socket it finds and opens another, whose close
-      // schedules the next: a connect/close cycle every retryInterval that no
-      // retry cap stops, since retryAttempts resets on each successful open.
+      // Deliberate disconnects invalidate the socket first. Late close events
+      // must not schedule another retry or clear the next socket's monitors.
       if (websocket !== socket) {
         return;
       }
 
       console.log('Disconnected from MCP server');
+      websocket = null;
       isConnected = false;
       serverVersion = null;
       clearAllMonitors('the connection to the server dropped');
@@ -179,7 +188,7 @@ function connectToMCPServer() {
     };
 
     socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      if (websocket === socket) console.error('WebSocket error:', error);
     };
   } catch (error) {
     console.error('Failed to connect to MCP server:', error);
@@ -188,100 +197,152 @@ function connectToMCPServer() {
 }
 
 function scheduleReconnect() {
-  retryAttempts++;
+  cancelReconnect();
+  if (!initialized || configError || websocket || isConnected) return;
+  const epoch = reconnectEpoch;
+  connectionState = 'waiting_retry';
+  nextRetryAt = Date.now() + CONFIG.retryInterval;
+  reconnectTimer = setTimeout(() => {
+    if (epoch !== reconnectEpoch) return;
+    reconnectTimer = null;
+    nextRetryAt = null;
+    retryAttempts++;
+    connectToMCPServer();
+  }, CONFIG.retryInterval);
+}
 
-  // Check configured max retries
-  if (CONFIG.maxRetries > 0 && retryAttempts > CONFIG.maxRetries) {
-    console.error(`Configured max retry attempts (${CONFIG.maxRetries}) exceeded. Stopping reconnection attempts.`);
+async function loadConfig() {
+  const stored = await browser.storage.sync.get(FoxMCPConfig.storageDefaults);
+  // Upgrade previously valid intervals when the supported maximum is reduced.
+  if (Number.isInteger(stored.retryInterval) && stored.retryInterval > 30000 && stored.retryInterval <= 60000) {
+    await browser.storage.sync.set({retryInterval: 30000});
+    stored.retryInterval = 30000;
+  }
+  configuredConfig = FoxMCPConfig.configured(stored);
+  hasTestOverrides = stored.testHostname != null || stored.testPort != null;
+  let next;
+  try {
+    next = FoxMCPConfig.effective(stored);
+  } catch (error) {
+    configError = error.message;
+    initialized = true;
+    disconnect();
+    connectionState = 'configuration_error';
     return;
   }
-
-  const delay = retryAttempts > FAST_RETRIES
-    ? Math.max(CONFIG.retryInterval, SLOW_RETRY_INTERVAL)
-    : CONFIG.retryInterval;
-  console.log(`Scheduling reconnection attempt ${retryAttempts} in ${delay}ms`);
-  setTimeout(connectToMCPServer, delay);
-}
-
-// Function to update configuration (can be called from popup or other scripts)
-function updateConfig(newConfig) {
-  Object.assign(CONFIG, newConfig);
-  console.log('Configuration updated:', CONFIG);
-  console.log('New WebSocket URL will be:', `ws://${CONFIG.hostname}:${CONFIG.port}`);
-
-  // Save to storage for persistence
-  browser.storage.sync.set({
-    hostname: CONFIG.hostname,
-    port: CONFIG.port,
-    retryInterval: CONFIG.retryInterval,
-    maxRetries: CONFIG.maxRetries,
-    pingTimeout: CONFIG.pingTimeout
-  });
-
-  // Reconnect with new settings if currently connected
-  if (isConnected || websocket) {
-    console.log('Reconnecting with new configuration...');
+  const restart = !initialized || configError || next.hostname !== CONFIG.hostname || next.port !== CONFIG.port;
+  const intervalChanged = next.retryInterval !== CONFIG.retryInterval;
+  CONFIG = next;
+  initialized = true;
+  configError = null;
+  if (restart) {
     disconnect();
+    retryAttempts = 0;
     connectToMCPServer();
-  }
-}
-
-// Load configuration from storage on startup
-async function loadConfig() {
-  console.log('📥 Loading configuration from storage...');
-  console.log('🔍 LOADCONFIG - Stack trace:');
-  console.trace();
-
-  // Load from storage - browser.storage.sync.get() always succeeds
-  const result = await browser.storage.sync.get({
-    hostname: 'localhost',
-    port: 8765,
-    retryInterval: 5000,
-    maxRetries: -1,
-    pingTimeout: 5000,
-    // Test configuration overrides (set by test framework)
-    testPort: null,
-    testHostname: null
-  });
-
-  // Check if we're in a test environment waiting for configuration
-  const isTestEnvironment = result.testPort !== null || result.testHostname !== null;
-  const hasValidTestConfig = result.testPort && result.testPort !== 8765;
-
-  // In test environment, wait longer for configuration to be ready
-  if (isTestEnvironment && !hasValidTestConfig) {
-    console.log('🧪 Test environment detected but no valid test config yet');
-    console.log('📋 Will retry in test environment...');
-    throw new Error('Test environment detected but configuration not ready');
-  }
-
-  // Apply configuration with test overrides taking priority
-  CONFIG.hostname = result.testHostname || result.hostname;
-  CONFIG.port = result.testPort || result.port;
-  CONFIG.retryInterval = result.retryInterval;
-  CONFIG.maxRetries = result.maxRetries;
-  CONFIG.pingTimeout = result.pingTimeout;
-
-  console.log('📋 Configuration loaded:', CONFIG);
-  console.log('🌐 WebSocket URL will be:', `ws://${CONFIG.hostname}:${CONFIG.port}`);
-
-  if (result.testPort || result.testHostname) {
-    console.log('🧪 Test overrides active:', {
-      testPort: result.testPort,
-      testHostname: result.testHostname
-    });
+  } else if (intervalChanged && reconnectTimer !== null) {
+    scheduleReconnect();
   }
 }
 
 // Disconnect function
 function disconnect() {
-  if (websocket) {
-    websocket.close();
-    websocket = null;
-  }
+  cancelReconnect();
+  const oldSocket = websocket;
+  websocket = null; // Invalidate callbacks before close(), including synchronous test sockets.
   isConnected = false;
   serverVersion = null;
-  clearAllMonitors('the connection to the server was closed');
+  connectionState = 'disconnected';
+  if (oldSocket) {
+    oldSocket.close();
+    clearAllMonitors('the connection to the server was closed');
+  }
+}
+
+const pendingSettings = new Map();
+let settingsTimer = null;
+let settingsRevision = 0;
+let settingsEpoch = 0;
+let settingsTimerRevision = 0;
+const settingsGroups = {
+  endpoint: {revision: 0, state: 'saved'},
+  retryInterval: {revision: 0, state: 'saved'}
+};
+
+function getConnectionStatus() {
+  return {
+    connected: isConnected, state: connectionState, configError,
+    extensionVersion: EXTENSION_VERSION, protocolVersion: EXTENSION_PROTOCOL_VERSION, serverVersion, retryAttempts,
+    config: {...CONFIG}, configuredConfig: {...configuredConfig}, hasTestOverrides,
+    activeUrl: websocket ? websocket.url : null,
+    retryDelayMs: reconnectTimer === null ? null : CONFIG.retryInterval, nextRetryAt,
+    settings: {groups: structuredClone(settingsGroups)}
+  };
+}
+
+function queueConfigUpdate(group, values) {
+  if (!Object.hasOwn(settingsGroups, group)) throw new Error('Unknown settings group');
+  const revision = ++settingsRevision;
+  pendingSettings.delete(group);
+  try {
+    const patch = FoxMCPConfig.group(group, values);
+    pendingSettings.set(group, {patch, revision});
+    settingsGroups[group] = {revision, state: 'pending'};
+  } catch (error) {
+    settingsGroups[group] = {revision, state: 'error', error: error.message};
+  }
+  if (settingsTimer !== null) clearTimeout(settingsTimer);
+  settingsTimer = null;
+  const timerRevision = ++settingsTimerRevision;
+  if (pendingSettings.size) {
+    const epoch = settingsEpoch;
+    settingsTimer = setTimeout(() => {
+      if (epoch !== settingsEpoch || timerRevision !== settingsTimerRevision) return;
+      settingsTimer = null;
+      const updates = new Map(pendingSettings);
+      pendingSettings.clear();
+      serializeConfiguration(() => saveSettingsUpdates(updates, epoch));
+    }, 500);
+  }
+  return getConnectionStatus();
+}
+
+async function saveSettingsUpdates(updates, epoch) {
+  const current = [...updates].filter(([group, entry]) =>
+    epoch === settingsEpoch && settingsGroups[group].revision === entry.revision);
+  if (!current.length) return;
+  try {
+    await browser.storage.sync.set(Object.assign({}, ...current.map(([, entry]) => entry.patch)));
+    if (epoch !== settingsEpoch) return; // A queued reset supersedes this in-flight write.
+    await loadConfig();
+    for (const [group, entry] of current) {
+      if (settingsGroups[group].revision === entry.revision) settingsGroups[group] = {revision: entry.revision, state: 'saved'};
+    }
+  } catch (error) {
+    for (const [group, entry] of current) {
+      if (settingsGroups[group].revision === entry.revision) {
+        settingsGroups[group] = {revision: entry.revision, state: 'error', error: `Could not save settings: ${error.message}`};
+      }
+    }
+  }
+}
+
+function resetConfig() {
+  settingsEpoch++;
+  settingsTimerRevision++;
+  pendingSettings.clear();
+  if (settingsTimer !== null) clearTimeout(settingsTimer);
+  settingsTimer = null;
+  const revision = ++settingsRevision;
+  for (const group of Object.keys(settingsGroups)) settingsGroups[group] = {revision, state: 'pending'};
+  const updates = new Map([
+    ['endpoint', {revision, patch: FoxMCPConfig.group('endpoint', FoxMCPConfig.defaults)}],
+    ['retryInterval', {revision, patch: FoxMCPConfig.group('retryInterval', FoxMCPConfig.defaults)}]
+  ]);
+  const epoch = settingsEpoch;
+  return serializeConfiguration(async () => {
+    await saveSettingsUpdates(updates, epoch);
+    return getConnectionStatus();
+  });
 }
 
 async function handleMessage(message) {
@@ -434,59 +495,22 @@ browser.menus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// Handle popup requests for connection status
+// UI messages use one contract for both pages. Only settings writes are async.
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
-  if (request.action === 'getConnectionStatus') {
-    sendResponse({
-      connected: isConnected,
-      extensionVersion: EXTENSION_VERSION,
-      serverVersion: serverVersion,
-      retryAttempts: retryAttempts,
-      config: CONFIG
-    });
-    return true;
+  if (request.action === 'getConnectionStatus' || request.type === 'getConnectionStatus') {
+    sendResponse(getConnectionStatus());
+    return false;
   }
-
-  // Handle options page configuration updates
-  if (request.type === 'configUpdated') {
-    updateConfig(request.config);
-    sendResponse({ success: true });
-    return true;
-  }
-
-  // Handle advanced configuration updates
-  if (request.type === 'advancedConfigUpdated') {
-    updateConfig(request.config);
-    sendResponse({ success: true });
-    return true;
-  }
-
-
-  // Handle connection status request from options page
-  if (request.type === 'getConnectionStatus') {
-    sendResponse({ connected: isConnected });
-    return true;
-  }
-
-
-  if (request.action === 'updateConfig') {
-    updateConfig(request.config);
-    sendResponse({ success: true, config: CONFIG });
-    return true;
-  }
-
-  if (request.action === 'forceReconnect') {
-    if (websocket) {
-      websocket.close();
+  if (request.action === 'queueConfigUpdate') {
+    try {
+      return Promise.resolve(queueConfigUpdate(request.group, request.config));
+    } catch (error) {
+      return Promise.reject(error);
     }
-    retryAttempts = 0;
-    connectToMCPServer();
-    sendResponse({ success: true });
-    return true;
   }
+  if (request.action === 'resetConfig') return resetConfig();
+  return false;
 });
-
 
 // History handlers
 async function handleHistoryAction(id, action, data) {
@@ -2040,23 +2064,24 @@ async function handleTestAction(id, action, data) {
   }
 }
 
-// Get current popup display state
+// Legacy test.* storage projection, retained for protocol compatibility.
+// These helpers do not inspect UI; real UI checks execute the page scripts.
 async function handleGetPopupState(id, data) {
   try {
     const storageConfig = await browser.storage.sync.get({
       hostname: 'localhost',
       port: 8765,
-      retryInterval: 5000,
+      retryInterval: FoxMCPConfig.defaults.retryInterval,
       maxRetries: -1,
       pingTimeout: 5000,
       testPort: null,
       testHostname: null
     });
     
-    // Calculate effective values (same logic as popup.js)
-    const effectiveHostname = storageConfig.testHostname || storageConfig.hostname || 'localhost';
-    const effectivePort = storageConfig.testPort || storageConfig.port || 8765;
-    const serverUrl = `ws://${effectiveHostname}:${effectivePort}`;
+    const effective = FoxMCPConfig.effective(storageConfig);
+    const effectiveHostname = effective.hostname;
+    const effectivePort = effective.port;
+    const serverUrl = FoxMCPConfig.socketUrl(effective);
     const hasTestOverrides = storageConfig.testPort !== null || storageConfig.testHostname !== null;
     
     sendResponse(id, 'test.get_popup_state', {
@@ -2075,23 +2100,23 @@ async function handleGetPopupState(id, data) {
   }
 }
 
-// Get current options page display state  
+// Legacy test.* effective configuration projection (not editable UI fields).
 async function handleGetOptionsState(id, data) {
   try {
     const storageConfig = await browser.storage.sync.get({
       hostname: 'localhost',
       port: 8765,
-      retryInterval: 5000,
+      retryInterval: FoxMCPConfig.defaults.retryInterval,
       maxRetries: -1,
       pingTimeout: 5000,
       testPort: null,
       testHostname: null
     });
     
-    // Calculate display values (same logic as options.js)
-    const displayHostname = storageConfig.testHostname || storageConfig.hostname;
-    const displayPort = storageConfig.testPort || storageConfig.port;
-    const webSocketUrl = `ws://${displayHostname}:${displayPort}`;
+    const effective = FoxMCPConfig.effective(storageConfig);
+    const displayHostname = effective.hostname;
+    const displayPort = effective.port;
+    const webSocketUrl = FoxMCPConfig.socketUrl(effective);
     const hasTestOverrides = storageConfig.testPort !== null || storageConfig.testHostname !== null;
     
     sendResponse(id, 'test.get_options_state', {
@@ -2453,33 +2478,22 @@ async function handleClearTestHistory(id, data) {
 }
 
 
-// ✅ INITIALIZATION: Load config and connect automatically after loading completes
-// This ensures storage configuration is fully loaded before connection attempts
-console.log('🚀 Extension starting - loading configuration...');
+// React to actual sync changes, including updates made by another Firefox.
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
+  const relevant = Object.keys(FoxMCPConfig.storageDefaults).some(key =>
+    changes[key] && changes[key].newValue !== changes[key].oldValue);
+  if (relevant) serializeConfiguration(loadConfig);
+});
 
-// Initialize extension: load config then connect
-async function initializeExtension() {
+// Queue initialization ahead of any UI/storage operation. A delayed initial
+// read can never replace settings saved afterwards, and invalid config never
+// falls back to connecting to a different server.
+serializeConfiguration(async () => {
   try {
-    console.log('🚀 Initializing extension...');
-    console.log('📍 BEFORE loadConfig() - CONFIG:', JSON.stringify(CONFIG, null, 2));
-
     await loadConfig();
-
-    console.log('✅ Configuration loaded successfully');
-    console.log('📍 AFTER loadConfig() - CONFIG:', JSON.stringify(CONFIG, null, 2));
-
-    // Connect after config load
-    console.log('🔌 Connecting to MCP server...');
-    connectToMCPServer();
-
   } catch (error) {
-    console.error('❌ Failed to initialize extension:', error);
-    console.log('🔄 Will retry initialization in 1 second...');
-    setTimeout(() => {
-      initializeExtension();
-    }, 1000);
+    configError = `Could not load settings: ${error.message}`;
+    connectionState = 'configuration_error';
   }
-}
-
-// Start initialization
-initializeExtension();
+});

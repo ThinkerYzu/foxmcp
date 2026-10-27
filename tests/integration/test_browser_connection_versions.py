@@ -13,6 +13,7 @@ from test_file_loading import browser_request, open_fixture, upload_page  # noqa
 BACKGROUND_CHECK = r'''
 const checks = [];
 function check(value, label) { if (!value) throw new Error(label); checks.push(label); }
+initialized = true;
 connectToMCPServer();
 const first = websocket;
 first.onopen();
@@ -50,11 +51,13 @@ POPUP_CHECK = r'''
 await loaded();
 check(elements.versionInfo.textContent.includes('server 0.0.1'), 'both versions visible');
 check(elements.versionInfo.textContent.includes('Version mismatch'), 'mismatch visible');
-elements.serverUrl.value = 'ws://example.org:9999';
+elements.hostname.value = 'example.org';
+elements.hostname.dispatchEvent(new Event('input'));
+await Promise.resolve();
 connection = {connected:true, extensionVersion:'1.4.0', serverVersion:'1.4.0', retryAttempts:0};
 await refresh();
 check(!elements.versionInfo.textContent.includes('mismatch'), 'open popup refreshes');
-check(elements.serverUrl.value === 'ws://example.org:9999', 'refresh preserves edits');
+check(elements.hostname.value === 'example.org', 'refresh preserves edits');
 connection.serverVersion = null;
 await refresh();
 check(elements.versionInfo.textContent.includes('version unavailable'), 'unknown peer visible');
@@ -75,15 +78,16 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
     assert server.extension_version == VERSION  # Actual extension hello, not a mock.
     tab_id = await open_fixture(server, upload_page)
     root = Path(__file__).resolve().parents[2]
-    background = (root / 'extension/background.js').read_text()
-    popup = (root / 'extension/popup/popup.js').read_text()
+    config = (root / 'extension/config.js').read_text()
+    background = config + '\n' + (root / 'extension/background.js').read_text()
+    popup = config + '\n' + (root / 'extension/settings.js').read_text() + '\n' + (root / 'extension/popup/popup.js').read_text()
     script = r'''(async () => {
       const listeners = [];
       const event = {addListener() {}};
       const browser = {
         runtime: {getManifest:()=>({version:'1.4.0'}), onMessage:{addListener:f=>listeners.push(f)}},
         menus: {create(){}, onShown:event, onClicked:event},
-        storage: {sync:{get:()=>new Promise(()=>{})}}
+        storage: {onChanged:event, sync:{get:()=>new Promise(()=>{})}}
       };
       class FakeSocket {
         static CLOSED = 3;
@@ -95,18 +99,25 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
       const quiet = {log(){}, error(){}, warn(){}, trace(){}};
       const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
       const backgroundResult = await new AsyncFunction(
-        'browser','window','WebSocket','setTimeout','console','listeners',
+        'browser','window','WebSocket','setTimeout','clearTimeout','console','listeners',
         BACKGROUND_SOURCE + '\n' + BACKGROUND_TEST
-      )(browser, {}, FakeSocket, ()=>0, quiet, listeners);
+      )(browser, {}, FakeSocket, ()=>0, ()=>{}, quiet, listeners);
       const elements = {};
       const doc = {
         addEventListener:(_,f)=>loaded=f,
-        getElementById:id=>elements[id] ||= {style:{}, value:'', textContent:'', addEventListener(){}},
+        getElementById:id=>elements[id] ||= {style:{}, dataset:{}, value:'', textContent:'',
+          addEventListener(type, f){this[type]=f;}, dispatchEvent(event){this[event.type]?.(event);}},
         createElement:()=>({style:{}})
       };
       let loaded, refresh;
       let connection = {connected:true, extensionVersion:'1.4.0', serverVersion:'0.0.1', retryAttempts:0};
-      browser.runtime.sendMessage = (_,callback)=>callback(connection);
+      const defaultStatus = {
+        protocolVersion:2,
+        config:{hostname:'localhost',port:8765,retryInterval:5000},
+        configuredConfig:{hostname:'localhost',port:8765,retryInterval:5000},
+        settings:{groups:{endpoint:{revision:0,state:'pending'},retryInterval:{revision:0,state:'saved'}}}
+      };
+      browser.runtime.sendMessage = async () => ({...defaultStatus, ...connection});
       browser.storage.sync.get = async defaults=>defaults;
       const checks=[];
       const check=(value,label)=>{if(!value)throw new Error(label); checks.push(label);};

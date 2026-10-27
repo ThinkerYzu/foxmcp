@@ -1,0 +1,21 @@
+body { padding: 48px 24px; }
+.settings-page { max-width: 520px; margin: 0 auto; }
+.header { margin-bottom: 28px; }
+h1 { font-size: 20px; }
+.page-label { margin-left: 3px; color: var(--muted); font-size: 13px; }
+.connection { padding: 16px; margin-bottom: 28px; }
+.connection-heading { display: flex; align-items: center; gap: 8px; }
+.status::before { display: none; }
+.status-indicator { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.status-indicator.connected { background: var(--success); }
+.status-indicator[data-state="connecting"],
+.status-indicator[data-state="waiting_retry"] { background: var(--warning); }
+.status-indicator[data-state="configuration_error"] { background: var(--error); }
+.input-shell { height: 42px; }
+.retry-field { margin-top: 20px; }
+.configuration-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; }
+.footer { margin-top: 24px; }
+@media (max-width: 400px) {
+  body { padding: 24px 16px; }
+  .configuration-actions { align-items: flex-start; flex-direction: column; gap: 12px; }
+}

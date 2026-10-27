@@ -66,7 +66,11 @@ exposed as `protocol_version` in discovery and the proxy greeting. It identifies
 the forwarding contract, including the browser API requests and responses
 carried between the extension and MCP server. It is independent of the release
 version in the extension's advisory `hello` announcement. The extension does
-not currently exchange or enforce this protocol ID itself.
+not currently exchange or enforce this protocol ID itself. It declares the
+supported ID as `EXTENSION_PROTOCOL_VERSION` in `extension/background.js` and
+displays it in the Popup and Options footers, including while disconnected. Pairing tests
+require that declaration to match the server's `PROTOCOL_VERSION`; the display
+does not imply protocol negotiation with a connected server.
 
 Increase the protocol ID whenever an existing extension/server API is modified
 or removed. This includes changes to action names, parameter types, defaults or
@@ -1526,7 +1530,12 @@ at birth or answer each removal with another.
 
 ## Test Helper Messages
 
-The extension provides test helper messages for automated testing and validation of UI state synchronization.
+The extension retains these test helper messages as legacy storage/effective
+configuration projections. They do not inspect the actual popup or Options DOM.
+The `maxRetries` and `pingTimeout` response fields remain for compatibility but
+no longer control the connection or appear in the UI. Editable Host/Port fields
+show the user configuration; the connection status separately shows test
+overrides. UI regression tests execute the actual scripts and HTML instead.
 
 ### Get Popup Display State
 
