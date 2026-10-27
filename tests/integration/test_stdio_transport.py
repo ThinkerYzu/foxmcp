@@ -23,7 +23,7 @@ import pytest_asyncio
 
 import test_imports  # Automatic path setup
 from port_coordinator import get_port_by_type
-from test_config import connect_as_extension
+from test_config import connect_as_extension, connected_test_profiles
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -91,8 +91,16 @@ class StdioClient:
 
     async def call_tool(self, name, arguments=None):
         """Call one tool and return the text of its result"""
-        result = await self.request('tools/call',
-                                    {'name': name, 'arguments': arguments or {}})
+        arguments = dict(arguments or {})
+        if name not in ('profiles_list', 'debug_websocket_status') and 'profile_id' not in arguments:
+            known = connected_test_profiles.get(self.websocket_port, set())
+            if len(known) == 1:
+                arguments['profile_id'] = next(iter(known))
+            else:
+                profiles = json.loads(await self.call_tool('profiles_list', {'populate': False}))['profiles']
+                assert len(profiles) <= 1, 'Test must choose a profile explicitly'
+                arguments['profile_id'] = profiles[0]['profile_id'] if profiles else 'unavailable-test-profile'
+        result = await self.request('tools/call', {'name': name, 'arguments': arguments})
         return '\n'.join(block['text'] for block in result['content']
                          if block['type'] == 'text')
 
@@ -230,7 +238,7 @@ class TestBeforeTheExtensionConnects:
         answer = await stdio_client.call_tool('tabs_list')
         elapsed = asyncio.get_event_loop().time() - started
 
-        assert 'No extension connection' in answer, \
+        assert 'profile is not connected' in answer, \
             f"Expected the missing-extension error, got: {answer}"
         assert elapsed < self.FAIL_FAST_SECONDS, \
             f"Took {elapsed:.1f}s to say the extension is not connected"
@@ -245,7 +253,7 @@ class TestBeforeTheExtensionConnects:
         may leave the bridge unusable - a pending request never cleaned up, or a
         connection slot marked taken.
         """
-        assert 'No extension connection' in await stdio_client.call_tool('tabs_list')
+        assert 'profile is not connected' in await stdio_client.call_tool('tabs_list')
 
         async with connect_as_extension(f"ws://localhost:{websocket_port}") as extension:
             await asyncio.sleep(0.2)

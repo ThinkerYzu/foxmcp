@@ -1,3 +1,7 @@
+def make_profile(**kwargs):
+    return BrowserProfile(FoxMCPServer(**kwargs), None, "test-profile", "moz-extension://test")
+
+from server.browser_profile import BrowserProfile
 """
 Integration tests for ping-pong functionality between server and extension
 """
@@ -16,7 +20,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_bidirectional_ping_pong(self):
         """Test bidirectional ping-pong communication"""
-        server = FoxMCPServer(host="localhost", port=8766)
+        server = BrowserProfile(FoxMCPServer(host="localhost", port=8766), None, "test-profile", "moz-extension://test")
         
         # Mock the WebSocket connection
         mock_websocket = AsyncMock()
@@ -71,7 +75,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_connection_state_during_ping(self):
         """Test connection state is properly checked during ping"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         # Test with no connection
         result = await server.test_ping_extension()
@@ -88,7 +92,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_ping_message_id_uniqueness(self):
         """Test that ping message IDs are unique"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         server.extension_connection = AsyncMock()
         
         # Generate multiple pings
@@ -104,7 +108,7 @@ class TestPingPongIntegration:
     @pytest.mark.asyncio
     async def test_ping_data_integrity(self):
         """Test ping message data integrity"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         mock_websocket = AsyncMock()
         server.extension_connection = mock_websocket
         
@@ -128,7 +132,7 @@ class TestPingPongErrorHandling:
     @pytest.mark.asyncio
     async def test_malformed_ping_message(self):
         """Test handling of malformed ping messages"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         server.extension_connection = AsyncMock()
         
         malformed_messages = [
@@ -147,7 +151,7 @@ class TestPingPongErrorHandling:
     @pytest.mark.asyncio 
     async def test_connection_lost_during_ping(self):
         """Test ping behavior when connection is lost"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         mock_websocket = AsyncMock()
         
         # Simulate connection loss during send
@@ -163,7 +167,7 @@ class TestPingPongErrorHandling:
     @pytest.mark.asyncio
     async def test_concurrent_pings(self):
         """Test handling of concurrent ping requests"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         server.extension_connection = AsyncMock()
         
         # Send multiple pings concurrently

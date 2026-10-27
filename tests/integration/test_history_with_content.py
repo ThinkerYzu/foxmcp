@@ -23,6 +23,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
 from firefox_test_utils import FirefoxTestManager, validate_history_item_timestamp
@@ -99,7 +100,7 @@ async def wait_for_history_update(server, search_criteria, max_attempts=15, inte
         }
 
         # Send query and get response
-        response = await server.send_request_and_wait(query_message, timeout=5.0)
+        response = await profile_connection(server).send_request_and_wait(query_message, timeout=5.0)
 
         if response and not response.get('error'):
             response_data = response.get('data', {})
@@ -133,7 +134,7 @@ class TestHistoryWithContent:
         assert server is not None
         assert firefox is not None
         assert test_port > 0
-        assert server.extension_connection is not None
+        assert server.profiles
 
         print("✓ Basic fixture test passed - server and extension are connected")
     
@@ -152,7 +153,7 @@ class TestHistoryWithContent:
         # Visit the URL with timeout protection
         try:
             visit_result = await asyncio.wait_for(
-                server.visit_url_for_test(test_url, wait_time=8.0),
+                server.visit_url_for_test(profile_connection(server).profile_id, test_url, wait_time=8.0),
                 timeout=30.0
             )
         except asyncio.TimeoutError:
@@ -219,7 +220,7 @@ class TestHistoryWithContent:
                 "timestamp": datetime.now().isoformat()
             }
 
-            history_response = await server.send_request_and_wait(history_query, timeout=10.0)
+            history_response = await profile_connection(server).send_request_and_wait(history_query, timeout=10.0)
 
             if "error" in history_response:
                 print(f"❌ Search strategy '{strategy_name}' failed: {history_response}")
@@ -255,7 +256,7 @@ class TestHistoryWithContent:
                 "timestamp": datetime.now().isoformat()
             }
 
-            recent_response = await server.send_request_and_wait(recent_query, timeout=10.0)
+            recent_response = await profile_connection(server).send_request_and_wait(recent_query, timeout=10.0)
             recent_items = recent_response.get("data", {}).get("items", [])
             recent_urls = [item.get("url", "") for item in recent_items]
 
@@ -315,7 +316,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # Visit all URLs with timeout protection
         try:
             visit_result = await asyncio.wait_for(
-                server.visit_multiple_urls_for_test(
+                server.visit_multiple_urls_for_test(profile_connection(server).profile_id,
                     test_urls,
                     wait_time=8.0,
                     delay_between=3.0
@@ -379,7 +380,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # Visit the URL with timeout protection
         try:
             visit_result = await asyncio.wait_for(
-                server.visit_url_for_test(test_url, wait_time=8.0),
+                server.visit_url_for_test(profile_connection(server).profile_id, test_url, wait_time=8.0),
                 timeout=30.0
             )
         except asyncio.TimeoutError:
@@ -405,7 +406,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
             "timestamp": datetime.now().isoformat()
         }
         
-        recent_response = await server.send_request_and_wait(recent_query, timeout=10.0)
+        recent_response = await profile_connection(server).send_request_and_wait(recent_query, timeout=10.0)
         
         # Verify recent history query succeeded
         assert "error" not in recent_response, f"Recent history query failed: {recent_response}"
@@ -462,7 +463,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         urls_to_visit = [item["url"] for item in test_data]
         try:
             visit_result = await asyncio.wait_for(
-                server.visit_multiple_urls_for_test(urls_to_visit, wait_time=8.0),
+                server.visit_multiple_urls_for_test(profile_connection(server).profile_id, urls_to_visit, wait_time=8.0),
                 timeout=60.0
             )
         except asyncio.TimeoutError:
@@ -519,7 +520,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
                 "timestamp": datetime.now().isoformat()
             }
             
-            search_response = await server.send_request_and_wait(search_query, timeout=10.0)
+            search_response = await profile_connection(server).send_request_and_wait(search_query, timeout=10.0)
             
             assert "error" not in search_response, f"Search for {search_term} failed: {search_response}"
             assert "data" in search_response
@@ -552,7 +553,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         # Visit the URLs with timeout protection
         try:
             visit_result = await asyncio.wait_for(
-                server.visit_multiple_urls_for_test(cleanup_urls, wait_time=8.0),
+                server.visit_multiple_urls_for_test(profile_connection(server).profile_id, cleanup_urls, wait_time=8.0),
                 timeout=60.0
             )
         except asyncio.TimeoutError:
@@ -600,7 +601,7 @@ Consider increasing wait times or using a non-headless Firefox instance for this
         print(f"✓ Verified {len(urls_found)} URLs are in history before cleanup")
         
         # Now clean them up (only clean URLs we actually found)
-        cleanup_result = await server.clear_test_history(urls_found)
+        cleanup_result = await server.clear_test_history(profile_connection(server).profile_id, urls_found)
         
         assert "error" not in cleanup_result, f"Cleanup failed: {cleanup_result}"
         assert cleanup_result.get("success") == True

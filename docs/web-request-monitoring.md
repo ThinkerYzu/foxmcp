@@ -1,5 +1,9 @@
 # Web Request Monitoring
 
+Every browser tool requires an explicit `profile_id` from `profiles_list` in
+addition to the arguments shown below. Tab and monitor IDs are local to that
+profile; see [profile discovery](api-reference.md#firefox-profiles).
+
 FoxMCP can watch the HTTP requests Firefox makes and hand them to an MCP client:
 the URLs, the status codes, the response headers, and — for text responses — the
 response bodies. It is built on the extension's `webRequest` listeners, so it sees

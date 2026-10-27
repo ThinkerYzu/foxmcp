@@ -158,7 +158,7 @@ class TestTestHelperProtocol:
         """Test get_popup_state generates correct message format"""
         server, mock_ws = mock_server
         
-        result = await server.get_popup_state()
+        result = await server.get_popup_state("test-profile")
         
         # Verify request was sent
         assert len(mock_ws.sent_messages) == 1
@@ -182,7 +182,7 @@ class TestTestHelperProtocol:
         """Test get_options_state generates correct message format"""
         server, mock_ws = mock_server
         
-        result = await server.get_options_state()
+        result = await server.get_options_state("test-profile")
         
         # Verify request was sent
         assert len(mock_ws.sent_messages) == 1
@@ -206,7 +206,7 @@ class TestTestHelperProtocol:
         """Test get_storage_values generates correct message format"""
         server, mock_ws = mock_server
         
-        result = await server.get_storage_values()
+        result = await server.get_storage_values("test-profile")
         
         # Verify request was sent
         request = mock_ws.sent_messages[0]
@@ -224,7 +224,7 @@ class TestTestHelperProtocol:
         server, mock_ws = mock_server
         
         expected_values = {"testPort": 7777, "hostname": "localhost"}
-        result = await server.validate_ui_sync(expected_values)
+        result = await server.validate_ui_sync("test-profile", expected_values)
         
         # Verify request was sent with expected values
         request = mock_ws.sent_messages[0]
@@ -243,7 +243,7 @@ class TestTestHelperProtocol:
         """Test refresh_ui_state generates correct message format"""
         server, mock_ws = mock_server
         
-        result = await server.refresh_ui_state()
+        result = await server.refresh_ui_state("test-profile")
         
         # Verify request format
         request = mock_ws.sent_messages[0]
@@ -261,7 +261,7 @@ class TestTestHelperProtocol:
         server, mock_ws = mock_server
         
         test_values = {"testPort": 7777, "hostname": "localhost"}
-        result = await server.test_storage_sync_workflow(test_values)
+        result = await server.test_storage_sync_workflow("test-profile", test_values)
         
         # Should have made multiple requests
         assert len(mock_ws.sent_messages) >= 4  # storage, popup, options, validate
@@ -284,9 +284,9 @@ class TestTestHelperProtocol:
         server, mock_ws = mock_server
         
         # Make multiple requests
-        await server.get_popup_state()
-        await server.get_options_state()
-        await server.get_storage_values()
+        await server.get_popup_state("test-profile")
+        await server.get_options_state("test-profile")
+        await server.get_storage_values("test-profile")
         
         # Verify all requests have unique IDs
         request_ids = [msg["id"] for msg in mock_ws.sent_messages]
@@ -302,7 +302,7 @@ class TestTestHelperProtocol:
         """Test that messages include proper timestamps"""
         server, mock_ws = mock_server
         
-        await server.get_popup_state()
+        await server.get_popup_state("test-profile")
         
         request = mock_ws.sent_messages[0]
         assert "timestamp" in request

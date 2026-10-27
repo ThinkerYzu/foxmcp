@@ -1,5 +1,7 @@
 """Run actual extension JavaScript in Firefox with controlled sockets and UI."""
 
+from test_config import profile_connection
+
 import asyncio
 import json
 from pathlib import Path
@@ -17,9 +19,12 @@ connectToMCPServer();
 const first = websocket;
 first.onopen();
 check(JSON.parse(first.sent[0]).data.version === EXTENSION_VERSION, 'hello is first message');
-await first.onmessage({data: JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION}})});
+check(JSON.parse(first.sent[0]).data.profile_id === PROFILE_ID, 'profile identity announced');
+check(!isConnected, 'not connected until ready');
+await first.onmessage({data: JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION, protocol_version:3}})});
+await first.onmessage({data: JSON.stringify({type:'ready', data:{profile_id:PROFILE_ID}})});
 check(serverVersion === EXTENSION_VERSION, 'matching version');
-await first.onmessage({data: JSON.stringify({type:'hello', data:{version:'0.0.1'}})});
+await first.onmessage({data: JSON.stringify({type:'hello', data:{version:'0.0.1', protocol_version:3}})});
 check(serverVersion === '0.0.1', 'mismatch retained');
 let status;
 listeners[0]({action:'getConnectionStatus'}, {}, value => status=value);
@@ -29,20 +34,27 @@ check(JSON.parse(first.sent.at(-1)).action === 'ping', 'mismatch does not block 
 connectToMCPServer();
 const second = websocket;
 second.onopen();
-check(serverVersion === null, 'legacy server is unknown after reconnect');
+check(JSON.parse(second.sent[0]).data.profile_id === PROFILE_ID, 'reconnect retains profile identity');
+await second.onmessage({data: JSON.stringify({type:'ready', data:{profile_id:PROFILE_ID}})});
+check(serverVersion === null, 'release version reset after reconnect');
 await first.onmessage({data: JSON.stringify({type:'hello', data:{version:'9.9.9'}})});
 first.onopen();
-first.onclose();
+first.onclose({code:1000});
 check(serverVersion === null && isConnected, 'stale callbacks ignored');
 for (const data of [null, [], {}, {version:3}, {version:'bad\nversion'}, {version:EXTENSION_VERSION+'\n'}, {version:'1.'+'0'.repeat(70)}]) {
-  await second.onmessage({data:JSON.stringify({type:'hello', data})});
+  await second.onmessage({data:JSON.stringify({type:'hello', data:{...data, protocol_version:3}})});
   check(serverVersion === null, 'malformed version ignored');
 }
 await second.onmessage({data:JSON.stringify({type:'request', action:'ping', id:'legacy'})});
-check(JSON.parse(second.sent.at(-1)).id === 'legacy', 'legacy tools work');
-await second.onmessage({data:JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION}})});
-second.onclose();
+check(JSON.parse(second.sent.at(-1)).id === 'legacy', 'missing release version does not block tools');
+await second.onmessage({data:JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION, protocol_version:3}})});
+second.onclose({code:1000});
 check(serverVersion === null && !isConnected, 'close clears version');
+connectToMCPServer();
+const legacy = websocket;
+legacy.onopen();
+await legacy.onmessage({data:JSON.stringify({type:'hello',data:{version:EXTENSION_VERSION}})});
+check(legacy.readyState === WebSocket.CLOSED && connectionError.includes('update'), 'old protocol refused explicitly');
 return checks;
 '''
 
@@ -61,6 +73,9 @@ check(elements.versionInfo.textContent.includes('version unavailable'), 'unknown
 connection = {connected:false};
 await refresh();
 check(elements.versionInfo.textContent.includes('disconnected'), 'disconnected clears old version');
+connection = {connected:false, connectionError:'Update the extension and server'};
+await refresh();
+check(elements.versionInfo.textContent.includes('Update the extension and server'), 'protocol error visible');
 return checks;
 '''
 
@@ -69,10 +84,10 @@ return checks;
 async def test_browser_versions_and_popup(server_with_extension, upload_page):
     server = server_with_extension['server']
     for _ in range(100):
-        if server.extension_version:
+        if profile_connection(server).extension_version:
             break
         await asyncio.sleep(0.01)
-    assert server.extension_version == VERSION  # Actual extension hello, not a mock.
+    assert profile_connection(server).extension_version == VERSION  # Actual extension hello, not a mock.
     tab_id = await open_fixture(server, upload_page)
     root = Path(__file__).resolve().parents[2]
     background = (root / 'extension/background.js').read_text()
@@ -125,6 +140,6 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
     try:
         result = await browser_request(server, 'content.execute_script', {'tabId': tab_id, 'script': script})
         assert len(result['result']['background']) >= 10, result
-        assert len(result['result']['popup']) == 6, result
+        assert len(result['result']['popup']) == 7, result
     finally:
         await browser_request(server, 'tabs.close', {'tabId': tab_id})

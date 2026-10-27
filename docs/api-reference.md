@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 45 tools are offered by default. Each section below corresponds to a *group*
+All 46 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -13,6 +13,34 @@ its tools are named `create_window`, `list_windows` and so on. `--enable-tools` 
 tool out of a group you disabled. See
 [configuration.md](configuration.md#reducing-the-tool-surface) for the full list
 and what each group costs.
+
+### Firefox Profiles
+
+`profiles_list(populate=True)` returns an object with a `profiles` array. Each entry
+contains `profile_id`, `name`, `name_error`, `extension_version`, and `windows`.
+Windows include their tabs, titles and URLs when `populate=True`. A window-query
+failure is returned as that profile's `error`, without hiding other profiles.
+
+**Every browser tool below requires `profile_id` as its first argument**, including
+profile-wide history, bookmarks, containers and request monitors. Obtain it from
+`profiles_list`; do not infer it from a name or assume one profile is selected.
+Only `profiles_list` and `debug_websocket_status` work without a target. For example:
+
+```python
+profiles_list()
+tabs_list(profile_id="<selected-profile-id>", window_id=1)
+content_get_text(profile_id="<selected-profile-id>", tab_id=2)
+```
+
+The signatures below omit this common required argument for readability. Native
+object IDs can coincide in different profiles. The profile ID survives socket
+reconnections but changes when Firefox or its extension restarts; rediscover after
+a restart. A missing/disconnected target fails without selecting another profile.
+
+Names are read from Firefox's local metadata on the server machine. The new
+profile-manager database takes precedence over legacy `profiles.ini`. Temporary,
+inaccessible or ambiguous profiles have `name=null` and an explicit `name_error`;
+they remain usable by ID. Names refresh on discovery and need not be unique.
 
 ### Tab Management
 - `tabs_list(window_id=None, cookie_store_id=None)` - List tabs with optional

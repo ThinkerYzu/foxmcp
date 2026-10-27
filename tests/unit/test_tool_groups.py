@@ -27,7 +27,7 @@ from server.server import FoxMCPServer
 class StubWebSocketServer:
     """Stands in for the WebSocket server; these tests never send a request"""
 
-    async def send_request_and_wait(self, request):
+    async def send_request_and_wait(self, request, timeout=30.0):
         return {"type": "response", "data": {}}
 
     async def get_extension_status(self):

@@ -15,7 +15,7 @@ from pathlib import Path
 # Every file that puts an action name on the wire. server.py carries the test
 # helper protocol (test.*) while mcp_tools.py carries everything a client can
 # reach, and a handler only looks orphaned if both are read.
-SENDER_FILES = ("server/mcp_tools.py", "server/server.py")
+SENDER_FILES = ("server/mcp_tools.py", "server/server.py", "server/browser_profile.py")
 
 HANDLER_FILE = "extension/background.js"
 
@@ -53,7 +53,7 @@ def _actions_sent_by_server():
         for node in ast.walk(tree):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                     and node.func.id == "container_request"):
-                actions.add(node.args[0].value)
+                actions.add(node.args[1].value)
         for node in ast.walk(tree):
             if isinstance(node, ast.Dict):
                 for key, value in zip(node.keys, node.values):

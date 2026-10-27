@@ -202,7 +202,14 @@ venv/bin/python server/server.py --disable-tools bookmarks,history
 venv/bin/python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
 ```
 
-All **45 tools** are enabled by default. Available groups are `windows`, `tabs`,
+Use `profiles_list` first to inspect all connected Firefox profiles, their real
+names, windows and tabs. Every browser command requires the chosen `profile_id`
+alongside its window/tab IDs. Profiles can share the same server port without
+replacing each other. IDs survive a socket reconnect and change after a browser
+or extension restart; rediscover then. Update both extension and server for
+protocol 3. See [profile discovery](docs/api-reference.md#firefox-profiles).
+
+All **46 tools** are enabled by default. Available groups are `profiles`, `windows`, `tabs`,
 `containers`, `bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.
 See [configuration](docs/configuration.md) for client examples and other options.
 

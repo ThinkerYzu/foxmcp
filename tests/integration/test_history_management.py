@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 
 # Set up consistent imports
 import test_imports
+from test_config import profile_connection
 
 # Import project modules
 from server.server import FoxMCPServer
@@ -49,7 +50,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Verify response structure
         assert "error" not in response, f"History query failed: {response.get('error')}"
@@ -95,7 +96,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Verify response
         assert "error" not in response, f"History search failed: {response.get('error')}"
@@ -137,7 +138,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": now.isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Verify response
         assert "error" not in response, f"History time range query failed: {response.get('error')}"
@@ -178,7 +179,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Verify response
         assert "error" not in response, f"Recent history failed: {response.get('error')}"
@@ -228,7 +229,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Since delete is not implemented, we expect an error
         # This test documents the current limitation
@@ -291,7 +292,7 @@ class TestHistoryManagementEndToEnd:
                 "timestamp": datetime.now().isoformat()
             }
             
-            response = await server.send_request_and_wait(request, timeout=10.0)
+            response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
             
             if test_case["should_succeed"]:
                 assert "error" not in response or response.get("type") != "error", \
@@ -324,7 +325,7 @@ class TestHistoryManagementEndToEnd:
                 },
                 "timestamp": datetime.now().isoformat()
             }
-            concurrent_requests.append(server.send_request_and_wait(request, timeout=15.0))
+            concurrent_requests.append(profile_connection(server).send_request_and_wait(request, timeout=15.0))
         
         # Execute all requests concurrently
         responses = await asyncio.gather(*concurrent_requests)
@@ -356,7 +357,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Should get an error response
         assert response.get("type") == "error" or "error" in response
@@ -389,7 +390,7 @@ class TestHistoryManagementEndToEnd:
                 "timestamp": datetime.now().isoformat()
             }
             
-            requests.append(server.send_request_and_wait(request, timeout=10.0))
+            requests.append(profile_connection(server).send_request_and_wait(request, timeout=10.0))
             
             # Small delay between requests to ensure different timestamps
             await asyncio.sleep(0.1)
@@ -426,7 +427,7 @@ class TestHistoryManagementEndToEnd:
         # Visit all test URLs
         try:
             visit_result = await asyncio.wait_for(
-                server.visit_multiple_urls_for_test(
+                server.visit_multiple_urls_for_test(profile_connection(server).profile_id,
                     test_urls,
                     wait_time=8.0,
                     delay_between=3.0
@@ -463,7 +464,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
 
-        all_response = await server.send_request_and_wait(all_query, timeout=10.0)
+        all_response = await profile_connection(server).send_request_and_wait(all_query, timeout=10.0)
         assert "error" not in all_response, f"Query for all URLs failed: {all_response}"
 
         all_items = all_response.get("data", {}).get("items", [])
@@ -491,7 +492,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
 
-        python_response = await server.send_request_and_wait(python_query, timeout=10.0)
+        python_response = await profile_connection(server).send_request_and_wait(python_query, timeout=10.0)
         assert "error" not in python_response, f"Python search failed: {python_response}"
 
         python_items = python_response.get("data", {}).get("items", [])
@@ -533,7 +534,7 @@ class TestHistoryManagementEndToEnd:
             "timestamp": datetime.now().isoformat()
         }
 
-        rust_response = await server.send_request_and_wait(rust_query, timeout=10.0)
+        rust_response = await profile_connection(server).send_request_and_wait(rust_query, timeout=10.0)
         assert "error" not in rust_response, f"Rust search failed: {rust_response}"
 
         rust_items = rust_response.get("data", {}).get("items", [])

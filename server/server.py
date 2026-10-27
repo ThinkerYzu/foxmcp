@@ -7,6 +7,7 @@ Licensed under the MIT License - see LICENSE file for details
 """
 
 import argparse
+from collections import Counter
 from contextlib import suppress
 import asyncio
 import json
@@ -16,6 +17,7 @@ import socket
 import sys
 import os
 import threading
+import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -25,12 +27,16 @@ try:
     from .version import VERSION
     from .mcp_tools import FoxMCPTools
     from .file_transfer import FileTransferServer
-    from .browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN
+    from .browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN, PROTOCOL_VERSION
+    from .browser_profile import BrowserProfile
+    from .profile_names import FirefoxProfileNames
 except ImportError:
     from version import VERSION
     from mcp_tools import FoxMCPTools
     from file_transfer import FileTransferServer
-    from browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN
+    from browser_proxy import BrowserProxyHub, EXTENSION_ORIGIN_PATTERN, PROTOCOL_VERSION
+    from browser_profile import BrowserProfile
+    from profile_names import FirefoxProfileNames
 
 # Try to import port coordinator for dynamic port allocation
 try:
@@ -90,19 +96,6 @@ def find_available_port(start_port=3000, max_attempts=100):
 class FoxMCPServer:
     # How often to check whether the MCP clients owning monitors are still there
     MONITOR_REAP_INTERVAL = 5.0
-    VERSION_REPORT_TIMEOUT = 5.0
-
-    # Owner recorded for a monitor started outside any MCP session, which is what
-    # a tool called in-process rather than over a transport gets. There is no
-    # client to outlive it, so it is never reaped - but it is still a monitor the
-    # server knows about, and that is what keeps it from being stopped as a stray.
-    NO_MCP_SESSION = "no-mcp-session"
-
-    # A reply naming a monitor the server has no record of is not evidence of a
-    # stray when the reply is what creates the record, or what confirms the
-    # removal. Excluding the second is also what stops a stray from being stopped
-    # over and over.
-    MONITOR_LIFECYCLE_ACTIONS = ("requests.start_monitoring", "requests.stop_monitoring")
 
     def __init__(self, host: str = "localhost", port: int = 8765, mcp_port: int = None, start_mcp: bool = True,
                  disabled_tool_groups=None, enabled_tools=None, use_stdio: bool = False):
@@ -143,10 +136,8 @@ class FoxMCPServer:
             logger.info(f"MCP server will use port {self.mcp_port}")
         self.start_mcp = start_mcp
 
-        # SINGLE CONNECTION CONSTRAINT: Only one extension connection allowed
-        self.extension_connection = None
-        self.extension_version = None
-        self.pending_requests = {}  # Map of request IDs to Future objects
+        self.profiles = {}
+        self.profile_names = FirefoxProfileNames()
 
         # Connection event management
         self._connection_waiters = []  # List of futures waiting for connection
@@ -160,11 +151,6 @@ class FoxMCPServer:
         self.mcp_thread = None
         self.mcp_server_instance = None
 
-        # Which MCP client asked for each running monitor, so its monitors can be
-        # stopped when it goes. Monitors live in the extension, which outlives
-        # every client, and only the client that started one knows its id.
-        self.monitor_owners = {}  # monitor_id -> MCP session id
-        self.monitors_being_stopped = set()
         self.mcp_http_app = None
         self.monitor_reaper_task = None
         self._shutdown_event = None
@@ -191,391 +177,140 @@ class FoxMCPServer:
         return None
 
     async def handle_extension_connection(self, websocket):
-        """Handle WebSocket connection from browser extension
-
-        IMPORTANT: Only ONE extension connection is allowed at a time.
-        If a new connection arrives, the existing one is closed first.
-        This prevents multiple extensions or connection races.
-        """
-        logger.info(f"Extension connected from {websocket.remote_address}")
-
-        # CONSTRAINT: Only one extension connection allowed at a time
-        # Close existing connection if there is one to maintain single connection policy
-        if self.extension_connection and self.extension_connection.close_code is None:
-            logger.info("Closing existing extension connection for new one")
-            try:
-                await self.extension_connection.close()
-            except Exception as e:
-                logger.warning(f"Error closing existing connection: {e}")
-
-        self.extension_connection = websocket
-        self.extension_version = None
-        version_timeout = asyncio.create_task(self._warn_missing_version(websocket))
-
-        # Notify all waiters that a connection has been established
-        self._notify_connection_waiters()
-
+        """Register a ready profile without displacing any connected profile."""
+        profile = None
         try:
-            await websocket.send(json.dumps({"type": "hello", "data": {"version": VERSION}}))
+            await websocket.send(json.dumps({"type": "hello", "data": {
+                "version": VERSION, "protocol_version": PROTOCOL_VERSION}}))
+            hello = json.loads(await asyncio.wait_for(websocket.recv(), 5.0))
+            data = hello.get("data") if isinstance(hello, dict) else None
+            if (not isinstance(data, dict) or hello.get("type") != "hello"
+                    or type(data.get("protocol_version")) is not int
+                    or data["protocol_version"] != PROTOCOL_VERSION
+                    or not isinstance(data.get("profile_id"), str)
+                    or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", data["profile_id"]) is None):
+                logger.warning("Rejected extension: protocol 3 and profile_id required; update extension")
+                await websocket.close(code=1008, reason="FoxMCP protocol 3 and profile_id required; update extension")
+                return
+            profile_id = data["profile_id"]
+            if profile_id in self.profiles:
+                await websocket.close(code=4009, reason="Profile already connected")
+                return
+            origin = websocket.request.headers.get("Origin", "")
+            profile = BrowserProfile(self, websocket, profile_id, origin)
+            self.profiles[profile_id] = profile
+            await profile.handle_extension_message(json.dumps(hello))
+            if profile.extension_version is None:
+                logger.warning("Extension version unavailable for profile %s; browser tools remain available", profile_id)
+            await websocket.send(json.dumps({"type": "ready", "data": {"profile_id": profile_id}}))
+            self._notify_connection_waiters()
+            logger.info("Firefox profile %s connected from %s", profile_id, websocket.remote_address)
             async for message in websocket:
-                if self.extension_connection is not websocket:
+                if self.profiles.get(profile_id) is not profile:
                     break
-                await self.handle_extension_message(message)
-        except ConnectionAbortedError:
-            logger.info("Extension disconnected")
-        except Exception as e:
-            logger.error(f"Error handling extension connection: {e}")
+                await profile.handle_extension_message(message)
+        except (ValueError, TypeError, asyncio.TimeoutError):
+            logger.warning("Rejected invalid or timed-out Firefox profile handshake")
+            await websocket.close(code=1008, reason="Invalid FoxMCP profile handshake; update extension")
+        except websockets.ConnectionClosed:
+            pass
         finally:
-            version_timeout.cancel()
-            with suppress(asyncio.CancelledError):
-                await version_timeout
-            # Only the handler still holding the slot may clear it.
-            #
-            # An extension reconnecting closes its old socket and opens the new
-            # one at once, so this handler can finish after its replacement has
-            # already installed itself. Clearing unconditionally would blank out
-            # a live connection, and nothing sets it again until the extension
-            # reconnects. The monitors go with it because the extension clears
-            # its own the moment a connection ends, leaving these records with
-            # nothing to name.
-            if self.extension_connection is websocket:
-                self.extension_connection = None
-                self.extension_version = None
-                self.monitor_owners.clear()
-                for future in list(self.pending_requests.values()):
-                    if not future.done():
-                        future.set_result({"error": "Browser extension disconnected"})
+            if profile is not None:
+                profile.disconnected()
+                if self.profiles.get(profile.profile_id) is profile:
+                    self.profiles.pop(profile.profile_id)
 
     async def get_extension_status(self):
-        """Report the actual browser connection for local and forwarded tools."""
-        connection = self.extension_connection
-        if connection is None or connection.close_code is not None:
+        """Report all live profiles, without choosing a target implicitly."""
+        snapshot = await self.list_profiles(populate=False, include_windows=False)
+        if not snapshot["profiles"]:
             return "No browser extension is connected"
-        address = connection.remote_address
-        where = f" from {address[0]}:{address[1]}" if address else ""
-        return f"Browser extension connected{where}"
+        return "Browser extension connected profiles:\n" + "\n".join(
+            f"- {p['profile_id']}: {p['name'] or 'name unavailable'}" for p in snapshot["profiles"])
 
-    async def _warn_missing_version(self, websocket):
-        """Older peers remain usable even when they cannot report a version."""
-        await asyncio.sleep(self.VERSION_REPORT_TIMEOUT)
-        if self.extension_connection is websocket and self.extension_version is None:
-            logger.warning(
-                "Extension version unavailable; server %s. Update extension and server "
-                "together to check versions. Browser tools remain available.", VERSION
-            )
-
-    async def handle_extension_message(self, message: str):
-        """Process message from browser extension"""
-        try:
-            data = json.loads(message)
-            if not isinstance(data, dict):
-                return
-            message_type = data.get('type', 'unknown')
-            if message_type == 'hello':
-                payload = data.get('data')
-                version = payload.get('version') if isinstance(payload, dict) else None
-                if (isinstance(version, str) and len(version) <= 64
-                        and re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,3}', version)):
-                    if version != self.extension_version:
-                        if version != VERSION:
-                            logger.warning(
-                                "FoxMCP version mismatch: extension %s, server %s. "
-                                "Update extension and server together; browser tools remain available.",
-                                version, VERSION
-                            )
-                        else:
-                            logger.info("FoxMCP versions match: extension %s, server %s", version, VERSION)
-                    self.extension_version = version
-                return
-            message_id = data.get('id')
-            action = data.get('action', 'unknown')
-
-            # Handle debug logs specially - print them prominently
-            if message_type == 'debug_log':
-                level = data.get('data', {}).get('level', 'log')
-                log_message = data.get('data', {}).get('message', '')
-                timestamp = data.get('data', {}).get('timestamp', '')
-
-                logger.info("----- EXTENSION DEBUG LOG -----")
-                if level == 'error':
-                    logger.info(f"🔴 EXTENSION ERROR [{timestamp}]: {log_message}")
-                else:
-                    logger.info(f"🔵 EXTENSION LOG [{timestamp}]: {log_message}")
-                return
-
-            logger.info(f"Received from extension: {message_type} - {action} (ID: {message_id})")
-
-            # The extension answered for a monitor the server has no record of,
-            # so nothing can reach it: stop it rather than leave it capturing.
-            #
-            # The two sides can only drift this way if one of them let go of a
-            # monitor the other kept - an extension too old to clear its monitors
-            # when a connection ends, or a server that has forgotten an owner. In
-            # a matched pair this never fires, which is why it is worth having: it
-            # is the case nobody planned for.
-            stray_monitor = self._stray_monitor_named_in(action, data)
-            if stray_monitor:
-                asyncio.create_task(self._stop_stray_monitor(stray_monitor))
-
-            if message_type == 'request':
-                # Handle ping-pong for connection testing
-                if action == 'ping':
-                    await self.handle_ping_request(data)
-                    return
-
-            elif message_type in ['response', 'error']:
-                # Handle response/error from extension
-                await self.handle_extension_response(data)
-                return
-
-            # For other message types, just log for now
-            logger.warning(f"Unhandled message type: {message_type}")
-
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON received: {message}")
-        except Exception as e:
-            logger.error(f"Error processing extension message: {e}")
-
-    async def handle_extension_response(self, response_data: Dict[str, Any]):
-        """Handle response or error from browser extension"""
-        request_id = response_data.get('id')
-        if not request_id:
-            logger.warning("Received response without ID")
-            return
-
-        if request_id in self.pending_requests:
-            future = self.pending_requests.pop(request_id)
-            if not future.cancelled():
-                future.set_result(response_data)
-                logger.info(f"Completed pending request: {request_id}")
-        else:
-            logger.warning(f"Received response for unknown request: {request_id}")
-
-    async def handle_ping_request(self, request: Dict[str, Any]):
-        """Handle ping request from extension"""
-        response = {
-            "id": request["id"],
-            "type": "request",
-            "action": "ping",
-            "data": {"test": True},
-            "timestamp": datetime.now().isoformat()
-        }
-
-        success = await self.send_to_extension(response)
-        if success:
-            logger.info(f"Sent ping request to extension: {request['id']}")
-        else:
-            logger.error(f"Failed to send ping request: {request['id']}")
-
-
-    async def test_ping_extension(self) -> Dict[str, Any]:
-        """Send ping to extension and wait for response"""
-        if not self.extension_connection:
-            return {"success": False, "error": "No extension connection"}
-
-        test_id = f"server_ping_{int(datetime.now().timestamp() * 1000)}"
-        ping_request = {
-            "id": test_id,
-            "type": "request",
-            "action": "ping",
-            "data": {"server_test": True},
-            "timestamp": datetime.now().isoformat()
-        }
-
-        # Send ping and return immediately (for now)
-        success = await self.send_to_extension(ping_request)
-        if success:
-            return {"success": True, "message": "Ping sent to extension", "id": test_id}
-        else:
-            return {"success": False, "error": "Failed to send ping"}
-
-    async def send_to_extension(self, message: Dict[str, Any]) -> bool:
-        """Send message to browser extension"""
-        if not self.extension_connection:
-            logger.warning("No extension connection available")
-            return False
-
-        try:
-            message['timestamp'] = datetime.now().isoformat()
-            await self.extension_connection.send(json.dumps(message))
-            return True
-        except Exception as e:
-            logger.error(f"Error sending to extension: {e}")
-            return False
-
-    async def send_request_and_wait(self, request: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
-        """Send request to extension and wait for response"""
-        # HTTP MCP runs on uvicorn's thread. Browser sockets and their reply
-        # futures must stay on the listener's loop, also when HTTP and stdio
-        # clients share the same browser connection.
+    async def list_profiles(self, populate=True, include_windows=True):
+        """Discover every profile; a failed peer cannot hide healthy peers."""
         if self._browser_loop is not None and asyncio.get_running_loop() is not self._browser_loop:
-            result = asyncio.run_coroutine_threadsafe(
-                self.send_request_and_wait(request, timeout), self._browser_loop
-            )
-            return await asyncio.wrap_future(result)
-        request_id = request.get('id')
-        if not request_id:
-            raise ValueError("Request must have an ID")
-
-        if not self.extension_connection:
-            return {"error": "No extension connection available"}
-
-        # Create future for response
-        response_future = asyncio.Future()
-        self.pending_requests[request_id] = response_future
-
+            return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(
+                self.list_profiles(populate, include_windows), self._browser_loop))
+        profiles = [p for p in self.profiles.values() if p.extension_connection.close_code is None]
+        if not profiles:
+            return {"profiles": []}
+        origins = Counter(p.origin for p in profiles)
         try:
-            # Send the request
-            success = await self.send_to_extension(request)
-            if not success:
-                self.pending_requests.pop(request_id, None)
-                return {"error": "Failed to send request to extension"}
+            names = await asyncio.to_thread(self.profile_names.resolve, [p.origin for p in profiles])
+        except (OSError, ValueError, RuntimeError) as error:
+            names = {p.origin: {"name": None, "name_error":
+                     f"Firefox profile metadata unavailable: {type(error).__name__}"} for p in profiles}
+        for origin, count in origins.items():
+            if count > 1:
+                names[origin] = {"name": None, "name_error":
+                    "Multiple connected Firefox instances share this extension Origin; name is ambiguous"}
 
-            # Wait for response with timeout
-            response = await asyncio.wait_for(response_future, timeout=timeout)
-            return response
+        async def describe(profile):
+            result = {"profile_id": profile.profile_id, "extension_version": profile.extension_version,
+                      **names[profile.origin]}
+            if include_windows:
+                response = await profile.send_request_and_wait({
+                    "id": uuid.uuid4().hex, "type": "request", "action": "windows.list",
+                    "data": {"populate": populate}}, timeout=5.0)
+                payload = response.get("data")
+                windows = payload.get("windows") if isinstance(payload, dict) else None
+                result["windows"] = windows if isinstance(windows, list) else []
+                if "error" in response or response.get("type") == "error":
+                    result["error"] = response.get("error") or payload
+                elif not isinstance(windows, list):
+                    result["error"] = "Invalid windows response from Firefox profile"
+            return result
 
-        except asyncio.TimeoutError:
-            self.pending_requests.pop(request_id, None)
-            return {"error": f"Request timed out after {timeout} seconds"}
-        except Exception as e:
-            self.pending_requests.pop(request_id, None)
-            return {"error": f"Request failed: {str(e)}"}
-        finally:
-            self.pending_requests.pop(request_id, None)
+        return {"profiles": list(await asyncio.gather(*(describe(p) for p in profiles)))}
 
-    def register_monitor(self, monitor_id: str, session_id: str):
-        """Record the MCP client a newly started request monitor belongs to
+    async def send_request_and_wait(self, request, timeout=30.0):
+        """Route one command to its explicit profile on the browser event loop."""
+        if self._browser_loop is not None and asyncio.get_running_loop() is not self._browser_loop:
+            return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(
+                self.send_request_and_wait(request, timeout), self._browser_loop))
+        profile_id = request.get("profile_id")
+        if not isinstance(profile_id, str) or not profile_id:
+            return {"error": "profile_id is required; call profiles_list first"}
+        profile = self.profiles.get(profile_id)
+        if profile is None or profile.extension_connection.close_code is not None:
+            return {"error": "Firefox profile is not connected; call profiles_list again", "profile_id": profile_id}
+        return await profile.send_request_and_wait(request, timeout)
 
-        Called by the requests_start_monitoring tool once the extension has
-        answered with an id. Monitors with no owner recorded are never reaped;
-        that is what happens when a tool is called outside an MCP session, as the
-        test harness does.
-        """
-        if monitor_id:
-            self.monitor_owners[monitor_id] = session_id or self.NO_MCP_SESSION
+    def register_monitor(self, profile_id, monitor_id, session_id, connection_id):
+        """Record ownership only on the connection that created the monitor."""
+        if self._browser_loop is not None:
+            try:
+                same_loop = asyncio.get_running_loop() is self._browser_loop
+            except RuntimeError:
+                same_loop = False
+            if not same_loop:
+                self._browser_loop.call_soon_threadsafe(
+                    self.register_monitor, profile_id, monitor_id, session_id, connection_id)
+                return
+        profile = self.profiles.get(profile_id)
+        if profile is not None and profile.connection_id == connection_id:
+            profile.register_monitor(monitor_id, session_id)
 
-    def forget_monitor(self, monitor_id: str):
-        """Drop a monitor the client stopped itself, so the reaper ignores it"""
-        self.monitor_owners.pop(monitor_id, None)
-
-    def _live_mcp_session_ids(self) -> Optional[set]:
-        """Sessions of the MCP clients still connected, or None if that cannot be told
-
-        None and the empty set mean different things: None is "no answer
-        available" and must not be read as "every client has gone".
-
-        `_server_instances` is private to the MCP SDK's
-        StreamableHTTPSessionManager, and fastmcp reaches into it the same way in
-        its own shutdown path. A terminated session stays in that dict rather than
-        being removed, so `is_terminated` is what separates a client that has gone
-        from one that is merely quiet.
-        """
-        app = self.mcp_http_app
-        if app is None:
-            return None
-
-        for route in getattr(app, 'routes', []):
-            manager = getattr(getattr(route, 'app', None), 'session_manager', None)
-            transports = getattr(manager, '_server_instances', None)
-            if transports is not None:
-                return {
-                    session_id
-                    for session_id, transport in list(transports.items())
-                    if not getattr(transport, 'is_terminated', False)
-                }
-
-        return None
+    def forget_monitor(self, profile_id, monitor_id, connection_id):
+        """Forget a monitor without touching a reconnected profile's state."""
+        if self._browser_loop is not None:
+            try:
+                same_loop = asyncio.get_running_loop() is self._browser_loop
+            except RuntimeError:
+                same_loop = False
+            if not same_loop:
+                self._browser_loop.call_soon_threadsafe(
+                    self.forget_monitor, profile_id, monitor_id, connection_id)
+                return
+        profile = self.profiles.get(profile_id)
+        if profile is not None and profile.connection_id == connection_id:
+            profile.forget_monitor(monitor_id)
 
     async def stop_monitors_of_gone_clients(self):
-        """Stop every running monitor whose MCP client has disconnected
-
-        A monitor outlives the client that started it: it lives in the extension,
-        and only its creator ever knew its id. Left alone it keeps the extension's
-        webRequest listeners registered and filters response bodies nobody can
-        read.
-
-        A monitor whose extension has gone is forgotten here rather than stopped:
-        the extension clears its own monitors whenever a connection ends, so there
-        is nothing left to stop.
-        """
-        if not self.monitor_owners:
-            return
-
-        live_sessions = self._live_mcp_session_ids()
-        proxy_sessions = set(self.browser_hub.clients.values())
-        abandoned = [
-            monitor_id for monitor_id, session_id in self.monitor_owners.items()
-            if (session_id.startswith('proxy:') and session_id not in proxy_sessions)
-            or (not session_id.startswith('proxy:') and live_sessions is not None
-                and session_id != self.NO_MCP_SESSION and session_id not in live_sessions)
-        ]
-
-        for monitor_id in abandoned:
-            self.monitor_owners.pop(monitor_id, None)
-
-            if not self.extension_connection:
-                continue
-
-            request = {
-                "id": f"reap_{monitor_id}",
-                "type": "request",
-                "action": "requests.stop_monitoring",
-                "data": {"monitor_id": monitor_id},
-                "timestamp": datetime.now().isoformat()
-            }
-            response = await self.send_request_and_wait(request, timeout=10.0)
-            if "error" in response or response.get("type") == "error":
-                detail = response.get("error") or response.get("data", {}).get("message", response)
-                logger.warning(f"Could not stop monitor {monitor_id} of a departed MCP client: {detail}")
-            else:
-                logger.info(f"Stopped monitor {monitor_id}: the MCP client that started it has gone")
-
-    def _stray_monitor_named_in(self, action: str, message: Dict[str, Any]) -> Optional[str]:
-        """The monitor id in a message from the extension that no client owns, if any
-
-        Returns None for the monitor lifecycle replies, which name ids the registry
-        is not expected to hold yet or any more.
-        """
-        if action in self.MONITOR_LIFECYCLE_ACTIONS:
-            return None
-
-        payload = message.get('data')
-        if not isinstance(payload, dict):
-            return None
-
-        monitor_id = payload.get('monitor_id')
-        if not monitor_id or monitor_id in self.monitor_owners:
-            return None
-
-        return monitor_id
-
-    async def _stop_stray_monitor(self, monitor_id: str):
-        """Stop a monitor the extension is running that no client can reach
-
-        Runs as its own task so the message being handled is not held up waiting
-        for the extension to answer this.
-        """
-        if monitor_id in self.monitors_being_stopped:
-            return
-
-        self.monitors_being_stopped.add(monitor_id)
-        try:
-            request = {
-                "id": f"stray_{monitor_id}",
-                "type": "request",
-                "action": "requests.stop_monitoring",
-                "data": {"monitor_id": monitor_id},
-                "timestamp": datetime.now().isoformat()
-            }
-            response = await self.send_request_and_wait(request, timeout=10.0)
-            if "error" in response or response.get("type") == "error":
-                detail = response.get("error") or response.get("data", {}).get("message", response)
-                logger.warning(f"Could not stop stray monitor {monitor_id}: {detail}")
-            else:
-                logger.info(f"Stopped stray monitor {monitor_id}: no MCP client owns it")
-        finally:
-            self.monitors_being_stopped.discard(monitor_id)
+        """Reap abandoned monitors independently for each profile."""
+        await asyncio.gather(*(p.stop_monitors_of_gone_clients() for p in list(self.profiles.values())))
 
     async def _reap_monitors(self):
         """Poll for departed MCP clients for as long as the server runs
@@ -595,7 +330,7 @@ class FoxMCPServer:
                 logger.warning(f"Error reaping monitors of departed clients: {e}")
 
     # Test Helper Methods
-    async def get_popup_state(self, timeout: float = 30.0) -> Dict[str, Any]:
+    async def get_popup_state(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
         """Get current popup display state from extension"""
         request = {
             "id": f"test_popup_{datetime.now().isoformat()}",
@@ -604,10 +339,10 @@ class FoxMCPServer:
             "data": {},
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def get_options_state(self, timeout: float = 30.0) -> Dict[str, Any]:
+    async def get_options_state(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
         """Get current options page display state from extension"""
         request = {
             "id": f"test_options_{datetime.now().isoformat()}",
@@ -616,10 +351,10 @@ class FoxMCPServer:
             "data": {},
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def get_storage_values(self, timeout: float = 30.0) -> Dict[str, Any]:
+    async def get_storage_values(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
         """Get raw storage.sync values from extension"""
         request = {
             "id": f"test_storage_{datetime.now().isoformat()}",
@@ -628,10 +363,10 @@ class FoxMCPServer:
             "data": {},
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def validate_ui_sync(self, expected_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
+    async def validate_ui_sync(self, profile_id: str, expected_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Validate UI-storage synchronization with expected values"""
         request = {
             "id": f"test_validate_{datetime.now().isoformat()}",
@@ -640,10 +375,10 @@ class FoxMCPServer:
             "data": {"expectedValues": expected_values},
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def refresh_ui_state(self, timeout: float = 30.0) -> Dict[str, Any]:
+    async def refresh_ui_state(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
         """Trigger UI state refresh in extension"""
         request = {
             "id": f"test_refresh_{datetime.now().isoformat()}",
@@ -652,10 +387,10 @@ class FoxMCPServer:
             "data": {},
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def visit_url_for_test(self, url: str, wait_time: float = 6.0, timeout: float = 20.0) -> Dict[str, Any]:
+    async def visit_url_for_test(self, profile_id: str, url: str, wait_time: float = 6.0, timeout: float = 20.0) -> Dict[str, Any]:
         """Visit a URL to create browser history entry for testing"""
         request = {
             "id": f"test_visit_url_{datetime.now().isoformat()}",
@@ -667,10 +402,10 @@ class FoxMCPServer:
             },
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def visit_multiple_urls_for_test(self, urls: list, wait_time: float = 6.0, delay_between: float = 2.0, timeout: float = 90.0) -> Dict[str, Any]:
+    async def visit_multiple_urls_for_test(self, profile_id: str, urls: list, wait_time: float = 6.0, delay_between: float = 2.0, timeout: float = 90.0) -> Dict[str, Any]:
         """Visit multiple URLs to create browser history entries for testing"""
         request = {
             "id": f"test_visit_multiple_{datetime.now().isoformat()}",
@@ -683,10 +418,10 @@ class FoxMCPServer:
             },
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def clear_test_history(self, urls: list = None, clear_all: bool = False, timeout: float = 30.0) -> Dict[str, Any]:
+    async def clear_test_history(self, profile_id: str, urls: list = None, clear_all: bool = False, timeout: float = 30.0) -> Dict[str, Any]:
         """Clear test history entries for cleanup"""
         request = {
             "id": f"test_clear_history_{datetime.now().isoformat()}",
@@ -698,10 +433,10 @@ class FoxMCPServer:
             },
             "timestamp": datetime.now().isoformat()
         }
-        response = await self.send_request_and_wait(request, timeout)
+        response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def test_storage_sync_workflow(self, test_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
+    async def test_storage_sync_workflow(self, profile_id: str, test_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Complete test workflow: set values, validate sync, return results"""
         results = {
             "workflow_success": False,
@@ -711,28 +446,28 @@ class FoxMCPServer:
 
         try:
             # Step 1: Get initial state
-            initial_storage = await self.get_storage_values(timeout)
+            initial_storage = await self.get_storage_values(profile_id, timeout)
             if "error" in initial_storage:
                 results["errors"].append(f"Failed to get initial storage: {initial_storage['error']}")
                 return results
             results["steps"]["initial_storage"] = initial_storage
 
             # Step 2: Get popup state
-            popup_state = await self.get_popup_state(timeout)
+            popup_state = await self.get_popup_state(profile_id, timeout)
             if "error" in popup_state:
                 results["errors"].append(f"Failed to get popup state: {popup_state['error']}")
                 return results
             results["steps"]["popup_state"] = popup_state
 
             # Step 3: Get options state
-            options_state = await self.get_options_state(timeout)
+            options_state = await self.get_options_state(profile_id, timeout)
             if "error" in options_state:
                 results["errors"].append(f"Failed to get options state: {options_state['error']}")
                 return results
             results["steps"]["options_state"] = options_state
 
             # Step 4: Validate synchronization
-            validation_result = await self.validate_ui_sync(test_values, timeout)
+            validation_result = await self.validate_ui_sync(profile_id, test_values, timeout)
             if "error" in validation_result:
                 results["errors"].append(f"Failed to validate UI sync: {validation_result['error']}")
                 return results
@@ -776,7 +511,7 @@ class FoxMCPServer:
                 print("Connection timeout")
         """
         # If already connected, return immediately
-        if self.extension_connection and self.extension_connection.close_code is None:
+        if any(p.extension_connection.close_code is None for p in self.profiles.values()):
             return True
 
         # Create a future to wait for connection
@@ -875,15 +610,9 @@ class FoxMCPServer:
             try:
                 logger.info("Stopping WebSocket server...")
 
-                # Close all existing connections first
-                if self.extension_connection:
-                    try:
-                        await self.extension_connection.close()
-                        logger.info("Extension connection closed")
-                    except Exception as e:
-                        logger.warning(f"Error closing extension connection: {e}")
-                    finally:
-                        self.extension_connection = None
+                # Each handler cleans up only the profile it owns.
+                await asyncio.gather(*(p.extension_connection.close() for p in list(self.profiles.values())),
+                                     return_exceptions=True)
 
                 # close() only starts the shutdown; wait_closed() is what
                 # actually releases the port. Bounded so a connection that

@@ -9,12 +9,14 @@ connection displaces the existing one, and answer requests on its behalf.
 """
 
 import asyncio
+import json
 
 import pytest
 import pytest_asyncio
 import websockets
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
 from port_coordinator import get_port_by_type
 from test_config import EXTENSION_TEST_ORIGIN, connect_as_extension
@@ -47,7 +49,7 @@ class TestConnectionOrigin:
         """A moz-extension:// origin connects and becomes the extension connection"""
         async with connect_as_extension(self.uri(server)):
             await asyncio.sleep(0.2)
-            assert server.extension_connection is not None
+            assert server.profiles
 
     @pytest.mark.asyncio
     async def test_web_page_origin_is_rejected(self, server):
@@ -59,7 +61,7 @@ class TestConnectionOrigin:
             )
 
         assert rejection.value.response.status_code == 403
-        assert server.extension_connection is None
+        assert not server.profiles
 
     @pytest.mark.asyncio
     async def test_missing_origin_is_rejected(self, server):
@@ -74,7 +76,7 @@ class TestConnectionOrigin:
             await websockets.connect(self.uri(server))
 
         assert rejection.value.response.status_code == 403
-        assert server.extension_connection is None
+        assert not server.profiles
 
     @pytest.mark.asyncio
     async def test_rejected_page_cannot_displace_the_extension(self, server):
@@ -87,7 +89,7 @@ class TestConnectionOrigin:
         """
         async with connect_as_extension(self.uri(server)) as extension:
             await asyncio.sleep(0.2)
-            assert server.extension_connection is not None
+            assert server.profiles
 
             with pytest.raises(websockets.exceptions.InvalidStatus):
                 await websockets.connect(
@@ -96,7 +98,7 @@ class TestConnectionOrigin:
                 )
 
             await asyncio.sleep(0.2)
-            assert server.extension_connection is not None
+            assert server.profiles
             assert extension.close_code is None
 
     @pytest.mark.asyncio
@@ -108,6 +110,11 @@ class TestConnectionOrigin:
         async with websockets.connect(
             self.uri(server),
             additional_headers={'Origin': other_install}
-        ):
-            await asyncio.sleep(0.2)
-            assert server.extension_connection is not None
+        ) as peer:
+            import uuid
+            from server.browser_proxy import PROTOCOL_VERSION
+            await peer.recv()
+            await peer.send(json.dumps({'type': 'hello', 'data': {
+                'profile_id': str(uuid.uuid4()), 'protocol_version': PROTOCOL_VERSION}}))
+            assert json.loads(await peer.recv())['type'] == 'ready'
+            assert server.profiles

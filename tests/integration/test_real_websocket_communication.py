@@ -18,6 +18,7 @@ import os
 
 import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
+from server.browser_profile import BrowserProfile
 from test_config import connect_as_extension
 
 # Configure logging for better debugging
@@ -128,7 +129,7 @@ class TestRealWebSocketCommunication:
         })
         
         # This should not raise an exception even without extension
-        await real_server.handle_extension_message(test_message)
+        await BrowserProfile(real_server, None, "test-profile", "moz-extension://test").handle_extension_message(test_message)
         logger.info("Message handled successfully without extension")
 
     @pytest.mark.asyncio
@@ -148,7 +149,7 @@ class TestRealWebSocketCommunication:
         
         for message in invalid_messages:
             try:
-                await real_server.handle_extension_message(message)
+                await BrowserProfile(real_server, None, "test-profile", "moz-extension://test").handle_extension_message(message)
                 logger.info(f"Successfully handled invalid message: {message[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to handle invalid message: {e}")
@@ -160,11 +161,11 @@ class TestRealWebSocketCommunication:
         await asyncio.sleep(0.1)
         
         # Initially no extension connected
-        assert real_server.extension_connection is None
+        assert not real_server.profiles
         
         # Test sending message without connection
         test_message = {"type": "request", "action": "test", "id": "test-001"}
-        result = await real_server.send_to_extension(test_message)
+        result = await BrowserProfile(real_server, None, "test-profile", "moz-extension://test").send_to_extension(test_message)
         assert result is False, "Should return False when no extension connected"
 
     @pytest.mark.asyncio
@@ -247,7 +248,7 @@ class TestFirefoxExtensionIntegration:
             }
         ]
         
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         for message in valid_messages:
             message_json = json.dumps(message)
@@ -269,7 +270,7 @@ class TestFirefoxExtensionIntegration:
             "content.get_text", "content.get_html", "content.get_title", "content.execute_script"
         ]
         
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         for action in action_categories:
             message = {
@@ -292,7 +293,7 @@ class TestFirefoxExtensionIntegration:
     async def test_response_correlation(self):
         """Test that responses can be correlated with requests"""
         
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         # Simulate a request-response cycle
         request_id = "correlation-test-001"

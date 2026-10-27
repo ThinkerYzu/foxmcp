@@ -12,6 +12,7 @@ import sys
 import re
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
 from port_coordinator import coordinated_test_ports
 from firefox_test_utils import FirefoxTestManager
@@ -566,7 +567,7 @@ class TestBrowserFunctionality:
         import uuid
 
         for invalid_id in (None, -1, 1.5, "42", True):
-            response = await system['server'].send_request_and_wait({
+            response = await profile_connection(system['server']).send_request_and_wait({
                 "id": str(uuid.uuid4()),
                 "type": "request",
                 "action": "tabs.captureTab",

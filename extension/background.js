@@ -9,6 +9,11 @@ let websocket = null;
 let isConnected = false;
 const EXTENSION_VERSION = browser.runtime.getManifest().version;
 let serverVersion = null;
+const PROTOCOL_VERSION = 3;
+// A browser/extension restart invalidates old window and tab addresses.
+const PROFILE_ID = crypto.randomUUID();
+let connectionError = null;
+const requestSockets = new Map();
 
 
 // Debug logging configuration - set to true to send extension logs to server
@@ -132,11 +137,9 @@ function connectToMCPServer() {
 
     socket.onopen = () => {
       if (websocket !== socket) return;
-      socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION } }));
-      console.log('Connected to MCP server');
-      isConnected = true;
-      retryAttempts = 0; // Reset retry counter on successful connection
-      connectionRetryAttempts = 0; // Reset connection retry counter
+      socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION, protocol_version: PROTOCOL_VERSION, profile_id: PROFILE_ID } }));
+      isConnected = false; // Wait for the server to register this profile.
+      connectionError = null;
 
       // Send an immediate debug message to test after a small delay
       setTimeout(() => {
@@ -155,10 +158,10 @@ function connectToMCPServer() {
       if (websocket !== socket) return;
       // Test debug message right when we receive a message
       console.log('📨 Extension received message from server');
-      await handleMessage(JSON.parse(event.data));
+      await handleMessage(JSON.parse(event.data), socket);
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       // Reconnect only if this socket is still the live one.
       //
       // close() fires this handler for a deliberate disconnect as well, and
@@ -175,6 +178,12 @@ function connectToMCPServer() {
       isConnected = false;
       serverVersion = null;
       clearAllMonitors('the connection to the server dropped');
+      requestSockets.clear();
+      if (event.code === 1008) {
+        connectionError = event.reason || 'Incompatible FoxMCP connection; update extension and server.';
+        console.error(connectionError);
+        return;
+      }
       scheduleReconnect();
     };
 
@@ -281,13 +290,19 @@ function disconnect() {
   }
   isConnected = false;
   serverVersion = null;
+  requestSockets.clear();
   clearAllMonitors('the connection to the server was closed');
 }
 
-async function handleMessage(message) {
+async function handleMessage(message, socket = websocket) {
   const { id, type, action, data } = message;
 
   if (type === 'hello') {
+    if (!data || data.protocol_version !== PROTOCOL_VERSION) {
+      connectionError = 'Incompatible FoxMCP protocol; update the server and extension together.';
+      socket.close(1008, connectionError);
+      return;
+    }
     const version = data && data.version;
     if (typeof version === 'string' && version.length <= 64 && version.trim() === version && /^[0-9]+(?:\.[0-9]+){0,3}$/.test(version)) {
       serverVersion = version;
@@ -298,7 +313,17 @@ async function handleMessage(message) {
     return;
   }
 
-  if (type !== 'request') return;
+  if (type === 'ready') {
+    if (!data || data.profile_id !== PROFILE_ID) return;
+    isConnected = true;
+    connectionError = null;
+    retryAttempts = 0;
+    connectionRetryAttempts = 0;
+    console.log(`Connected to MCP server as profile ${PROFILE_ID}`);
+    return;
+  }
+  if (type !== 'request' || !isConnected) return;
+  requestSockets.set(id, socket);
 
   // Handle ping-pong for connection testing
   if (action === 'ping') {
@@ -344,7 +369,9 @@ async function handleMessage(message) {
 }
 
 function sendResponse(id, action, data) {
-  if (!isConnected) return;
+  const socket = requestSockets.get(id);
+  requestSockets.delete(id);
+  if (!isConnected || socket !== websocket || socket.readyState !== WebSocket.OPEN) return;
 
   const message = {
     id,
@@ -354,11 +381,13 @@ function sendResponse(id, action, data) {
     timestamp: new Date().toISOString()
   };
 
-  websocket.send(JSON.stringify(message));
+  socket.send(JSON.stringify(message));
 }
 
 function sendError(id, code, message, details = {}) {
-  if (!isConnected) return;
+  const socket = requestSockets.get(id);
+  requestSockets.delete(id);
+  if (!isConnected || socket !== websocket || socket.readyState !== WebSocket.OPEN) return;
 
   const errorMessage = {
     id,
@@ -372,7 +401,7 @@ function sendError(id, code, message, details = {}) {
     timestamp: new Date().toISOString()
   };
 
-  websocket.send(JSON.stringify(errorMessage));
+  socket.send(JSON.stringify(errorMessage));
 }
 
 function sendDebugLog(message, level = 'log') {
@@ -442,6 +471,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
       connected: isConnected,
       extensionVersion: EXTENSION_VERSION,
       serverVersion: serverVersion,
+      profileId: PROFILE_ID,
+      connectionError: connectionError,
       retryAttempts: retryAttempts,
       config: CONFIG
     });

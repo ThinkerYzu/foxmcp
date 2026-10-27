@@ -15,7 +15,7 @@ from websockets.exceptions import ConnectionClosed
 
 logger = logging.getLogger(__name__)
 SERVER_NAME = "FoxMCP"
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 EXTENSION_ORIGIN_PATTERN = re.compile(r"moz-extension://.+")
 
 
@@ -155,6 +155,10 @@ class BrowserProxyHub:
                     "action": action,
                     "data": {"status": await self.server.get_extension_status()},
                 }
+            elif action == "proxy.profiles":
+                response = {"type": "response", "action": action,
+                            "data": await self.server.list_profiles(
+                                populate=request.get("data", {}).get("populate", True))}
             else:
                 upstream = {**request, "id": uuid.uuid4().hex}
                 upstream.pop("timeout", None)
@@ -164,10 +168,10 @@ class BrowserProxyHub:
                 if response.get("type") == "response":
                     data = response.get("data", {})
                     if action == "requests.start_monitoring":
-                        self.server.register_monitor(data.get("monitor_id"), owner)
+                        self.server.register_monitor(request.get("profile_id"), data.get("monitor_id"), owner, response.get("connection_id"))
                     elif action == "requests.stop_monitoring":
                         self.server.forget_monitor(
-                            request.get("data", {}).get("monitor_id")
+                            request.get("profile_id"), request.get("data", {}).get("monitor_id"), response.get("connection_id")
                         )
             await websocket.send(json.dumps({**response, "id": original_id}))
         except ConnectionClosed:
@@ -238,6 +242,14 @@ class RemoteBrowser:
             return {"error": f"Request timed out after {timeout} seconds"}
         finally:
             self.pending.pop(request_id, None)
+
+    async def list_profiles(self, populate=True):
+        response = await self.send_request_and_wait({
+            "id": uuid.uuid4().hex, "type": "request", "action": "proxy.profiles",
+            "data": {"populate": populate}}, timeout=10.0)
+        if "error" in response:
+            return {"profiles": [], "error": response["error"]}
+        return response.get("data", {"profiles": [], "error": "Invalid profile discovery response"})
 
     async def get_extension_status(self):
         response = await self.send_request_and_wait(

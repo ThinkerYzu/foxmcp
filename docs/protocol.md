@@ -1,13 +1,32 @@
 # WebSocket Message Protocol
 
-## Connection Constraints
+## Profile connections (protocol ID 3)
 
-**IMPORTANT: Only one extension connection is allowed at a time.**
+Multiple Firefox profiles connect concurrently at `/`. A new profile never closes
+another profile's connection. Every browser request names an explicit `profile_id`;
+window, tab, group, container, bookmark and monitor IDs are local to that profile.
+There is no global current profile or automatic fallback to another profile.
 
-- The FoxMCP server accepts only one active WebSocket connection from a browser extension
-- If a new extension connection arrives at `/`, the existing extension is automatically closed
-- The extension disconnects any existing connection before creating a new one
-- This prevents connection races, resource conflicts, and multiple extension instances
+The extension generates a UUID when its background script starts. That `profile_id`
+survives WebSocket reconnections but changes on Firefox/extension restart, so stale
+object IDs cannot address a newly started browser session.
+
+The server sends `hello` with `data.version` and `data.protocol_version`. Within
+five seconds the extension sends:
+
+```json
+{"type":"hello","data":{"version":"1.5.0","protocol_version":3,"profile_id":"ca2c72af-58e1-4e37-91dd-797131004677"}}
+```
+
+After registration the server sends `{"type":"ready","data":{"profile_id":"..."}}`.
+Malformed, missing or incompatible handshakes close with code 1008 and an update
+instruction. Both extension and server must support ID 3. A duplicate live
+`profile_id` is refused with code 4009; the original stays connected and the
+extension can retry after the original socket closes.
+
+Each socket owns its pending replies and monitors. Disconnecting one profile
+fails only that profile's requests and removes only its monitor records. Replies
+from an old socket cannot complete a request on a new socket. No request is replayed.
 
 ## Discovery and proxy routes
 
@@ -31,7 +50,7 @@ or replace the current extension. Local callers are trusted, as on the ordinary 
 ```json
 {
   "server": "FoxMCP",
-  "protocol_version": 2,
+  "protocol_version": 3,
   "proxy_path": "/proxy",
   "pid": 1234,
   "lifetime": "automatic"
@@ -46,7 +65,12 @@ After upgrading `/proxy`, the server sends the same fields with `"type": "hello"
 Clients send browser requests in the message format below, with a nonempty string
 `id`. An optional `timeout` is a positive finite number of seconds, up to 300;
 the default is 30. `proxy.status` returns `data.status` describing the current
-Firefox connection without sending a command to the extension.
+Firefox connections without sending a command to an extension.
+`proxy.profiles` returns the same `data.profiles` structure as `profiles_list`;
+its `data.populate` boolean defaults to true. Other browser requests require a
+nonempty top-level `profile_id`, carried unchanged through `/proxy`. The ID is
+routing metadata, not part of an action's `data` parameters. Missing or unavailable
+IDs return an error without sending the request to any extension.
 
 The server assigns a fresh ID before forwarding each command to Firefox, then
 restores the originating client's ID in its reply. IDs may coincide across
@@ -65,8 +89,7 @@ The checked protocol ID is `PROTOCOL_VERSION` in `server/browser_proxy.py`,
 exposed as `protocol_version` in discovery and the proxy greeting. It identifies
 the forwarding contract, including the browser API requests and responses
 carried between the extension and MCP server. It is independent of the release
-version in the extension's advisory `hello` announcement. The extension does
-not currently exchange or enforce this protocol ID itself.
+version in the extension's advisory `hello` announcement. Both the extension handshake and local forwarding peers enforce this ID.
 
 Increase the protocol ID whenever an existing extension/server API is modified
 or removed. This includes changes to action names, parameter types, defaults or
@@ -134,34 +157,18 @@ publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
 
 ## Connection version announcement
 
-Immediately after opening the extension WebSocket at `/`, each peer sends its
-own release version:
+The mandatory profile handshake above also carries each peer's release version.
+The extension reads its manifest; the Python server uses `server/version.py`.
+Release-version equality remains advisory, independently of the checked protocol ID:
+compatible protocol-3 peers keep serving tools even when release versions differ.
+The server logs a mismatch and the popup displays it, preserving unsaved settings
+while refreshing. Numeric versions contain one to four dot-separated components
+and at most 64 characters. Invalid or absent release versions remain unavailable;
+they do not bypass or invalidate the mandatory profile/protocol handshake.
 
-```json
-{"type": "hello", "data": {"version": "1.4.0"}}
-```
-
-This is an advisory announcement with no request ID or reply. It precedes browser
-requests and does not add an MCP tool or change HTTP/stdio startup. The extension
-reads its installed manifest; the Python server uses `server/version.py`, checked
-against release metadata by `scripts/check-version.sh`.
-
-Version strings contain one to four dot-separated numeric components and at most
-64 characters (numeric release versions). Exact equality is checked;
-this is a release mismatch notice, not negotiated protocol compatibility. Both
-peers continue serving tools on mismatch. The server logs both versions and asks
-users to update the extension and server together. The popup shows the same
-notice when opened from the FoxMCP toolbar icon and refreshes once per second
-while open, preserving unsaved configuration. A mismatch does not automatically
-open the popup, display a modal dialog or send a browser notification.
-
-Legacy peers may omit `hello`: the popup shows the server version as unavailable,
-and a new server logs an unavailable extension version after five seconds without
-a valid announcement. Malformed version announcements are ignored. An older
-extension ignores the new non-request message; an older server may log it as
-unhandled. No handshake timeout disconnects a peer. Version state resets on each
-connection and disconnect, and messages from superseded extension sockets are
-ignored.
+The popup displays an incompatible-protocol close reason and stops retrying it
+until explicitly reconnected or reconfigured. Transient disconnects retain the
+normal reconnect policy and preserve the running extension's profile ID.
 
 ## Message Structure
 

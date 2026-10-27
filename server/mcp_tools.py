@@ -8,6 +8,7 @@ Licensed under the MIT License - see LICENSE file for details
 """
 
 import asyncio
+import inspect
 import logging
 import uuid
 import os
@@ -321,6 +322,7 @@ class FoxMCPTools:
     # new tool added to any _setup_* method below can be disabled with its group,
     # or enabled on its own, without further work.
     TOOL_GROUPS = {
+        'profiles': '_setup_profile_tools',
         'windows': '_setup_window_tools',
         'tabs': '_setup_tab_tools',
         'containers': '_setup_container_tools',
@@ -418,13 +420,13 @@ class FoxMCPTools:
             self.group_by_tool[fn.__name__] = group
             if group in self.disabled_groups and fn.__name__ not in self.enabled_tools:
                 return fn
-            if describe_more is None:
-                return self.mcp.tool()(fn)
-            # An explicit description replaces FastMCP's own reading of the
-            # docstring, which is its first paragraph; the Args: descriptions
-            # are still read from the docstring either way.
             summary = fn.__doc__.strip().split('\n\n')[0]
-            return self.mcp.tool(description=f"{summary}\n\n{describe_more()}")(fn)
+            if 'profile_id' in inspect.signature(fn).parameters:
+                summary += ("\n\nprofile_id is required: obtain it from profiles_list. "
+                            "All object IDs are local to that profile; never reuse them in another profile.")
+            if describe_more is not None:
+                summary += "\n\n" + describe_more()
+            return self.mcp.tool(description=summary)(fn)
 
         return register
 
@@ -456,11 +458,32 @@ class FoxMCPTools:
             else:
                 logger.info(f"Tool group '{group}' disabled - not registering its tools")
 
+    async def _send(self, profile_id, request, timeout=30.0):
+        return await self.websocket_server.send_request_and_wait(
+            {**request, "profile_id": profile_id}, timeout=timeout)
+
+    def _setup_profile_tools(self):
+        """Profile discovery is independent of the other optional tool groups."""
+        @self._tool()
+        async def profiles_list(populate: bool = True) -> dict:
+            """List all connected Firefox profiles, their real names and windows.
+
+            Use profile_id explicitly in every browser command. Window, tab, group,
+            container and monitor IDs belong to that profile only. Inspect window
+            tabs (titles and URLs) to choose the correct target. A profile_id survives
+            socket reconnection but changes when Firefox or its extension restarts.
+            Unavailable names and per-profile window errors are reported separately.
+
+            Args:
+                populate: Include each window's tabs with titles and URLs.
+            """
+            return await self.websocket_server.list_profiles(populate=populate)
+
     def _setup_window_tools(self):
         """Setup window management tools"""
 
         @self._tool()
-        async def list_windows(populate: bool = True) -> str:
+        async def list_windows(profile_id: str, populate: bool = True) -> str:
             """
             List all browser windows
             
@@ -478,7 +501,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error getting windows: {response['error']}"
@@ -489,7 +512,7 @@ class FoxMCPTools:
                 if not windows:
                     return "No windows found"
 
-                result = f"Browser windows ({len(windows)} found):\n"
+                result = f"Browser windows ({len(windows)} found): [profile {profile_id}]\n"
                 for window in windows:
                     state_info = f"state: {window.get('state', 'unknown')}"
                     focused_info = " (focused)" if window.get("focused") else ""
@@ -501,7 +524,7 @@ class FoxMCPTools:
             return "Unable to retrieve windows"
 
         @self._tool()
-        async def get_window(window_id: int, populate: bool = True) -> str:
+        async def get_window(profile_id: str, window_id: int, populate: bool = True) -> str:
             """
             Get information about a specific window
             
@@ -520,7 +543,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error getting window {window_id}: {response['error']}"
@@ -548,7 +571,7 @@ class FoxMCPTools:
         # extension has. So both calls evaluate the same expression. A separate tool
         # shipped until 1.2.0 and always returned the same window as this one.
         @self._tool()
-        async def get_current_window(populate: bool = True) -> str:
+        async def get_current_window(profile_id: str, populate: bool = True) -> str:
             """Get the current active window, which is also the last focused window
 
             Args:
@@ -562,7 +585,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error getting current window: {response['error']}"
@@ -581,6 +604,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def create_window(
+            profile_id: str,
             url: Optional[str] = None,
             window_type: str = "normal",
             state: str = "normal", 
@@ -626,7 +650,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error creating window: {response['error']}"
@@ -643,7 +667,7 @@ class FoxMCPTools:
             return "Window created but unable to retrieve details"
 
         @self._tool() 
-        async def close_window(window_id: int) -> str:
+        async def close_window(profile_id: str, window_id: int) -> str:
             """
             Close a browser window
             
@@ -661,7 +685,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error closing window {window_id}: {response['error']}"
@@ -675,7 +699,7 @@ class FoxMCPTools:
             return f"Unable to close window {window_id}"
 
         @self._tool()
-        async def focus_window(window_id: int) -> str:
+        async def focus_window(profile_id: str, window_id: int) -> str:
             """
             Bring a window to front and focus it
             
@@ -693,7 +717,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error focusing window {window_id}: {response['error']}"
@@ -708,6 +732,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def update_window(
+            profile_id: str,
             window_id: int,
             state: Optional[str] = None,
             focused: Optional[bool] = None,
@@ -755,7 +780,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error updating window {window_id}: {response['error']}"
@@ -774,12 +799,12 @@ class FoxMCPTools:
     def _setup_container_tools(self):
         """Container discovery and profile resources, independent of client lifetime."""
         @self._tool()
-        async def containers_list() -> str:
+        async def containers_list(profile_id: str) -> str:
             """List Firefox containers as JSON with opaque cookie_store_id, name, color
             and icon; default_cookie_store_id identifies normal browsing separately.
             IDs belong to the connected profile. Names may repeat.
             """
-            response = await self.websocket_server.send_request_and_wait({
+            response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", "action": "containers.list",
                 "data": {}, "timestamp": datetime.now().isoformat(),
             })
@@ -788,8 +813,8 @@ class FoxMCPTools:
                 return f"Error listing containers: {error}"
             return json.dumps(response.get("data", {}))
 
-        async def container_request(action, data):
-            response = await self.websocket_server.send_request_and_wait({
+        async def container_request(profile_id, action, data):
+            response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", "action": action,
                 "data": data, "timestamp": datetime.now().isoformat(),
             })
@@ -814,7 +839,7 @@ class FoxMCPTools:
             return value
 
         @self._tool()
-        async def containers_create(name: str, color: str = "blue", icon: str = "fingerprint") -> str:
+        async def containers_create(profile_id: str, name: str, color: str = "blue", icon: str = "fingerprint") -> str:
             """Create a persistent Firefox container. Return JSON container metadata.
             Duplicate names are permitted. Firefox validates color and icon.
             """
@@ -824,10 +849,10 @@ class FoxMCPTools:
                 data = properties(name, color, icon)
             except ValueError as error:
                 return f"Error: INVALID_PARAMETER: {error}"
-            return await container_request("containers.create", data)
+            return await container_request(profile_id, "containers.create", data)
 
         @self._tool()
-        async def containers_update(cookie_store_id: str, name: Optional[str] = None,
+        async def containers_update(profile_id: str, cookie_store_id: str, name: Optional[str] = None,
                                     color: Optional[str] = None, icon: Optional[str] = None) -> str:
             """Update a named Firefox container, preserving its ID and omitted properties.
             Supply at least one of name, color or icon. Return JSON container metadata.
@@ -839,10 +864,10 @@ class FoxMCPTools:
                     raise ValueError("Supply at least one of name, color or icon")
             except ValueError as error:
                 return f"Error: INVALID_PARAMETER: {error}"
-            return await container_request("containers.update", {"cookieStoreId": store, **data})
+            return await container_request(profile_id, "containers.update", {"cookieStoreId": store, **data})
 
         @self._tool()
-        async def containers_remove(cookie_store_id: str) -> str:
+        async def containers_remove(profile_id: str, cookie_store_id: str) -> str:
             """Remove a named Firefox container and its stored site data. Refuses open
             tabs with CONTAINER_IN_USE and tab_ids. Close tabs explicitly first.
             The check cannot exclude races with browser UI. No automatic cleanup.
@@ -851,14 +876,14 @@ class FoxMCPTools:
                 store = named_store(cookie_store_id)
             except ValueError as error:
                 return f"Error: INVALID_PARAMETER: {error}"
-            return await container_request("containers.remove", {"cookieStoreId": store})
+            return await container_request(profile_id, "containers.remove", {"cookieStoreId": store})
 
     def _setup_tab_tools(self):
         """Setup tab management tools"""
 
         # Tab List Tool
         @self._tool()
-        async def tabs_list(window_id: Optional[Union[int, str]] = None,
+        async def tabs_list(profile_id: str, window_id: Optional[Union[int, str]] = None,
                             cookie_store_id: Optional[str] = None) -> str:
             """
             List open browser tabs, optionally filtered by window and cookie store
@@ -908,7 +933,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             error = browser_tool_error(response)
             if error:
@@ -932,7 +957,7 @@ class FoxMCPTools:
                 # that match into pytest.skip, which would quietly stop testing rather than
                 # fail if the pattern broke.
                 scope = f" in window {window_id}" if window_id else ""
-                result = f"Open tabs{scope} ({len(tabs)} found):\n"
+                result = f"Open tabs{scope} ({len(tabs)} found): [profile {profile_id}]\n"
                 for tab in tabs:
                     active = " (active)" if tab.get("active") else ""
                     pinned = " (pinned)" if tab.get("pinned") else ""
@@ -945,6 +970,7 @@ class FoxMCPTools:
         # Tab Create Tool
         @self._tool()
         async def tabs_create(
+            profile_id: str,
             url: str,
             active: bool = True,
             pinned: bool = False,
@@ -988,7 +1014,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             error = browser_tool_error(response)
             if error:
@@ -1007,7 +1033,7 @@ class FoxMCPTools:
 
         # Tab Close Tool
         @self._tool()
-        async def tabs_close(tab_id: int) -> str:
+        async def tabs_close(profile_id: str, tab_id: int) -> str:
             """Close a browser tab
 
             Args:
@@ -1023,7 +1049,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error closing tab: {response['error']}"
@@ -1038,7 +1064,7 @@ class FoxMCPTools:
 
         # Tab Switch Tool
         @self._tool()
-        async def tabs_switch(tab_id: int) -> str:
+        async def tabs_switch(profile_id: str, tab_id: int) -> str:
             """Switch to a specific browser tab
 
             Args:
@@ -1054,7 +1080,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error switching to tab: {response['error']}"
@@ -1069,6 +1095,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_group(
+            profile_id: str,
             tab_ids: Union[int, str, List[Union[int, str]]],
             group_id: Optional[Union[int, str]] = None,
             title: Optional[str] = None,
@@ -1102,7 +1129,7 @@ class FoxMCPTools:
             except ValueError as error:
                 return f"Error: {error}"
 
-            response = await self.websocket_server.send_request_and_wait({
+            response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", "action": "tabs.group",
                 "data": data, "timestamp": datetime.now().isoformat()
             })
@@ -1121,6 +1148,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_ungroup(
+            profile_id: str,
             tab_ids: Union[int, str, List[Union[int, str]]]
         ) -> str:
             """Remove tabs from their tab group
@@ -1137,7 +1165,7 @@ class FoxMCPTools:
             except ValueError as error:
                 return f"Error: {error}"
 
-            response = await self.websocket_server.send_request_and_wait({
+            response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", "action": "tabs.ungroup",
                 "data": data, "timestamp": datetime.now().isoformat()
             })
@@ -1151,6 +1179,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_groups_update(
+            profile_id: str,
             group_id: Union[int, str],
             title: Optional[str] = None,
             color: Optional[str] = None,
@@ -1176,7 +1205,7 @@ class FoxMCPTools:
             except ValueError as error:
                 return f"Error: {error}"
 
-            response = await self.websocket_server.send_request_and_wait({
+            response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", "action": "tabGroups.update",
                 "data": data, "timestamp": datetime.now().isoformat()
             })
@@ -1191,6 +1220,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_groups_query(
+            profile_id: str,
             window_id: Optional[Union[int, str]] = None,
             title: Optional[str] = None,
             color: Optional[str] = None,
@@ -1215,7 +1245,7 @@ class FoxMCPTools:
             except ValueError as error:
                 return f"Error: {error}"
 
-            response = await self.websocket_server.send_request_and_wait({
+            response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", "action": "tabGroups.query",
                 "data": data, "timestamp": datetime.now().isoformat()
             })
@@ -1240,6 +1270,7 @@ class FoxMCPTools:
         # Tab Move Tool
         @self._tool()
         async def tabs_move(
+            profile_id: str,
             tab_ids: Union[int, str, List[Union[int, str]]],
             window_id: Optional[Union[int, str]] = None,
             index: int = -1
@@ -1303,7 +1334,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error moving tabs: {response['error']}"
@@ -1330,6 +1361,7 @@ class FoxMCPTools:
         # Tab Screenshot Tool
         @self._tool()
         async def tabs_capture_screenshot(
+            profile_id: str,
             filename: Optional[str] = None,
             window_id: Optional[int] = None,
             format: str = "png",
@@ -1378,7 +1410,7 @@ class FoxMCPTools:
                     "timestamp": datetime.now().isoformat()
                 }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error capturing screenshot: {response['error']}"
@@ -1456,6 +1488,7 @@ class FoxMCPTools:
         # History Query Tool
         @self._tool()
         async def history_query(
+            profile_id: str,
             query: str,
             max_results: int = 200,
             start_time: Optional[str] = None,
@@ -1482,7 +1515,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error querying history: {response['error']}"
@@ -1506,7 +1539,7 @@ class FoxMCPTools:
 
         # Get Recent History Tool
         @self._tool()
-        async def history_get_recent(count: int = 10) -> str:
+        async def history_get_recent(profile_id: str, count: int = 10) -> str:
             """Get recent browser history
 
             Args:
@@ -1522,7 +1555,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             # Debug logging for troubleshooting
             #
@@ -1552,7 +1585,7 @@ class FoxMCPTools:
 
         # Delete History Item Tool
         @self._tool()
-        async def history_delete_item(url: str) -> str:
+        async def history_delete_item(profile_id: str, url: str) -> str:
             """Delete a specific history item
 
             Args:
@@ -1568,7 +1601,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error deleting history item: {response['error']}"
@@ -1586,7 +1619,7 @@ class FoxMCPTools:
 
         # List Bookmarks Tool
         @self._tool()
-        async def bookmarks_list(folder_id: Optional[str] = None) -> str:
+        async def bookmarks_list(profile_id: str, folder_id: Optional[str] = None) -> str:
             """List browser bookmarks
 
             Folders are marked 📁 and bookmarks 🔖. Every line carries its own ID, its
@@ -1619,7 +1652,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error listing bookmarks: {response['error']}"
@@ -1648,7 +1681,7 @@ class FoxMCPTools:
 
         # Search Bookmarks Tool
         @self._tool()
-        async def bookmarks_search(query: str) -> str:
+        async def bookmarks_search(profile_id: str, query: str) -> str:
             """Search browser bookmarks by title or URL
 
             Matches bookmarks only — **folders are never returned**, so a folder cannot be
@@ -1676,7 +1709,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error searching bookmarks: {response['error']}"
@@ -1700,6 +1733,7 @@ class FoxMCPTools:
         # Create Bookmark Tool
         @self._tool()
         async def bookmarks_create(
+            profile_id: str,
             title: str,
             url: str,
             parent_id: Optional[str] = None
@@ -1724,7 +1758,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error creating bookmark: {response['error']}"
@@ -1741,6 +1775,7 @@ class FoxMCPTools:
         # Create Bookmark Folder Tool
         @self._tool()
         async def bookmarks_create_folder(
+            profile_id: str,
             title: str,
             parent_id: Optional[str] = None
         ) -> str:
@@ -1762,7 +1797,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error creating folder: {response['error']}"
@@ -1779,6 +1814,7 @@ class FoxMCPTools:
         # Update Bookmark Tool
         @self._tool()
         async def bookmarks_update(
+            profile_id: str,
             bookmark_id: str,
             title: Optional[str] = None,
             url: Optional[str] = None
@@ -1805,7 +1841,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error updating bookmark: {response['error']}"
@@ -1822,6 +1858,7 @@ class FoxMCPTools:
         # Move Bookmark Tool
         @self._tool()
         async def bookmarks_move(
+            profile_id: str,
             bookmark_id: str,
             parent_id: Optional[str] = None,
             index: Optional[int] = None
@@ -1868,7 +1905,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error moving bookmark: {response['error']}"
@@ -1885,7 +1922,7 @@ class FoxMCPTools:
 
         # Delete Bookmark Tool
         @self._tool()
-        async def bookmarks_delete(bookmark_id: str) -> str:
+        async def bookmarks_delete(profile_id: str, bookmark_id: str) -> str:
             """Delete a bookmark
 
             Args:
@@ -1901,7 +1938,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error deleting bookmark: {response['error']}"
@@ -1935,7 +1972,7 @@ class FoxMCPTools:
             tab_id: int = Field(description="ID of the tab to navigate back in")
 
         @self._tool()
-        async def navigation_back(params: NavigationBackParams) -> str:
+        async def navigation_back(profile_id: str, params: NavigationBackParams) -> str:
             """Navigate back in browser history for a tab"""
             request = {
                 "id": str(uuid.uuid4()),
@@ -1947,7 +1984,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error navigating back: {response['error']}"
@@ -1966,7 +2003,7 @@ class FoxMCPTools:
             tab_id: int = Field(description="ID of the tab to navigate forward in")
 
         @self._tool()
-        async def navigation_forward(params: NavigationForwardParams) -> str:
+        async def navigation_forward(profile_id: str, params: NavigationForwardParams) -> str:
             """Navigate forward in browser history for a tab"""
             request = {
                 "id": str(uuid.uuid4()),
@@ -1978,7 +2015,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error navigating forward: {response['error']}"
@@ -1993,7 +2030,7 @@ class FoxMCPTools:
 
         # Reload Page Tool
         @self._tool()
-        async def navigation_reload(tab_id: int, bypass_cache: bool = False) -> str:
+        async def navigation_reload(profile_id: str, tab_id: int, bypass_cache: bool = False) -> str:
             """Reload a page in a tab
 
             Returns as soon as the reload is issued, not when the page has
@@ -2015,7 +2052,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error reloading page: {response['error']}"
@@ -2031,7 +2068,7 @@ class FoxMCPTools:
 
         # Go to URL Tool
         @self._tool()
-        async def navigation_go_to_url(tab_id: int, url: str) -> str:
+        async def navigation_go_to_url(profile_id: str, tab_id: int, url: str) -> str:
             """Navigate to a specific URL in a tab
 
             Args:
@@ -2049,7 +2086,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error navigating to URL: {response['error']}"
@@ -2067,6 +2104,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def content_load_file(
+            profile_id: str,
             tab_id: int, path: str, mime_type: Optional[str] = None
         ) -> str:
             """Load a server-local file for website uploads/imports; does not submit it.
@@ -2093,7 +2131,7 @@ class FoxMCPTools:
                 file_id = str(uuid.uuid4())
                 logger.info("Loading local file %r (%s bytes, %s) into tab %s",
                             metadata["name"], metadata["size"], metadata["type"], tab_id)
-                response = await self.websocket_server.send_request_and_wait({
+                response = await self._send(profile_id, {
                     "id": str(uuid.uuid4()), "type": "request",
                     "action": "content.load_file",
                     "data": {"tabId": tab_id, "fileId": file_id,
@@ -2116,7 +2154,7 @@ class FoxMCPTools:
 
         # Get Page Text Tool
         @self._tool()
-        async def content_get_text(tab_id: int, max_length: Optional[int] = None) -> str:
+        async def content_get_text(profile_id: str, tab_id: int, max_length: Optional[int] = None) -> str:
             """Get text content from a tab's page
 
             Args:
@@ -2133,7 +2171,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error getting page text: {response['error']}"
@@ -2160,7 +2198,7 @@ class FoxMCPTools:
 
         # Get Page HTML Tool
         @self._tool()
-        async def content_get_html(tab_id: int) -> str:
+        async def content_get_html(profile_id: str, tab_id: int) -> str:
             """Get HTML content from a tab's page
 
             Args:
@@ -2176,7 +2214,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error getting page HTML: {response['error']}"
@@ -2198,7 +2236,7 @@ class FoxMCPTools:
 
         # Execute Script Tool
         @self._tool()
-        async def content_execute_script(tab_id: int, code: str) -> str:
+        async def content_execute_script(profile_id: str, tab_id: int, code: str) -> str:
             """Execute JavaScript code in a tab
 
             Args:
@@ -2216,7 +2254,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return f"Error executing script: {response['error']}"
@@ -2238,6 +2276,7 @@ class FoxMCPTools:
         # Execute Predefined Script Tool
         @self._tool(describe_more=lambda: describe_predefined_scripts(os.environ.get('FOXMCP_EXT_SCRIPTS')))
         async def content_execute_predefined(
+            profile_id: str,
             tab_id: int,
             script_name: str,
             script_args: str = ""
@@ -2377,7 +2416,7 @@ class FoxMCPTools:
                     "timestamp": datetime.now().isoformat()
                 }
 
-                response = await self.websocket_server.send_request_and_wait(request)
+                response = await self._send(profile_id, request)
 
                 if "error" in response:
                     logger.warning(
@@ -2417,7 +2456,7 @@ class FoxMCPTools:
                 logger.exception(f"Predefined script {script_name!r} raised an unexpected error")
                 return f"Unexpected error running script '{script_name}': {e}"
 
-    def _remember_monitor_owner(self, monitor_id):
+    def _remember_monitor_owner(self, profile_id, monitor_id, connection_id):
         """Tie a monitor just started to the MCP client that asked for it
 
         The server stops a client's monitors when that client disconnects, and
@@ -2441,13 +2480,14 @@ class FoxMCPTools:
             # does. register_monitor records its own marker for that.
             session_id = None
 
-        register(monitor_id, session_id)
+        register(profile_id, monitor_id, session_id, connection_id)
 
     def _setup_request_monitoring_tools(self):
         """Setup web request monitoring tools"""
 
         @self._tool()
         async def requests_start_monitoring(
+            profile_id: str,
             url_patterns: List[str],
             options: Optional[Dict[str, Any]] = None,
             tab_id: Optional[int] = None
@@ -2504,13 +2544,13 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return json.dumps({"error": f"Failed to start monitoring: {response['error']}"})
 
             if response.get("type") == "response" and "data" in response:
-                self._remember_monitor_owner(response["data"].get("monitor_id"))
+                self._remember_monitor_owner(profile_id, response["data"].get("monitor_id"), response.get("connection_id"))
                 return json.dumps(response["data"])
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
@@ -2520,6 +2560,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def requests_stop_monitoring(
+            profile_id: str,
             monitor_id: str,
             drain_timeout: int = 5
         ) -> str:
@@ -2544,7 +2585,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return json.dumps({"error": f"Failed to stop monitoring: {response['error']}"})
@@ -2552,7 +2593,7 @@ class FoxMCPTools:
             if response.get("type") == "response" and "data" in response:
                 forget = getattr(self.websocket_server, 'forget_monitor', None)
                 if forget:
-                    forget(monitor_id)
+                    forget(profile_id, monitor_id, response.get("connection_id"))
                 return json.dumps(response["data"])
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
@@ -2561,7 +2602,7 @@ class FoxMCPTools:
             return json.dumps({"error": "Unable to stop monitoring"})
 
         @self._tool()
-        async def requests_list_captured(monitor_id: str) -> str:
+        async def requests_list_captured(profile_id: str, monitor_id: str) -> str:
             """
             List all captured request summaries from a monitoring session
 
@@ -2584,7 +2625,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return json.dumps({"error": f"Failed to list captured requests: {response['error']}"})
@@ -2599,6 +2640,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def requests_get_content(
+            profile_id: str,
             monitor_id: str,
             request_id: str,
             include_binary: bool = False,
@@ -2641,7 +2683,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self.websocket_server.send_request_and_wait(request)
+            response = await self._send(profile_id, request)
 
             if "error" in response:
                 return json.dumps({"error": f"Failed to get request content: {response['error']}"})
