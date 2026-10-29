@@ -194,6 +194,11 @@ class DirectMCPTestClient:
             try:
                 # Call the tool function directly with the arguments
                 # FastMCP tools have a fn attribute with the actual function
+                arguments = dict(arguments)
+                if 'profile_id' in tool.parameters.get('required', []) and 'profile_id' not in arguments:
+                    profiles = getattr(self.mcp_tools.websocket_server, 'profiles', {})
+                    assert len(profiles) <= 1, 'Test must explicitly select a Firefox profile'
+                    arguments['profile_id'] = next(iter(profiles), 'unavailable-test-profile')
                 result = await tool.fn(**arguments)
                 
                 return {

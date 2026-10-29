@@ -10,7 +10,8 @@ h1 { font-size: 20px; }
 .status-indicator.connected { background: var(--success); }
 .status-indicator[data-state="connecting"],
 .status-indicator[data-state="waiting_retry"] { background: var(--warning); }
-.status-indicator[data-state="configuration_error"] { background: var(--error); }
+.status-indicator[data-state="configuration_error"],
+.status-indicator[data-state="protocol_error"] { background: var(--error); }
 .input-shell { height: 42px; }
 .retry-field { margin-top: 20px; }
 .configuration-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; }

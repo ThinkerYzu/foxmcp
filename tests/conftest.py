@@ -137,9 +137,9 @@ async def server_with_extension():
 
         try:
             # Set up Firefox with extension and start it
-            success = firefox.setup_and_start_firefox(headless=True)
+            success = await asyncio.to_thread(firefox.setup_and_start_firefox, headless=True)
             if not success:
-                pytest.skip("Firefox setup or extension installation failed")
+                pytest.fail("Firefox setup or extension installation failed")
 
             # Wait for extension to connect using awaitable mechanism
             connected = await firefox.async_wait_for_extension_connection(
@@ -148,7 +148,7 @@ async def server_with_extension():
 
             # Verify connection
             if not connected:
-                pytest.skip("Extension did not connect to server")
+                pytest.fail("Extension did not connect to server")
 
             # Return a dict that also acts like a tuple for backward compatibility
             # This allows both patterns:

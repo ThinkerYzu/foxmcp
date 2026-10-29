@@ -98,7 +98,10 @@ const FoxMCPSettingsUI = {
     const protocol = Number.isSafeInteger(connection.protocolVersion) && connection.protocolVersion > 0
       ? connection.protocolVersion : 'unavailable';
     element.dataset.state = '';
-    if (!connection.connected) {
+    if (connection.connectionError) {
+      element.dataset.state = 'mismatch';
+      element.textContent = connection.connectionError;
+    } else if (!connection.connected) {
       element.textContent = `Extension ${extension}; server disconnected.`;
     } else if (!server) {
       element.textContent = `Extension ${extension}; server version unavailable. Older servers may not report a version. Update both together to check versions.`;
@@ -113,6 +116,7 @@ const FoxMCPSettingsUI = {
 
   connectionText(status) {
     if (status.state === 'configuration_error') return `Configuration error: ${status.configError}`;
+    if (status.connectionError) return `Connection error: ${status.connectionError}`;
     if (status.connected) return 'Connected';
     if (status.state === 'connecting') return 'Connecting…';
     if (status.state === 'waiting_retry') {

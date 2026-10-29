@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import test_imports
+from test_config import profile_connection
 
 
 @pytest.fixture
@@ -43,7 +44,7 @@ def upload_page():
 
 
 async def browser_request(server, action, data, allow_loading=False):
-    response = await server.send_request_and_wait({
+    response = await profile_connection(server).send_request_and_wait({
         "id": str(uuid.uuid4()), "type": "request", "action": action, "data": data
     })
     if allow_loading and "Missing host permission for the tab" in response.get("data", {}).get("message", ""):
@@ -78,12 +79,12 @@ async def test_load_file_then_assign_with_predefined_script(
     script_tool = await server.mcp_tools.mcp.get_tool("content_execute_predefined")
     monkeypatch.setenv("FOXMCP_EXT_SCRIPTS", str(Path(__file__).resolve().parents[2] / "predefined-ex"))
     try:
-        result = json.loads(await tool.fn(tab_id=tab_id, path=str(source), mime_type="application/x-foxmcp-test"))
+        result = json.loads(await tool.fn(profile_id=profile_connection(server).profile_id, tab_id=tab_id, path=str(source), mime_type="application/x-foxmcp-test"))
         assert result["name"] == source.name
         assert result["size"] == len(contents)
         assert result["type"] == "application/x-foxmcp-test"
         assert str(tmp_path) not in json.dumps(result)
-        assigned = await script_tool.fn(
+        assigned = await script_tool.fn(profile_id=profile_connection(server).profile_id,
             tab_id=tab_id, script_name="set-file-input.py",
             script_args=json.dumps([result["file_id"], "#upload"])
         )
@@ -120,7 +121,7 @@ async def test_file_handle_is_tab_local_and_navigation_discards_it(
     source.touch()
     try:
         tool = await server.mcp_tools.mcp.get_tool("content_load_file")
-        result = json.loads(await tool.fn(tab_id=tab_id, path=str(source)))
+        result = json.loads(await tool.fn(profile_id=profile_connection(server).profile_id, tab_id=tab_id, path=str(source)))
         assert result["type"] == "text/plain" and result["size"] == 0
         file_id = json.dumps(result["file_id"])
         script = f"Boolean(globalThis.foxmcpFiles?.has({file_id}))"
@@ -146,7 +147,7 @@ async def test_file_handle_is_tab_local_and_navigation_discards_it(
               return true;
             })()'''
         })
-        expiring = json.loads(await tool.fn(tab_id=tab_id, path=str(source)))
+        expiring = json.loads(await tool.fn(profile_id=profile_connection(server).profile_id, tab_id=tab_id, path=str(source)))
         await browser_request(server, "content.execute_script", {
             "tabId": tab_id, "script": "globalThis.setTimeout = foxmcpOriginalTimeout; true"
         })
@@ -195,7 +196,7 @@ async def test_navigation_during_transfer_rejects_delivery(
 
     monkeypatch.setattr(server.file_transfers, "grant", grant)
     tool = await server.mcp_tools.mcp.get_tool("content_load_file")
-    task = asyncio.create_task(tool.fn(tab_id=tab_id, path=str(source)))
+    task = asyncio.create_task(tool.fn(profile_id=profile_connection(server).profile_id, tab_id=tab_id, path=str(source)))
     try:
         assert await asyncio.to_thread(started.wait, 10)
         await browser_request(server, "navigation.go_to_url", {"tabId": tab_id, "url": upload_page + "?during"})

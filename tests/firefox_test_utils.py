@@ -62,12 +62,13 @@ class FirefoxTestManager:
     _cache_dir = None
     _max_cache_size = 10
 
-    def __init__(self, firefox_path=None, test_port=None, coordination_file=None):
+    def __init__(self, firefox_path=None, test_port=None, coordination_file=None, cache_profiles=True):
         self.firefox_path = firefox_path or os.environ.get('FIREFOX_PATH', 'firefox')
         self.test_port = test_port or get_firefox_test_port()
         self.coordination_file = coordination_file
         self.profile_dir = None
         self.firefox_process = None
+        self.cache_profiles = cache_profiles
 
     @classmethod
     def _get_cache_dir(cls):
@@ -186,6 +187,20 @@ class FirefoxTestManager:
         stamp = os.path.join(target_dir, 'compatibility.ini')
         if os.path.exists(stamp):
             os.remove(stamp)
+
+        # A cached profile is restored under a different temporary path. Firefox's
+        # addon cache otherwise keeps pointing at the deleted original XPI and
+        # silently starts without the extension.
+        metadata = Path(target_dir) / 'extensions.json'
+        if metadata.exists():
+            data = json.loads(metadata.read_text(encoding='utf-8'))
+            for addon in data.get('addons', []):
+                if addon.get('id') == 'foxmcp@codemud.org':
+                    addon['path'] = str(Path(target_dir) / 'extensions/foxmcp@codemud.org.xpi')
+            metadata.write_text(json.dumps(data), encoding='utf-8')
+        startup = Path(target_dir) / 'addonStartup.json.lz4'
+        if startup.exists():
+            startup.unlink()
 
     def _compress_profile(self, profile_dir, output_path):
         """Compress profile directory to .tar.gz file"""
@@ -314,7 +329,7 @@ class FirefoxTestManager:
         """Create or retrieve cached Firefox profile configured for testing"""
 
         # Check cache first
-        cached_profile = self._get_cached_profile(self.test_port)
+        cached_profile = self._get_cached_profile(self.test_port) if self.cache_profiles else None
         if cached_profile:
             self.profile_dir = cached_profile
             print(f"✓ Using cached profile for port {self.test_port}: {self.profile_dir}")
@@ -322,7 +337,8 @@ class FirefoxTestManager:
 
         # Create new profile if not cached
         self.profile_dir = self._create_new_profile()
-        self._cache_profile(self.test_port, self.profile_dir)
+        if self.cache_profiles:
+            self._cache_profile(self.test_port, self.profile_dir)
         print(f"✓ Created and cached new profile for port {self.test_port}: {self.profile_dir}")
         return self.profile_dir
 
@@ -896,6 +912,19 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
                 return False
             else:
                 raise
+
+    def restart_firefox(self, headless=True):
+        """Restart the same disposable profile, preserving its Firefox metadata."""
+        if not self.profile_dir:
+            raise RuntimeError("Set up a Firefox test profile before restarting")
+        if self.firefox_process and self.firefox_process.poll() is None:
+            self.firefox_process.terminate()
+            try:
+                self.firefox_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.firefox_process.kill()
+                self.firefox_process.wait(timeout=5)
+        return self._start_firefox(headless=headless)
 
     def __enter__(self):
         """Context manager entry"""

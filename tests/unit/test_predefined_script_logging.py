@@ -33,7 +33,7 @@ class StubWebSocketServer:
     def __init__(self):
         self.sent_request = None
 
-    async def send_request_and_wait(self, request):
+    async def send_request_and_wait(self, request, timeout=30.0):
         self.sent_request = request
         return {
             "type": "response",
@@ -48,7 +48,7 @@ def run_script():
 
     async def call(**kwargs):
         tool = await tools.mcp.get_tool("content_execute_predefined")
-        return await tool.fn(**kwargs)
+        return await tool.fn(profile_id="test-profile", **kwargs)
 
     return call
 

@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timedelta
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
 from server.mcp_tools import FoxMCPTools
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
@@ -63,7 +64,7 @@ class TestHistoryMCPIntegration:
         
         # Test that both MCP and WebSocket servers are running
         assert server.mcp_tools is not None
-        assert server.extension_connection is not None
+        assert server.profiles
         
         # Test WebSocket layer directly with history request
         request = {
@@ -75,7 +76,7 @@ class TestHistoryMCPIntegration:
         }
         
         # This simulates what an MCP tool would do
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         
         # Verify integration works
         assert "error" not in response
@@ -99,7 +100,7 @@ class TestHistoryMCPIntegration:
         assert server.start_mcp == True  # MCP was enabled for this test
         
         # Test that WebSocket connection works (extension connected)
-        assert server.extension_connection is not None
+        assert server.profiles
         
         # Test that MCP tools were initialized
         assert server.mcp_tools is not None
@@ -114,7 +115,7 @@ class TestHistoryMCPIntegration:
             "timestamp": datetime.now().isoformat()
         }
         
-        response = await server.send_request_and_wait(request, timeout=10.0)
+        response = await profile_connection(server).send_request_and_wait(request, timeout=10.0)
         assert "error" not in response
         
         print(f"✓ Dual architecture verified:")
@@ -138,7 +139,7 @@ class TestHistoryMCPIntegration:
         # Test 1: Call history_query through MCP tool
         print("\n🔍 Testing history_query MCP tool...")
         history_query = (await mcp_tools.mcp.get_tool('history_query')).fn
-        query_result = await history_query(
+        query_result = await history_query(profile_id=profile_connection(server).profile_id,
             query="",
             max_results=5
         )
@@ -178,7 +179,7 @@ class TestHistoryMCPIntegration:
         # Test 2: Call history_get_recent through MCP tool
         print("\n🔍 Testing history_get_recent MCP tool...")
         history_get_recent = (await mcp_tools.mcp.get_tool('history_get_recent')).fn
-        recent_result = await history_get_recent(
+        recent_result = await history_get_recent(profile_id=profile_connection(server).profile_id,
             count=5
         )
 

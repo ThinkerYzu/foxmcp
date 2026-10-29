@@ -136,7 +136,7 @@ jobs:
           import asyncio
           from fastmcp import Client
 
-          EXPECTED = 45
+          EXPECTED = 46
 
           async def main():
               async with Client("http://localhost:13000/mcp/") as client:
@@ -164,7 +164,7 @@ jobs:
           async def main():
               async with Client("http://localhost:13001/mcp/") as client:
                   names = {tool.name for tool in await client.list_tools()}
-                  assert len(names) == 35, f"expected 35 tools, got {len(names)}"
+                  assert len(names) == 36, f"expected 36 tools, got {len(names)}"
                   assert not [n for n in names if n.startswith(("bookmarks_", "history_"))]
                   assert "tabs_list" in names
 
@@ -181,7 +181,7 @@ jobs:
           from fastmcp import Client
           from fastmcp.client.transports import PythonStdioTransport
 
-          EXPECTED = 45
+          EXPECTED = 46
 
           async def main():
               transport = PythonStdioTransport(
@@ -195,8 +195,8 @@ jobs:
 
                   # Reaches the bridge and comes back as a result rather than a
                   # protocol error, which is what a stray write to stdout would be.
-                  result = await client.call_tool("tabs_list", {})
-                  assert "No extension connection" in result.content[0].text
+                  result = await client.call_tool("tabs_list", {"profile_id": "unavailable-profile"})
+                  assert "profile is not connected" in result.content[0].text
 
           asyncio.run(main())
           PY
@@ -218,8 +218,8 @@ jobs:
           async def main():
               async with Client("http://localhost:13002/mcp/") as client:
                   names = {tool.name for tool in await client.list_tools()}
-                  # 45 tools minus 10 tab tools, plus the enabled screenshot.
-                  assert len(names) == 36, f"expected 36 tools, got {len(names)}"
+                  # 46 tools minus 10 tab tools, plus the enabled screenshot.
+                  assert len(names) == 37, f"expected 37 tools, got {len(names)}"
                   assert "tabs_capture_screenshot" in names
                   assert not [n for n in names
                               if n.startswith("tabs_") and n != "tabs_capture_screenshot"]

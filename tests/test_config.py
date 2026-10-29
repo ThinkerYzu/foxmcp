@@ -56,15 +56,79 @@ def _get_test_ports_dict():
 
 TEST_PORTS = _get_test_ports_dict()
 
+# Only test clients use this map, to explicitly address their simulated peer.
+connected_test_profiles = {}
+
+
+class TestExtensionConnection:
+    """A simulated extension with the real profile handshake and server greeting."""
+    __test__ = False
+
+    def __init__(self, uri, profile_id=None, **kwargs):
+        import uuid
+        from urllib.parse import urlsplit
+        self.uri, self.kwargs = uri, kwargs
+        self.profile_id = profile_id or str(uuid.uuid4())
+        self.port = urlsplit(uri).port
+        self.greeting = None
+
+    async def connect(self):
+        import asyncio
+        import json
+        from server.browser_proxy import PROTOCOL_VERSION
+        from server.version import VERSION
+        self.socket = await websockets.connect(self.uri, additional_headers={
+            'Origin': EXTENSION_TEST_ORIGIN}, **self.kwargs)
+        self.greeting = await asyncio.wait_for(self.socket.recv(), 5)
+        await self.socket.send(json.dumps({'type': 'hello', 'data': {
+            'version': VERSION, 'protocol_version': PROTOCOL_VERSION,
+            'profile_id': self.profile_id}}))
+        ready = json.loads(await asyncio.wait_for(self.socket.recv(), 5))
+        assert ready['type'] == 'ready', ready
+        connected_test_profiles.setdefault(self.port, set()).add(self.profile_id)
+        return self
+
+    def __await__(self):
+        return self.connect().__await__()
+
+    async def __aenter__(self):
+        return await self.connect()
+
+    async def __aexit__(self, *args):
+        await self.close()
+
+    def __getattr__(self, name):
+        return getattr(self.socket, name)
+
+    async def close(self, *args, **kwargs):
+        connected_test_profiles.get(self.port, set()).discard(self.profile_id)
+        await self.socket.close(*args, **kwargs)
+
+    async def recv(self):
+        if self.greeting is not None:
+            greeting, self.greeting = self.greeting, None
+            return greeting
+        return await self.socket.recv()
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return await self.recv()
+        except websockets.ConnectionClosedOK:
+            raise StopAsyncIteration
+
+
 def connect_as_extension(uri, **kwargs):
-    """Open a WebSocket to the server the way the real extension does
+    """Connect and register a disposable simulated Firefox profile."""
+    return TestExtensionConnection(uri, **kwargs)
 
-    Use this instead of websockets.connect() anywhere a test stands in for the
-    extension. Returns the same awaitable/context manager that
-    websockets.connect() returns, so it is a drop-in replacement.
 
-    Extra keyword arguments are passed through untouched, but passing
-    additional_headers will drop the Origin and the server will refuse the
-    connection - merge your headers into a copy of this function instead.
-    """
-    return websockets.connect(uri, additional_headers={'Origin': EXTENSION_TEST_ORIGIN}, **kwargs)
+def profile_connection(server):
+    """Explicitly select the sole connection in a single-profile test fixture."""
+    from server.browser_profile import BrowserProfile
+    if isinstance(server, BrowserProfile):
+        return server
+    assert len(server.profiles) == 1, 'Test must explicitly choose one Firefox profile'
+    return next(iter(server.profiles.values()))

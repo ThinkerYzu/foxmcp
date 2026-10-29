@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Concurrent Firefox profiles and `profiles_list`, exposing real Firefox profile names, windows and tabs to every MCP client. Local metadata lookup supports Windows, macOS and Linux, including XDG; unavailable or ambiguous names remain explicitly unknown.
+
 ### Changed
+
+- **Breaking: protocol ID 3 and explicit browser targets.** Every browser tool requires `profile_id`, including with one connected profile. Update extension and server together. The mandatory profile handshake replaces legacy connections; release-version matching remains advisory. Profile IDs survive socket reconnects and change after Firefox/extension restarts.
 - **Consistent settings design.** Popup and Options share a minimal light/dark theme, neutral focus styling and a segmented **MCP Server URL** field containing `ws://`, Host and Port. Configuration is always visible. Removed popup boilerplate, the Firefox badge, routine save feedback and the footer divider; validation errors remain visible. Both footers show extension/server release diagnostics and the locally supported protocol ID. Reconnect Interval defaults to 1000ms and accepts 100–30000ms; previously saved longer intervals are capped at 30000ms.
 - **Extension settings apply automatically.** Popup and Options use separate Host/Port fields and a Reconnect Interval, saving valid edits after a 500ms pause. Reset immediately persists and applies defaults. Removed Save, Reconnect, Max Retry Attempts and the unused Ping Timeout setting. Retries continue indefinitely at the configured interval; old limits are ignored. The built-in server uses unencrypted WebSocket and does not support TLS configuration.
 
 ### Fixed
+
+- Firefox profiles no longer replace each other's connections (#20). Requests, responses and monitor ownership are isolated by connection across HTTP and shared stdio clients. No request falls back to another profile or replays after disconnection.
+- Restored test-profile caches rebase the installed extension path and discard stale addon startup metadata, preventing browser tests from silently starting without the extension.
 - **Reset works in toolbar popups.** Both views reset immediately without a native confirmation dialog, which could block the Firefox popup.
 - **Connection status and settings agree.** Both pages display live connection state, the actual endpoint including test overrides, and the real pending retry delay while preserving unfinished input. Strict validation rejects empty, fractional and out-of-range numeric values. Obsolete reconnect timers and stale socket callbacks cannot close a new connection or clear its request monitors. Background-owned pending saves survive popup closure, and storage failures are reported without claiming success.
 

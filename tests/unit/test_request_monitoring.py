@@ -75,7 +75,7 @@ class TestRequestMonitoringAPIs:
         assert start_monitoring is not None, "requests_start_monitoring tool not found"
 
         # Test the function
-        result = await start_monitoring(
+        result = await start_monitoring(profile_id="test-profile",
             url_patterns=["https://api.example.com/*"],
             options={"capture_request_bodies": True},
             tab_id=None
@@ -108,7 +108,7 @@ class TestRequestMonitoringAPIs:
                 start_monitoring = tool.fn
                 break
 
-        result = await start_monitoring(
+        result = await start_monitoring(profile_id="test-profile",
             url_patterns=["*/api/*"],
             tab_id=123
         )
@@ -127,7 +127,7 @@ class TestRequestMonitoringAPIs:
                 start_monitoring = tool.fn
                 break
 
-        result = await start_monitoring(url_patterns=[])
+        result = await start_monitoring(profile_id="test-profile", url_patterns=[])
         response_data = json.loads(result)
         assert "error" in response_data
         assert "url_patterns is required" in response_data["error"]
@@ -153,7 +153,7 @@ class TestRequestMonitoringAPIs:
                 stop_monitoring = tool.fn
                 break
 
-        result = await stop_monitoring(
+        result = await stop_monitoring(profile_id="test-profile",
             monitor_id="mon_test123",
             drain_timeout=10
         )
@@ -213,7 +213,7 @@ class TestRequestMonitoringAPIs:
                 list_captured = tool.fn
                 break
 
-        result = await list_captured(monitor_id="mon_test123")
+        result = await list_captured(profile_id="test-profile", monitor_id="mon_test123")
 
         response_data = json.loads(result)
         assert response_data["total_requests"] == 2
@@ -258,7 +258,7 @@ class TestRequestMonitoringAPIs:
                 get_content = tool.fn
                 break
 
-        result = await get_content(
+        result = await get_content(profile_id="test-profile",
             monitor_id="mon_test123",
             request_id="req_001"
         )
@@ -310,7 +310,7 @@ class TestRequestMonitoringAPIs:
                 get_content = tool.fn
                 break
 
-        result = await get_content(
+        result = await get_content(profile_id="test-profile",
             monitor_id="mon_test123",
             request_id="req_002",
             include_binary=True,
@@ -345,7 +345,7 @@ class TestRequestMonitoringAPIs:
                 stop_monitoring = tool.fn
                 break
 
-        result = await stop_monitoring(monitor_id="invalid_id")
+        result = await stop_monitoring(profile_id="test-profile", monitor_id="invalid_id")
         response_data = json.loads(result)
         assert "error" in response_data
         assert "Invalid monitor_id" in response_data["error"]
@@ -363,7 +363,7 @@ class TestRequestMonitoringAPIs:
                 start_monitoring = tool.fn
                 break
 
-        result = await start_monitoring(url_patterns=["*"])
+        result = await start_monitoring(profile_id="test-profile", url_patterns=["*"])
         response_data = json.loads(result)
         assert "error" in response_data
         assert "Connection failed" in response_data["error"]

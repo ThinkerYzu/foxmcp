@@ -27,7 +27,7 @@ class StubWebSocketServer:
         self.sent_request = None
         self.response = {"type": "response", "data": {"tabs": []}}
 
-    async def send_request_and_wait(self, request):
+    async def send_request_and_wait(self, request, timeout=30.0):
         self.sent_request = request
         return self.response
 
@@ -44,7 +44,7 @@ def call_tool(stub_server):
 
     async def call(name, **kwargs):
         tool = await tools.mcp.get_tool(name)
-        return await tool.fn(**kwargs)
+        return await tool.fn(profile_id="test-profile", **kwargs)
 
     return call
 

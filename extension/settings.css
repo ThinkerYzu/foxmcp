@@ -70,7 +70,8 @@ h1 { font-size: 16px; font-weight: 650; letter-spacing: -.35px; }
 .status.connected::before { background: var(--success); }
 .status[data-state="connecting"]::before,
 .status[data-state="waiting_retry"]::before { background: var(--warning); }
-.status[data-state="configuration_error"]::before { background: var(--error); }
+.status[data-state="configuration_error"]::before,
+.status[data-state="protocol_error"]::before { background: var(--error); }
 .server-info { margin-top: 4px; padding-left: 15px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .server-info:empty { display: none; }
 

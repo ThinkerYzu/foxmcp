@@ -15,6 +15,7 @@ import os
 import re
 
 from server.server import FoxMCPServer
+from server.browser_profile import BrowserProfile
 from test_config import TEST_PORTS, connect_as_extension
 from port_coordinator import get_port_by_type
 
@@ -89,7 +90,7 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_server_message_handling(self):
         """Test server can handle messages correctly"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         # Test different message types
         messages = [
@@ -127,7 +128,7 @@ class TestLiveServerCommunication:
     @pytest.mark.asyncio
     async def test_server_state_management(self):
         """Test server state is managed correctly"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         # Initially no connection
         assert server.extension_connection is None
@@ -211,7 +212,7 @@ class TestFirefoxExtensionProtocol:
     @pytest.mark.asyncio
     async def test_all_browser_actions_supported(self):
         """Test that all expected browser actions are supported"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         # All browser actions that should be supported
         browser_actions = [
@@ -259,7 +260,7 @@ class TestFirefoxExtensionProtocol:
     @pytest.mark.asyncio
     async def test_error_handling_robustness(self):
         """Test that server handles various error conditions"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
         
         # Test various problematic inputs
         problematic_inputs = [

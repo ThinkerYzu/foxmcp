@@ -16,6 +16,8 @@ import test_imports
 
 # Import project modules
 from server.server import FoxMCPServer
+from server.browser_profile import BrowserProfile
+from unittest.mock import patch
 
 # Import test utilities
 from port_coordinator import coordinated_test_ports
@@ -51,7 +53,7 @@ class TestMCPServerIntegration:
 
             # Override handlers to track activity
             original_connection_handler = server.handle_extension_connection
-            original_message_handler = server.handle_extension_message
+            original_message_handler = BrowserProfile.handle_extension_message
 
             async def tracking_connection_handler(websocket):
                 server.connected_clients.append(websocket)
@@ -61,20 +63,22 @@ class TestMCPServerIntegration:
                     if websocket in server.connected_clients:
                         server.connected_clients.remove(websocket)
 
-            async def tracking_message_handler(message):
+            async def tracking_message_handler(profile, message):
                 server.received_messages.append(message)
-                result = await original_message_handler(message)
+                result = await original_message_handler(profile, message)
                 return result
 
             # Override send method to track sent messages
-            original_send = server.send_to_extension
-            async def tracking_send(message):
+            original_send = BrowserProfile.send_to_extension
+            async def tracking_send(profile, message):
                 server.sent_messages.append(message)
-                return await original_send(message)
+                return await original_send(profile, message)
 
             server.handle_extension_connection = tracking_connection_handler
-            server.handle_extension_message = tracking_message_handler
-            server.send_to_extension = tracking_send
+            message_patch = patch.object(BrowserProfile, 'handle_extension_message', tracking_message_handler)
+            send_patch = patch.object(BrowserProfile, 'send_to_extension', tracking_send)
+            message_patch.start()
+            send_patch.start()
 
             # Start servers (WebSocket server only - MCP handled by start_mcp=True)
             websocket_task = asyncio.create_task(server.start_server())
@@ -101,6 +105,8 @@ class TestMCPServerIntegration:
                 # Cleanup
                 await mcp_client.disconnect()
                 await server.shutdown(websocket_task)
+                message_patch.stop()
+                send_patch.stop()
 
     @pytest.mark.asyncio
     async def test_mcp_server_startup(self, full_mcp_system):

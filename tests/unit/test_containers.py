@@ -20,7 +20,7 @@ def call(server):
     tools = FoxMCPTools(server)
 
     async def invoke(tool_name, **args):
-        return await (await tools.mcp.get_tool(tool_name)).fn(**args)
+        return await (await tools.mcp.get_tool(tool_name)).fn(profile_id="test-profile", **args)
     return invoke
 
 
@@ -94,7 +94,7 @@ async def test_disabled_discovery_does_not_disable_tab_selection(server):
 def test_permissions_and_protocol_bump():
     manifest = json.loads((Path(__file__).resolve().parents[2] / "extension/manifest.json").read_text())
     assert {"cookies", "contextualIdentities"} <= set(manifest["permissions"])
-    assert PROTOCOL_VERSION == 2
+    assert PROTOCOL_VERSION == 3
 
 
 @pytest.mark.asyncio

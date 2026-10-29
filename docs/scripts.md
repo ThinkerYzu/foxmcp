@@ -1,5 +1,9 @@
 # Predefined Scripts
 
+Every browser tool requires an explicit `profile_id` from `profiles_list` in
+addition to the arguments shown below. Tab and monitor IDs are local to that
+profile; see [profile discovery](api-reference.md#firefox-profiles).
+
 Predefined scripts are external executable scripts that generate JavaScript code dynamically and execute it in browser tabs. This powerful feature allows you to create reusable, parameterized browser automation scripts that can be called via the `content_execute_predefined` MCP tool.
 
 ## How Predefined Scripts Work

@@ -7,13 +7,14 @@ import json
 import re
 from unittest.mock import AsyncMock, Mock
 from server.server import FoxMCPServer
+from server.browser_profile import BrowserProfile
 
 class TestPingPongCommunication:
     
     @pytest.fixture
     def server(self):
         """Create FoxMCPServer instance"""
-        return FoxMCPServer(host="localhost", port=8765)
+        return BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
     
     @pytest.fixture
     def ping_request(self):
