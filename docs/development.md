@@ -356,16 +356,18 @@ uses browser DOM. Multiple-profile coverage is split between two real Firefox pr
 through registered tool functions, and simulated profiles reached by actual
 HTTP/shared-stdio clients. The latter checks native-ID collisions and transport
 isolation. No single test combines two real Firefox profiles with both MCP
-transports. See the [coverage matrix](../tests/README.md#multiple-profile-coverage). The last integrated local run on
-2026-10-28 passed 691 tests with no skips (481 unit, 210 integration), plus all
-46 final-archive tools over HTTP/stdio. These counts describe that source tree;
-use the module guard below when the suite changes.
+transports. See the [coverage matrix](../tests/README.md#multiple-profile-coverage).
+The server-owned profile-ID change passed all 701 tests (491 unit, 210
+integration), with no skips, in the
+[2026-10-29 CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178).
+The module/no-skip guard also passed. Local packaged HTTP and stdio each pass all
+46 tools, including upload byte/event checks.
 
-The server-owned profile-ID follow-up passed 701 tests (491 unit, 210
-integration) across a full run and an isolated rerun of the stdio module after
-correcting two stale string-ID test placeholders. No tests were skipped, and
-the combined report passes the module guard. Packaged HTTP and stdio each pass
-all 46 tools, including upload byte/event checks.
+Source-installation smoke checks run separately from pytest on Python 3.10 and
+3.14. Keep their embedded tool arguments in `.github/workflows/ci.yml` aligned
+with the current schema. In particular, a missing-profile routing check must
+supply a positive integer `profile_id`; a legacy string placeholder only tests
+schema rejection. See [source-installation checks](../tests/README.md#source-installation-smoke-checks).
 
 The shared `scripts/check-test-report.py` guard requires successful test cases
 from every unit and integration module on disk. It detects missing integration

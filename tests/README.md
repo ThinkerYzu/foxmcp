@@ -24,15 +24,24 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**701 collected, 0 skipped**: 491 unit and 210 integration tests, validated on
-2026-10-28 for server-owned profile IDs. The full run passed 699 tests; two stale
-string-ID test placeholders were corrected, then all 12 stdio tests passed on
-an isolated rerun. The combined report passes the module guard. Collection changes as tests are added;
-use the JUnit module guard rather than a fixed count as the completeness gate.
+**701 collected, 0 skipped**: 491 unit and 210 integration tests. The
+[CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178)
+passed all 701 tests in one run on 2026-10-29, including the module/no-skip guard.
+Collection changes as tests are added; use the JUnit module guard rather than a
+fixed count as the completeness gate.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
 that Firefox can be found (see [Finding Firefox](#finding-firefox)).
+
+### Source-installation smoke checks
+
+CI tests source installation separately on Python 3.10 and 3.14, including HTTP
+and stdio startup, tool discovery and tool filtering. The stdio check runs without
+a browser and passes `profile_id=1`, a valid integer target, to verify that the
+bridge promptly reports a disconnected profile. A string placeholder fails schema
+validation before reaching routing. Keep these workflow inputs aligned with tool
+schemas when changing the API; they are outside the pytest module guard.
 
 ### Firefox path
 
@@ -70,7 +79,7 @@ Selected test modules, including local-file coverage:
 | `test_request_monitoring.py` | 11 | Web request capture logic |
 | `test_ping_pong.py` | 8 | Ping-pong protocol |
 | `test_connection_versions.py` | 10 | Version parsing and advisory diagnostics; per-profile connection tests are in `test_server.py` |
-| `test_server.py` | 18 | Server init, connection handling, message processing |
+| `test_server.py` | 28 | Server-assigned integer IDs, handshake validation, routing isolation, reconnect invalidation and monitor ownership |
 | `test_screenshot_filename.py` | 14 | Screenshot filename generation |
 | `test_profile_names.py` | 10 | Read-only Firefox name lookup, unavailable/ambiguous metadata |
 
