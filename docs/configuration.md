@@ -228,11 +228,30 @@ selection remains available with known IDs. Containers are persistent profile
 resources shared across clients; disconnects never remove them. Removal clears
 stored site data and refuses open tabs. See [API reference](api-reference.md#firefox-containers).
 
+## Selecting a Firefox profile
+
+All connected profiles are visible through `profiles_list(populate=True)`, including
+their windows and tabs. Pass the selected `profile_id` to every browser tool.
+Window/tab IDs alone are insufficient: the same numbers can exist in several
+profiles. There is no shared current-profile setting between agents.
+
+The server reads Firefox's own names locally: the new profile-manager SQLite
+store takes precedence over `profiles.ini`. It matches the extension Origin UUID
+against the profile's persisted extension UUID map. Metadata is read-only and
+refreshed on discovery. Profiles without a resolvable name remain visible with
+`name=null` and `name_error`. This requires Firefox metadata on the server's
+machine; a separate native helper is not installed.
+
+Protocol ID 3 requires updating both server and extension. The extension keeps its
+ID across socket reconnects; restarting Firefox or reloading the extension creates
+a new ID. Rediscover before using previously returned window/tab IDs. Commands
+never fall back to another connected profile.
+
 ## Reducing the Tool Surface
 
 Every tool's description sits in an MCP client's context for the whole session,
 whether or not the tool is ever called. With no predefined scripts listed, the
-full set of 45 tools costs roughly 7,243 tokens. `--disable-tools` leaves a group unregistered, so a client never
+full set of 46 tools costs roughly 8,096 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -246,15 +265,16 @@ token, so treat them as proportions rather than exact counts:
 
 | Group | Tools | ~Tokens |
 |---|---|---|
-| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,320 |
-| `containers` | list, create, update, remove | 437 |
-| `bookmarks` | list, search, create, create_folder, update, move, delete | 1,118 |
-| `windows` | list, get, get_current, create, close, focus, update | 1,029 |
-| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 795 |
-| `navigation` | back, forward, reload, go_to_url | 430 |
-| `content` | get_text, get_html, execute_script, execute_predefined, load_file | 732, plus ~35 per listed script |
-| `history` | query, get_recent, delete_item | 304 |
-| `debug` | websocket_status | 78 |
+| `profiles` | list | 77 |
+| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,188 |
+| `containers` | list, create, update, remove | 624 |
+| `bookmarks` | list, search, create, create_folder, update, move, delete | 1,131 |
+| `windows` | list, get, get_current, create, close, focus, update | 1,361 |
+| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 837 |
+| `navigation` | back, forward, reload, go_to_url | 564 |
+| `content` | get_text, get_html, execute_script, execute_predefined, load_file | 826 plus ~35 per listed script |
+| `history` | query, get_recent, delete_item | 446 |
+| `debug` | websocket_status | 42 |
 
 The `content` figure is with `FOXMCP_EXT_SCRIPTS` unset. `content_execute_predefined`
 lists every script in that directory in its description; see

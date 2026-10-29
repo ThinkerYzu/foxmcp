@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 
 # Set up consistent imports
 import test_imports
+from test_config import profile_connection
 
 # Import project modules
 from server.server import FoxMCPServer
@@ -508,15 +509,15 @@ class TestRequestMonitoringEndToEnd:
             f"The monitor caught nothing before the drop, so the test proves nothing: {listed}"
 
         # Drop the socket the way a restarted server would
-        dropped = server.extension_connection
+        dropped = next((p.extension_connection for p in server.profiles.values()), None)
         await dropped.close()
 
         for _ in range(100):
             await asyncio.sleep(0.1)
-            current = server.extension_connection
+            current = next((p.extension_connection for p in server.profiles.values()), None)
             if current is not None and current is not dropped:
                 break
-        assert server.extension_connection is not dropped, \
+        assert next((p.extension_connection for p in server.profiles.values()), None) is not dropped, \
             "Extension never reconnected, so the monitor's fate cannot be read"
 
         after = await mcp_client.call_tool("requests_list_captured", {"monitor_id": monitor_id})
@@ -618,7 +619,7 @@ async def test_small_json_bodies_keep_their_response_content_type(server_with_ex
     try:
         async with Client(server_with_extension['server'].mcp_tools.mcp) as client:
             async def call(name, **arguments):
-                result = await client.call_tool(name, arguments)
+                result = await client.call_tool(name, {"profile_id": profile_connection(server_with_extension["server"]).profile_id, **arguments})
                 assert not result.is_error, result
                 return result.content[0].text
 

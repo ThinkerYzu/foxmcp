@@ -1,3 +1,4 @@
+from server.browser_profile import BrowserProfile
 """
 Integration tests for WebSocket communication between server and extension
 """
@@ -71,7 +72,7 @@ class TestWebSocketCommunication:
     @pytest.mark.asyncio
     async def test_message_exchange(self):
         """Test message exchange between mock client and server"""
-        server = FoxMCPServer(host="localhost", port=8768)
+        server = BrowserProfile(FoxMCPServer(host="localhost", port=8768), None, "test-profile", "moz-extension://test")
 
         # Test message handling directly
         test_message = json.dumps({
@@ -87,7 +88,7 @@ class TestWebSocketCommunication:
     @pytest.mark.asyncio
     async def test_invalid_message_handling(self):
         """Test server handles invalid messages gracefully"""
-        server = FoxMCPServer(host="localhost", port=8769)
+        server = BrowserProfile(FoxMCPServer(host="localhost", port=8769), None, "test-profile", "moz-extension://test")
 
         invalid_messages = [
             "not json",
@@ -104,7 +105,7 @@ class TestWebSocketCommunication:
     @pytest.mark.asyncio
     async def test_connection_state_management(self):
         """Test connection state is properly managed"""
-        server = FoxMCPServer(host="localhost", port=8770)
+        server = BrowserProfile(FoxMCPServer(host="localhost", port=8770), None, "test-profile", "moz-extension://test")
 
         # Initially no connection
         assert server.extension_connection is None
@@ -188,7 +189,7 @@ class TestConnectionRecovery:
     @pytest.mark.asyncio
     async def test_connection_cleanup(self):
         """Test connection cleanup on disconnect"""
-        server = FoxMCPServer(start_mcp=False)
+        server = BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
 
         # Mock connection
         mock_ws = Mock()

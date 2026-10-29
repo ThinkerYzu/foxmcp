@@ -161,7 +161,7 @@ class StubScreenshotServer:
             "data": {"dataUrl": f"data:image/png;base64,{PNG_1X1}", "format": "png", "quality": 90},
         }
 
-    async def send_request_and_wait(self, request):
+    async def send_request_and_wait(self, request, timeout=30.0):
         self.sent_request = request
         self.requests += 1
         return self.response
@@ -185,7 +185,7 @@ class TestScreenshotOfOneTab:
 
         async def run(**kwargs):
             tool = await tools.mcp.get_tool("tabs_capture_screenshot")
-            return await tool.fn(**kwargs)
+            return await tool.fn(profile_id="test-profile", **kwargs)
 
         return run
 

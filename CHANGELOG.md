@@ -5,6 +5,21 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Concurrent Firefox profiles and `profiles_list`, exposing real Firefox profile names, windows and tabs to every MCP client. Local metadata lookup supports Windows, macOS and Linux, including XDG; unavailable or ambiguous names remain explicitly unknown.
+
+### Changed
+
+- **Breaking: protocol ID 3 and explicit browser targets.** Every browser tool requires `profile_id`, including with one connected profile. Update extension and server together. The mandatory profile handshake replaces legacy connections; release-version matching remains advisory. Profile IDs survive socket reconnects and change after Firefox/extension restarts.
+
+### Fixed
+
+- Firefox profiles no longer replace each other's connections (#20). Requests, responses and monitor ownership are isolated by connection across HTTP and shared stdio clients. No request falls back to another profile or replays after disconnection.
+- Restored test-profile caches rebase the installed extension path and discard stale addon startup metadata, preventing browser tests from silently starting without the extension.
+
 ## [1.5.0] - 2026-10-25
 
 ### Added

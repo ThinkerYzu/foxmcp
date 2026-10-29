@@ -85,7 +85,7 @@ foxmcp/
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
 │   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 45 MCP tool definitions
+│   └── mcp_tools.py # The 46 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -230,8 +230,8 @@ the `_setup_*_tools` methods. The tool builds the request, waits for the reply, 
 formats it for the caller:
 
 ```python
-@self.mcp.tool()
-async def tabs_list() -> str:
+@self._tool()
+async def tabs_list(profile_id: str) -> str:
     """List all open browser tabs"""
     request = {
         "id": str(uuid.uuid4()),
@@ -241,7 +241,7 @@ async def tabs_list() -> str:
         "timestamp": datetime.now().isoformat()
     }
 
-    response = await self.websocket_server.send_request_and_wait(request)
+    response = await self._send(profile_id, request)
 
     if "error" in response:
         return f"Error getting tabs: {response['error']}"
@@ -314,8 +314,8 @@ runs `make install` on a clean checkout — which nothing else does, since the o
 jobs create the venv themselves — then starts the server and asks it for its tools
 over HTTP as a real MCP client would, checking the count with every group enabled
 and with two groups disabled. It also checks stdio startup and that an individually
-enabled tool survives its disabled group. With 45 tools and 10 in the tabs group,
-`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 36 tools.
+enabled tool survives its disabled group. With 46 tools and 10 in the tabs group,
+`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 37 tools.
 When adding or removing tools, update all affected counts in the install job,
 including this override check. To check the default HTTP tool count by hand:
 

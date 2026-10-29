@@ -14,6 +14,7 @@ import os
 import re
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG
 from firefox_test_utils import FirefoxTestManager
@@ -30,7 +31,7 @@ class TestUIStorageSync:
         server, firefox, test_port = server_with_extension
         
         # Get popup state
-        popup_state = await server.get_popup_state()
+        popup_state = await server.get_popup_state(profile_connection(server).profile_id)
         
         # Verify response structure
         assert "error" not in popup_state, f"Error getting popup state: {popup_state.get('error')}"
@@ -54,7 +55,7 @@ class TestUIStorageSync:
         server, firefox, test_port = server_with_extension
         
         # Get options state
-        options_state = await server.get_options_state()
+        options_state = await server.get_options_state(profile_connection(server).profile_id)
         
         # Verify response structure
         assert "error" not in options_state, f"Error getting options state: {options_state.get('error')}"
@@ -78,7 +79,7 @@ class TestUIStorageSync:
         server, firefox, test_port = server_with_extension
         
         # Get storage values
-        storage_values = await server.get_storage_values()
+        storage_values = await server.get_storage_values(profile_connection(server).profile_id)
         
         # Verify response structure
         assert "error" not in storage_values, f"Error getting storage values: {storage_values.get('error')}"
@@ -106,7 +107,7 @@ class TestUIStorageSync:
         }
         
         # Validate UI sync
-        validation_result = await server.validate_ui_sync(expected_values)
+        validation_result = await server.validate_ui_sync(profile_connection(server).profile_id, expected_values)
         
         # Verify response structure
         assert "error" not in validation_result, f"Validation error: {validation_result.get('error')}"
@@ -145,7 +146,7 @@ class TestUIStorageSync:
         }
         
         # Run complete workflow
-        workflow_result = await server.test_storage_sync_workflow(test_values)
+        workflow_result = await server.test_storage_sync_workflow(profile_connection(server).profile_id, test_values)
         
         # Verify workflow succeeded
         assert "errors" not in workflow_result or len(workflow_result["errors"]) == 0, f"Workflow errors: {workflow_result.get('errors')}"
@@ -176,11 +177,11 @@ class TestUIStorageSync:
         server, firefox, test_port = server_with_extension
         
         # Get storage values
-        storage = await server.get_storage_values()
+        storage = await server.get_storage_values(profile_connection(server).profile_id)
         
         # Get UI states
-        popup_state = await server.get_popup_state() 
-        options_state = await server.get_options_state()
+        popup_state = await server.get_popup_state(profile_connection(server).profile_id)
+        options_state = await server.get_options_state(profile_connection(server).profile_id)
         
         # Verify all returned successfully
         assert "error" not in storage

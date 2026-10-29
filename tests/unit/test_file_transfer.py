@@ -180,7 +180,7 @@ async def test_tool_transfers_metadata_and_revokes_url(tmp_path):
     try:
         tools = FoxMCPTools(bridge)
         tool = await tools.mcp.get_tool("content_load_file")
-        result = json.loads(await tool.fn(tab_id=7, path=str(path), mime_type="text/markdown"))
+        result = json.loads(await tool.fn(profile_id="test-profile", tab_id=7, path=str(path), mime_type="text/markdown"))
         assert result["name"] == "hello.txt"
         assert result["type"] == "text/markdown"
         assert result["size"] == 5
@@ -206,7 +206,7 @@ async def test_tool_failure_closes_unclaimed_grant(tmp_path):
     path.write_bytes(b"hello")
     try:
         tool = await FoxMCPTools(bridge).mcp.get_tool("content_load_file")
-        assert "No extension" in await tool.fn(tab_id=7, path=str(path))
+        assert "No extension" in await tool.fn(profile_id="test-profile", tab_id=7, path=str(path))
         assert not bridge.file_transfers._grants
         assert (await asyncio.to_thread(download, bridge.url))[0] == 404
     finally:

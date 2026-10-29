@@ -1,4 +1,6 @@
 """Container isolation through MCP and defensive handlers in real Firefox."""
+
+from test_config import profile_connection
 import asyncio
 import json
 import re
@@ -22,6 +24,11 @@ def text(result):
 
 
 async def call(client, tool_name, **args):
+    if tool_name not in ('profiles_list', 'debug_websocket_status') and 'profile_id' not in args:
+        snapshot = await client.call_tool('profiles_list', {'populate': False})
+        profiles = json.loads(text(snapshot))['profiles']
+        assert len(profiles) == 1
+        args['profile_id'] = profiles[0]['profile_id']
     return text(await client.call_tool(tool_name, args))
 
 
@@ -92,7 +99,7 @@ async def test_container_handler_failures_without_mutation(server_with_extension
       function check(ok, label) { if (!ok) throw Error(label); checks.push(label); }
       const replies = [];
       isConnected = true;
-      websocket = {send: raw => replies.push(JSON.parse(raw))};
+      websocket = {readyState: WebSocket.OPEN, send: raw => replies.push(JSON.parse(raw))};
       let created = 0;
       browser.tabs = {create: async options => {created++; return {id:42, cookieStoreId:'wrong'};},
                       query: async () => []};
@@ -141,7 +148,7 @@ async def test_container_lifecycle_and_in_use_protection(server_with_extension, 
     tools = server.mcp_tools.mcp
 
     async def tool(tool_name, **args):
-        return await (await tools.get_tool(tool_name)).fn(**args)
+        return await (await tools.get_tool(tool_name)).fn(profile_id=profile_connection(server).profile_id, **args)
 
     identities, tabs = [], []
     try:
@@ -251,7 +258,7 @@ async def test_shared_stdio_containers_survive_disconnect_and_worker_restart(sha
         assert firefox.setup_and_start_firefox(headless=True, skip_on_failure=False)
         await connected(first)
         for client in (first, second):
-            assert len(await client.list_tool_names()) == 45
+            assert len(await client.list_tool_names()) == 46
             created = json.loads(await client.call_tool('containers_create', {'name':'Persistent test'}))
             stores.append(created['container']['cookie_store_id'])
         for index, client in enumerate((first, second)):

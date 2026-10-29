@@ -34,6 +34,7 @@ async def test_discovery_retries_after_losing_a_bind(tmp_path, monkeypatch):
 @pytest.mark.parametrize("metadata", [
     {}, {"server": "other"},
     {"server": SERVER_NAME, "protocol_version": 999, "proxy_path": "/proxy"},
+    {"server": SERVER_NAME, "protocol_version": 2, "proxy_path": "/proxy"},
     {"server": SERVER_NAME, "protocol_version": PROTOCOL_VERSION,
      "proxy_path": "ws://example.org/proxy"},
 ])

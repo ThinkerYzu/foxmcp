@@ -59,6 +59,7 @@ class SmokeClient:
 
     def __init__(self, client, work, transport):
         self.client = client
+        self.profile_id = None
         self.work = work
         self.transport = transport
         self.report = {"transport": transport, "passed": False, "checks": [], "calls": []}
@@ -75,7 +76,16 @@ class SmokeClient:
         return await self.client.list_tools()
 
     async def call_tool(self, name, arguments=None):
-        call = {"tool": name, "arguments": arguments or {}}
+        arguments = dict(arguments or {})
+        if name not in ("profiles_list", "debug_websocket_status") and "profile_id" not in arguments:
+            if self.profile_id is None:
+                discovery = await self.call_tool("profiles_list", {"populate": False})
+                profiles = json.loads(text(discovery))["profiles"]
+                assert len(profiles) <= 1, "Smoke test must explicitly select among multiple profiles"
+                if profiles:
+                    self.profile_id = profiles[0]["profile_id"]
+            arguments["profile_id"] = self.profile_id or "unavailable-smoke-profile"
+        call = {"tool": name, "arguments": arguments}
         self.report["calls"].append(call)
         self.save()
         try:
@@ -304,7 +314,7 @@ async def exercise(client, url, source, work, transport, receipts):
         store = None
         recorded.checked("container discovery, lifecycle and tab selection")
         names = {tool.name for tool in await client.list_tools()}
-        assert len(names) == 45, names
+        assert len(names) == 46, names
         called = {call["tool"] for call in recorded.report["calls"]}
         assert not names - called, f"Tools missing package smoke coverage: {sorted(names - called)}"
         recorded.report["passed"] = True

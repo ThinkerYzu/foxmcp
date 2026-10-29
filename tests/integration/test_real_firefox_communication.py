@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
 from test_config import TEST_PORTS, FIREFOX_TEST_CONFIG, get_test_ports, connect_as_extension
 from firefox_test_utils import FirefoxTestManager
@@ -33,7 +34,7 @@ class TestRealFirefoxCommunication:
         test_port = server_with_extension['test_port']
 
         # Check if extension connected to server
-        assert server.extension_connection is not None, "Extension should connect to server"
+        assert server.profiles, "Extension should connect to server"
 
         # Wait a bit more for any initial messages
         await asyncio.sleep(2.0)
@@ -58,7 +59,7 @@ class TestRealFirefoxCommunication:
         }
 
         # Send message to extension
-        success = await server.send_to_extension(test_message)
+        success = await profile_connection(server).send_to_extension(test_message)
         assert success, "Should be able to send message to extension"
 
         # Wait for potential response

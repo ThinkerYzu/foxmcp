@@ -15,6 +15,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import uuid
 
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -37,7 +38,7 @@ def unused_port() -> int:
         return sock.getsockname()[1]
 
 
-async def answer_extension(port: int, ready: asyncio.Event, scripts: list) -> None:
+async def answer_extension(port: int, ready: asyncio.Event, scripts: list, profile_id: str) -> None:
     """Stand in for Firefox to verify the installed command's bridge."""
     for attempt in range(200):
         try:
@@ -51,16 +52,20 @@ async def answer_extension(port: int, ready: asyncio.Event, scripts: list) -> No
             await asyncio.sleep(0.1)
     try:
         await connection.send(json.dumps({
-            "type": "hello", "data": {"version": distribution("foxmcp").version}
+            "type": "hello", "data": {"version": distribution("foxmcp").version, "protocol_version": 3, "profile_id": profile_id}
         }))
-        ready.set()
         async for raw in connection:
             request = json.loads(raw)
             if request.get("type") == "hello":
                 assert request["data"]["version"] == distribution("foxmcp").version, request
                 continue
+            if request.get("type") == "ready":
+                ready.set()
+                continue
             action = request.get("action")
-            if action == "tabs.list":
+            if action == "windows.list":
+                data = {"windows": [{"id": 1, "tabs": []}]}
+            elif action == "tabs.list":
                 data = {
                     "tabs": [
                         {
@@ -97,11 +102,12 @@ async def check_client(client: Client, port: int, script_name: str | None) -> No
     """Verify discovery, a bridge call, and execution of a packaged/custom script."""
     ready = asyncio.Event()
     scripts = []
-    extension = asyncio.create_task(answer_extension(port, ready, scripts))
+    profile_id = str(uuid.uuid4())
+    extension = asyncio.create_task(answer_extension(port, ready, scripts, profile_id))
     try:
         await asyncio.wait_for(ready.wait(), 25)
         tools = {tool.name: tool for tool in await client.list_tools()}
-        assert len(tools) == 45, sorted(tools)
+        assert len(tools) == 46, sorted(tools)
         description = tools["content_execute_predefined"].description
         if script_name == "dom-summarize.sh":
             assert all(name in description for name in EXAMPLES), description
@@ -110,11 +116,14 @@ async def check_client(client: Client, port: int, script_name: str | None) -> No
             assert "dom-summarize.sh" not in description, description
         else:
             assert "FOXMCP_EXT_SCRIPTS is not set" in description, description
-        result = await client.call_tool("tabs_list", {})
+        profiles = await client.call_tool("profiles_list", {})
+        assert profile_id in profiles.content[0].text, profiles
+        result = await client.call_tool("tabs_list", {"profile_id": profile_id})
         assert "Package smoke" in result.content[0].text, result
         result = await client.call_tool(
             "content_execute_predefined",
             {
+                "profile_id": profile_id,
                 "tab_id": 1,
                 "script_name": script_name or "dom-summarize.sh",
             },

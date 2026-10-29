@@ -201,7 +201,9 @@ function updateVersionDisplay(connection) {
   const extension = connection.extensionVersion || browser.runtime.getManifest().version;
   const server = connection.connected ? connection.serverVersion : null;
   element.style.color = '#666';
-  if (!connection.connected) {
+  if (connection.connectionError) {
+    element.textContent = connection.connectionError;
+  } else if (!connection.connected) {
     element.textContent = `Extension ${extension}; server disconnected.`;
   } else if (!server) {
     element.textContent = `Extension ${extension}; server version unavailable. Older servers may not report a version. Update both together to check versions.`;

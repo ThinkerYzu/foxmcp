@@ -11,6 +11,7 @@ import os
 
 import test_imports  # Automatic path setup
 from server.server import FoxMCPServer
+from server.browser_profile import BrowserProfile
 
 
 class TestWindowHandlers:
@@ -18,7 +19,7 @@ class TestWindowHandlers:
     @pytest.fixture
     def server(self):
         """Create FoxMCPServer instance"""
-        return FoxMCPServer(host="localhost", port=8765, start_mcp=False)
+        return BrowserProfile(FoxMCPServer(start_mcp=False), None, "test-profile", "moz-extension://test")
     
     @pytest.fixture
     def mock_websocket(self):
@@ -233,7 +234,7 @@ class StubWebSocketServer:
         self.sent_request = None
         self.response = {"type": "response", "data": {}}
 
-    async def send_request_and_wait(self, request):
+    async def send_request_and_wait(self, request, timeout=30.0):
         self.sent_request = request
         return self.response
 
@@ -251,7 +252,7 @@ def call_tool(stub_server):
 
     async def call(name, **kwargs):
         tool = await tools.mcp.get_tool(name)
-        return await tool.fn(**kwargs)
+        return await tool.fn(profile_id="test-profile", **kwargs)
 
     return call
 

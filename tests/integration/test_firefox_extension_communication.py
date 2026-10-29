@@ -19,7 +19,9 @@ import re
 from pathlib import Path
 
 import test_imports  # Automatic path setup
+from test_config import profile_connection
 from server.server import FoxMCPServer
+from server.browser_profile import BrowserProfile
 from test_config import TEST_PORTS, connect_as_extension
 from firefox_test_utils import FirefoxTestManager
 from port_coordinator import get_port_by_type
@@ -196,7 +198,7 @@ user_pref("browser.tabs.remote.autostart", false);
             
             # Test that server can handle these message types
             for msg in test_messages:
-                await running_server.handle_extension_message(json.dumps(msg))
+                await BrowserProfile(running_server, None, "test-profile", "moz-extension://test").handle_extension_message(json.dumps(msg))
             
             # Test server's send capability (even without active extension)
             test_send_msg = {
@@ -207,7 +209,7 @@ user_pref("browser.tabs.remote.autostart", false);
                 "timestamp": time.time()
             }
             
-            result = await running_server.send_to_extension(test_send_msg)
+            result = await profile_connection(running_server).send_to_extension(test_send_msg)
             # Should return False if no extension connected, which is expected
             assert result in [True, False]  # Either state is valid for this test
             
@@ -285,7 +287,7 @@ user_pref("browser.tabs.remote.autostart", false);
         # Test that server can handle all these message types
         for msg in extension_messages:
             try:
-                await running_server.handle_extension_message(json.dumps(msg))
+                await BrowserProfile(running_server, None, "test-profile", "moz-extension://test").handle_extension_message(json.dumps(msg))
                 print(f"✓ Handled {msg['type']} message for action {msg['action']}")
             except Exception as e:
                 pytest.fail(f"Server should handle extension message {msg['action']}: {e}")
@@ -382,7 +384,7 @@ async def _distinct_connections(server, seconds, interval=0.05):
     seen = []
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        current = server.extension_connection
+        current = next((p.extension_connection for p in server.profiles.values()), None)
         if current is not None and (not seen or seen[-1] is not current):
             seen.append(current)
         await asyncio.sleep(interval)
@@ -439,7 +441,7 @@ async def test_dropped_connection_still_reconnects(server_with_extension):
     a server restart.
     """
     server = server_with_extension['server']
-    dropped = server.extension_connection
+    dropped = next((p.extension_connection for p in server.profiles.values()), None)
     assert dropped is not None, "Fixture handed over no extension connection"
 
     await dropped.close()
@@ -447,7 +449,7 @@ async def test_dropped_connection_still_reconnects(server_with_extension):
     reconnected = None
     for _ in range(100):
         await asyncio.sleep(0.1)
-        current = server.extension_connection
+        current = next((p.extension_connection for p in server.profiles.values()), None)
         if current is not None and current is not dropped:
             reconnected = current
             break

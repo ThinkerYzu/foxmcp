@@ -63,7 +63,7 @@ async def test_all_routes_work_through_a_local_tcp_forwarder(shared):
                 assert json.loads(await proxy.recv())["type"] == "hello"
                 await proxy.send(json.dumps({
                     "id": "forwarded", "type": "request",
-                    "action": "tabs.list", "data": {},
+                    "action": "tabs.list", "data": {}, "profile_id": extension.profile_id,
                 }))
                 request = json.loads(await asyncio.wait_for(extension.recv(), 5))
                 await answer_tabs(extension, request, 44)
@@ -97,7 +97,7 @@ async def test_colliding_ids_are_remapped_and_replies_can_arrive_out_of_order(sh
                 "id": "same-id",
                 "type": "request",
                 "action": "tabs.list",
-                "data": {},
+                "profile_id": extension.profile_id, "data": {},
             }
             await first.send(json.dumps(request))
             one = json.loads(await asyncio.wait_for(extension.recv(), 10))
@@ -206,7 +206,7 @@ async def test_proxy_joins_manual_http_server_without_changing_its_lifetime(
                     await answer_tabs(extension, request, 33)
                     assert "ID 33" in await call
                     async with Client(f"http://localhost:{http_port}/mcp") as http:
-                        call = asyncio.create_task(http.call_tool("list_windows", {}))
+                        call = asyncio.create_task(http.call_tool("list_windows", {"profile_id": extension.profile_id}))
                         request = json.loads(
                             await asyncio.wait_for(extension.recv(), 10)
                         )
@@ -262,7 +262,7 @@ async def test_monitor_started_after_disconnect_is_still_stopped(shared):
                 "method": "tools/call",
                 "params": {
                     "name": "requests_start_monitoring",
-                    "arguments": {"url_patterns": ["<all_urls>"]},
+                    "arguments": {"profile_id": extension.profile_id, "url_patterns": ["<all_urls>"]},
                 },
             }
         )
