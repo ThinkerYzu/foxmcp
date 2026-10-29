@@ -1,7 +1,7 @@
 # Predefined Scripts
 
 Every browser tool requires an explicit `profile_id` from `profiles_list` in
-addition to the arguments shown below. Tab and monitor IDs are local to that
+addition to the action-specific arguments. Tab and monitor IDs are local to that
 profile; see [profile discovery](api-reference.md#firefox-profiles).
 
 Predefined scripts are external executable scripts that generate JavaScript code dynamically and execute it in browser tabs. This powerful feature allows you to create reusable, parameterized browser automation scripts that can be called via the `content_execute_predefined` MCP tool.
@@ -99,6 +99,7 @@ chmod +x /path/to/your/scripts/*.sh
 {
   "name": "content_execute_predefined",
   "arguments": {
+    "profile_id": "<chosen-profile-id>",
     "tab_id": 123,
     "script_name": "get_title.sh",
     "script_args": ""
@@ -111,6 +112,7 @@ chmod +x /path/to/your/scripts/*.sh
 {
   "name": "content_execute_predefined",
   "arguments": {
+    "profile_id": "<chosen-profile-id>",
     "tab_id": 123,
     "script_name": "get_page_info.sh",
     "script_args": "[\"url\"]"
@@ -123,6 +125,7 @@ chmod +x /path/to/your/scripts/*.sh
 {
   "name": "content_execute_predefined",
   "arguments": {
+    "profile_id": "<chosen-profile-id>",
     "tab_id": 123,
     "script_name": "add_banner.sh",
     "script_args": "[\"Welcome to our site!\", \"green\"]"
@@ -141,7 +144,7 @@ Claude: I'll add a maintenance banner to your page using a predefined script.
 
 Claude Code will call:
 ```
-content_execute_predefined(tab_id=current_tab, script_name="add_banner.sh", script_args=["Under Maintenance", "red"])
+content_execute_predefined(profile_id=profile_id, tab_id=current_tab, script_name="add_banner.sh", script_args='["Under Maintenance", "red"]')
 ```
 
 ## Script Output Types
@@ -270,7 +273,7 @@ directory of scripts an agent never needs is worth splitting out.
 
 ## Loading local files
 
-Call `content_load_file(tab_id, path, mime_type=None)` first. Python reads the
+Call `content_load_file(profile_id, tab_id, path, mime_type=None)` first. Python reads the
 regular file and streams it over a temporary localhost HTTP URL to the extension.
 The result contains its original basename, MIME type, size, modification time
 and a `file_id`; it contains neither the local directory nor file bytes.
@@ -295,13 +298,13 @@ read this map directly. Clone the File into the page before assigning it through
 the page's own DataTransfer; [set-file-input.py](../predefined-ex/set-file-input.py)
 demonstrates this and dispatches `input` and `change` events. The package and
 GitHub installer include it; for a custom collection, copy that executable
-example into `FOXMCP_EXT_SCRIPTS`. Then call:
+example into `FOXMCP_EXT_SCRIPTS`. Choose `profile_id` from `profiles_list` and a tab in that profile. Then call:
 
 ```python
-content_load_file(tab_id=17, path="/home/me/reports/report.pdf",
+content_load_file(profile_id=profile_id, tab_id=17, path="/home/me/reports/report.pdf",
                   mime_type="application/pdf")
 # Returns JSON including file_id, name="report.pdf", type and size.
-content_execute_predefined(tab_id=17, script_name="set-file-input.py",
+content_execute_predefined(profile_id=profile_id, tab_id=17, script_name="set-file-input.py",
                            script_args='["<returned file_id>", "input[type=file]"]')
 ```
 

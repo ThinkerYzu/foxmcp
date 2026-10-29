@@ -84,8 +84,11 @@ foxmcp/
 ├── docs/            # Documentation
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
-│   ├── server.py    # WebSocket server, request correlation, CLI
-│   └── mcp_tools.py # The 46 MCP tool definitions
+│   ├── server.py          # Profile registry, routing and MCP startup
+│   ├── browser_profile.py # Per-profile sockets, replies and monitor ownership
+│   ├── browser_proxy.py   # Shared-port discovery and forwarding
+│   ├── profile_names.py   # Read-only Firefox metadata lookup
+│   └── mcp_tools.py       # The 46 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -199,10 +202,19 @@ Installing through the browser with either method above does not need that step.
 ```
 extension/
 ├── manifest.json   # Extension configuration (Manifest V2)
-├── background.js   # WebSocket client and action dispatch
+├── background.js   # Profile handshake, browser actions and settings persistence
+├── config.js       # Shared defaults, validation and effective endpoints
+├── settings.js     # Shared controller for Popup/Options
+├── settings.css    # Shared light/dark styling
+├── options.html/.js/.css # Full-page settings and DOM adapter
 ├── content.js      # Content script injection
-└── popup/          # Popup UI (html, js, css)
+└── popup/          # Toolbar popup layout and DOM adapter
 ```
+
+The persistent background owns settings validation and writes. Both views use
+`settings.js` and send runtime messages, so pending saves survive popup closure.
+Keep profile registration, socket identity guards and protocol errors intact when
+editing reconnection behavior. See the [file map](files.md#extension-directory).
 
 ## Adding a Browser Function
 
@@ -337,6 +349,17 @@ Developer Edition and unbranded builds honour it — release and beta enforce
 signing regardless, so the extension never loads and every browser test fails.
 Pass `channel: nightly` to `.github/actions/setup-firefox` to test against
 tomorrow's Firefox.
+
+The settings regression harness executes 234 assertions against the actual
+scripts, with controlled storage, sockets, timers and UI. Its Firefox test also
+uses browser DOM. Multiple-profile coverage is split between two real Firefox profiles called
+through registered tool functions, and simulated profiles reached by actual
+HTTP/shared-stdio clients. The latter checks native-ID collisions and transport
+isolation. No single test combines two real Firefox profiles with both MCP
+transports. See the [coverage matrix](../tests/README.md#multiple-profile-coverage). The last integrated local run on
+2026-10-28 passed 691 tests with no skips (481 unit, 210 integration), plus all
+46 final-archive tools over HTTP/stdio. These counts describe that source tree;
+use the module guard below when the suite changes.
 
 The shared `scripts/check-test-report.py` guard requires successful test cases
 from every unit and integration module on disk. It detects missing integration
@@ -493,7 +516,7 @@ The default startup script was also tried, exposing the occupied-MCP-port
 behavior described above. This check did not repeat the interactive installer
 prompts, manual Firefox Add-ons installation, Claude Code registration, or the
 natural-language examples through an AI assistant. The release package smoke
-tests separately exercise all 45 tools over HTTP and stdio with an unsigned XPI
+tests separately exercise all 46 tools over HTTP and stdio with an unsigned XPI
 in Firefox Developer Edition; they do not verify the signed Add-ons installation.
 
 ## Security Notes

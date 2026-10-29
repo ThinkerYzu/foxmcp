@@ -108,9 +108,8 @@ Reference documentation for how FoxMCP *works* stays here in `docs/`.
 - All browser function definitions and error codes
 
 ## docs/files.md
-- Complete project structure (26 files + venv)
-- Implementation details for each component
-- Current status: foundation complete, tests working, browser APIs pending
+- Source file map and component responsibilities
+- Shared settings UI, profile routing, build outputs and test entry points
 
 ## README.md
 - Main project documentation and quick start guide

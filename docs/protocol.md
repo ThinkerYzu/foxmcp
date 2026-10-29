@@ -152,10 +152,12 @@ preferences. Firefox exposes no structured disabled-feature error: recognize
 its fixed, nonlocalized implementation message (Mozilla's `checkAPIEnabled`),
 and preserve unknown failures as `API_ERROR`. Do not match translated text.
 
-Compatibility review against v1.4.0: checked ID increases from 1 to 2 for the
+Historical v1.5.0 compatibility review against v1.4.0: checked ID increased
+from 1 to 2 for the
 existing tab-list response and filter contract. New lifecycle actions alone do
 not require a further bump. Extension/server release matching remains advisory;
-only forwarding peers enforce this ID. The complete v1.5.0 review is recorded in
+only forwarding peers enforced ID 2 in that release. Current source requires
+the protocol-3 profile handshake described above. The complete v1.5.0 review is recorded in
 [release preparation](../RELEASES.md#protocol-compatibility-review), including
 other changes since the baseline. Reassess if the final diff changes before
 publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
@@ -166,14 +168,16 @@ The mandatory profile handshake above also carries each peer's release version.
 The extension reads its manifest; the Python server uses `server/version.py`.
 Release-version equality remains advisory, independently of the checked protocol ID:
 compatible protocol-3 peers keep serving tools even when release versions differ.
-The server logs a mismatch and the popup displays it, preserving unsaved settings
+The server logs a mismatch and both settings views display it, preserving unsaved settings
 while refreshing. Numeric versions contain one to four dot-separated components
 and at most 64 characters. Invalid or absent release versions remain unavailable;
 they do not bypass or invalidate the mandatory profile/protocol handshake.
 
-The popup displays an incompatible-protocol close reason and stops retrying it
-until explicitly reconnected or reconfigured. Transient disconnects retain the
-normal reconnect policy and preserve the running extension's profile ID.
+Both settings views display an incompatible-protocol close reason. The extension
+stops retrying that peer. Update both components and reload the extension to
+register again, or change the effective endpoint. There is no manual Reconnect
+button. Transient disconnects retain the normal constant-interval retry policy
+and preserve the running extension's profile ID.
 
 ## Message Structure
 

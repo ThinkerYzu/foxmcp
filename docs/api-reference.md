@@ -21,21 +21,23 @@ contains `profile_id`, `name`, `name_error`, `extension_version`, and `windows`.
 Windows include their tabs, titles and URLs when `populate=True`. A window-query
 failure is returned as that profile's `error`, without hiding other profiles.
 
-**Every browser tool below requires `profile_id` as its first argument**, including
-profile-wide history, bookmarks, containers and request monitors. Obtain it from
-`profiles_list`; do not infer it from a name or assume one profile is selected.
-Only `profiles_list` and `debug_websocket_status` work without a target. For example:
+Every browser tool below requires `profile_id`, even when only one profile is
+connected. `profiles_list` and `debug_websocket_status` need no target. IDs for
+tabs, windows, groups, containers and monitors belong to their selected profile.
+Names are labels, may repeat, and cannot substitute for a routing ID.
 
-```python
-profiles_list()
-tabs_list(profile_id="<selected-profile-id>", window_id=1)
-content_get_text(profile_id="<selected-profile-id>", tab_id=2)
-```
+| Profile field | Meaning |
+|---|---|
+| `profile_id` | Required browser-call target; stable across socket reconnects, replaced after Firefox/extension restart. |
+| `name` | Local Firefox name, or `null` when unavailable or ambiguous. |
+| `name_error` | Name-resolution explanation, or `null` on success. |
+| `extension_version` | Reported extension release version, or `null` when unavailable. |
+| `windows` | Profile windows, populated with tabs/titles/URLs when requested. |
+| `error` | Present when querying this profile's windows failed; other profiles remain listed. |
 
-The signatures below omit this common required argument for readability. Native
-object IDs can coincide in different profiles. The profile ID survives socket
-reconnections but changes when Firefox or its extension restarts; rediscover after
-a restart. A missing/disconnected target fails without selecting another profile.
+There is no active-profile setting, `profiles_select` tool or implicit fallback.
+A missing/disconnected target fails. Rediscover after a browser/extension restart
+before reusing native object IDs. Both halves must support protocol 3.
 
 Names are read from Firefox's local metadata on the server machine. The new
 profile-manager database takes precedence over legacy `profiles.ini`. Temporary,
@@ -43,32 +45,32 @@ inaccessible or ambiguous profiles have `name=null` and an explicit `name_error`
 they remain usable by ID. Names refresh on discovery and need not be unique.
 
 ### Tab Management
-- `tabs_list(window_id=None, cookie_store_id=None)` - List tabs with optional
+- `tabs_list(profile_id, window_id=None, cookie_store_id=None)` - List tabs with optional
   window and cookie-store filters, applied together
   - Each line includes `[window {window_id}, index {index}]` followed by
     `[cookie store {cookie_store_id}]`; the index counts from 0
   - Store metadata from an older extension is reported as unavailable. An
     unverifiable store filter fails instead of returning an unfiltered listing.
-- `tabs_create(url, active=True, pinned=False, window_id=None, cookie_store_id=None)`
+- `tabs_create(profile_id, url, active=True, pinned=False, window_id=None, cookie_store_id=None)`
   - Create a tab, optionally selecting a window and cookie store
   - Reports the actual store. Explicit selection requires an updated extension
     and never falls back to the default store.
-- `tabs_close(tab_id)` - Close specific tab
-- `tabs_switch(tab_id)` - Switch to specific tab
-- `tabs_move(tab_ids, window_id=None, index=-1)` - Move tabs to a position, optionally into another window
+- `tabs_close(profile_id, tab_id)` - Close specific tab
+- `tabs_switch(profile_id, tab_id)` - Switch to specific tab
+- `tabs_move(profile_id, tab_ids, window_id=None, index=-1)` - Move tabs to a position, optionally into another window
   - `tab_ids` takes one ID, a list, or a JSON string such as `"[12, 15]"`
   - `index` is the destination, counting from 0; `-1` is the end
   - Without `window_id`, tabs are reordered within the window they are in
   - Reports `Moved {n} of {m}` — Firefox refuses some moves silently, chiefly moving an
     unpinned tab in front of a pinned one, and a refused tab is absent from the result
-- `tabs_group(tab_ids, group_id=None, title=None, color=None)` - Group tabs into a new group, or into an existing one
+- `tabs_group(profile_id, tab_ids, group_id=None, title=None, color=None)` - Group tabs into a new group, or into an existing one
   - Without `group_id`, the new group goes in the first tab's window, and tabs from other
     windows move there
   - Reports `Tabs grouped into group {id}`; see [Tab groups](#tab-groups)
-- `tabs_ungroup(tab_ids)` - Take tabs out of their group
-- `tabs_groups_update(group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
-- `tabs_groups_query(window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
-- `tabs_capture_screenshot(filename=None, window_id=None, format="png", quality=90, tab_id=None)` - Capture screenshot of the visible tab, or of one given tab
+- `tabs_ungroup(profile_id, tab_ids)` - Take tabs out of their group
+- `tabs_groups_update(profile_id, group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
+- `tabs_groups_query(profile_id, window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
+- `tabs_capture_screenshot(profile_id, filename=None, window_id=None, format="png", quality=90, tab_id=None)` - Capture screenshot of the visible tab, or of one given tab
   - If `filename` provided: saves screenshot to file and returns success message
   - If `filename` omitted: returns base64 encoded image data URL
   - Automatically adds file extension (.png/.jpeg) if not provided
@@ -79,13 +81,13 @@ they remain usable by ID. Names refresh on discovery and need not be unique.
 
 ### Firefox Containers
 
-- `containers_list()` returns JSON with `containers` (named identities with
+- `containers_list(profile_id)` returns JSON with `containers` (named identities with
   `cookie_store_id`, `name`, `color`, `icon`) and `default_cookie_store_id`.
-- `containers_create(name, color="blue", icon="fingerprint")` returns
+- `containers_create(profile_id, name, color="blue", icon="fingerprint")` returns
   `{container: {cookie_store_id, name, color, icon}}` as JSON.
-- `containers_update(cookie_store_id, name=None, color=None, icon=None)` requires
+- `containers_update(profile_id, cookie_store_id, name=None, color=None, icon=None)` requires
   at least one property; unspecified properties and identity are preserved.
-- `containers_remove(cookie_store_id)` returns `{removed: true, cookie_store_id}`.
+- `containers_remove(profile_id, cookie_store_id)` returns `{removed: true, cookie_store_id}`.
   Refuses open tabs (`CONTAINER_IN_USE` with `tab_ids`) and default/private stores.
   Removal clears stored site data. The open-tab check cannot exclude races with
   browser UI or other extensions. Containers are never cleaned up on disconnect.
@@ -105,31 +107,32 @@ there are no cookie export/edit tools. Installation can enable Firefox container
 subsequent user disabling is respected. History and bookmarks remain shared.
 
 ### History Operations
-- `history_query(query, max_results=50)` - Search browser history
-- `history_get_recent(count=10)` - Get recent history items
-- `history_delete_item(url)` - Delete specific history item
+- `history_query(profile_id, query, max_results=50)` - Search browser history
+- `history_get_recent(profile_id, count=10)` - Get recent history items
+- `history_delete_item(profile_id, url)` - Delete specific history item
 
 ### Bookmark Management
-- `bookmarks_list(folder_id=None)` - List bookmarks from all folders or a specific folder
+- `bookmarks_list(profile_id, folder_id=None)` - List bookmarks from all folders or a specific folder
   - Returns formatted text with folder (📁) and bookmark (🔖) entries
   - Each item includes unique ID, parent folder ID, and index (position within the parent, from 0)
   - When `folder_id` is provided, returns only direct children of that folder, in order
-- `bookmarks_search(query)` - Search bookmarks by title or URL
+- `bookmarks_search(profile_id, query)` - Search bookmarks by title or URL
   - Returns formatted text with matching bookmark entries including ID and parent folder ID
-- `bookmarks_create(title, url, parent_id=None)` - Create bookmark
-- `bookmarks_create_folder(title, parent_id=None)` - Create bookmark folder
-- `bookmarks_update(bookmark_id, title=None, url=None)` - Update bookmark or folder title/URL
-- `bookmarks_move(bookmark_id, parent_id=None, index=None)` - Move a bookmark or folder into another folder, or to another position
+- `bookmarks_create(profile_id, title, url, parent_id=None)` - Create bookmark
+- `bookmarks_create_folder(profile_id, title, parent_id=None)` - Create bookmark folder
+- `bookmarks_update(profile_id, bookmark_id, title=None, url=None)` - Update bookmark or folder title/URL
+- `bookmarks_move(profile_id, bookmark_id, parent_id=None, index=None)` - Move a bookmark or folder into another folder, or to another position
   - Needs at least one of `parent_id` and `index`; the bookmark keeps its ID
   - `index` is the final position, counting from 0; omitted, the item goes to the end of the folder
 - For `bookmarks_create`, `bookmarks_create_folder` and `bookmarks_move`, `parent_id` must be a folder; a bookmark or separator ID is refused
-- `bookmarks_delete(bookmark_id)` - Delete bookmark
+- `bookmarks_delete(profile_id, bookmark_id)` - Delete bookmark
 
 ### Navigation Control
-- `navigation_back(tab_id)` - Navigate back in tab
-- `navigation_forward(tab_id)` - Navigate forward in tab
-- `navigation_reload(tab_id, bypass_cache=False)` - Reload tab
-- `navigation_go_to_url(tab_id, url)` - Navigate to URL
+- `navigation_back(profile_id, params)` - Navigate back in tab
+- `navigation_forward(profile_id, params)` - Navigate forward in tab
+  - For back/forward, `params` is an object such as `{"tab_id": 12}`.
+- `navigation_reload(profile_id, tab_id, bypass_cache=False)` - Reload tab
+- `navigation_go_to_url(profile_id, tab_id, url)` - Navigate to URL
 
 ### Content Access
 
@@ -137,32 +140,32 @@ subsequent user disabling is respected. History and bookmarks remain shared.
 in its MCP description. See [Loading local files](scripts.md#loading-local-files)
 for the complete input-assignment example and transfer details.
 
-- `content_load_file(tab_id, path, mime_type=None)` - Load one regular local file into the tab's extension-isolated JavaScript scope. Returns JSON with `file_id`, `name` (basename only), `type`, `size`, `lastModified` and `expires_in_seconds` (300). Use `globalThis.foxmcpFiles.get(file_id)` from `content_execute_script` or a predefined script, and delete the entry after use. MIME is inferred from the filename unless overridden, with `application/octet-stream` as the fallback. Does not select an input or submit a form. Private tabs are refused. See [Loading local files](scripts.md#loading-local-files).
-- `content_get_text(tab_id, max_length=None)` - Extract page text content
+- `content_load_file(profile_id, tab_id, path, mime_type=None)` - Load one regular local file into the tab's extension-isolated JavaScript scope. Returns JSON with `file_id`, `name` (basename only), `type`, `size`, `lastModified` and `expires_in_seconds` (300). Use `globalThis.foxmcpFiles.get(file_id)` from `content_execute_script` or a predefined script, and delete the entry after use. MIME is inferred from the filename unless overridden, with `application/octet-stream` as the fallback. Does not select an input or submit a form. Private tabs are refused. See [Loading local files](scripts.md#loading-local-files).
+- `content_get_text(profile_id, tab_id, max_length=None)` - Extract page text content
   - `max_length`: Optional maximum length of text to return (default: unlimited)
-- `content_get_html(tab_id)` - Get page HTML source
-- `content_execute_script(tab_id, script)` - Execute JavaScript directly
-- `content_execute_predefined(tab_id, script_name, script_args="")` - Execute predefined external scripts
+- `content_get_html(profile_id, tab_id)` - Get page HTML source
+- `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
+- `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
 
 ### Web Request Monitoring
-- `requests_start_monitoring(url_patterns, options=None, tab_id=None)` - Start monitoring web requests
+- `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests
   - `url_patterns`: List of URL patterns to monitor (e.g., `["https://api.example.com/*", "*/api/*"]`)
   - `options`: Optional configuration dict with capture settings
   - `tab_id`: Optional tab ID to monitor (if not provided, monitors all tabs)
   - Returns JSON with `monitor_id` and monitoring status
-- `requests_stop_monitoring(monitor_id, drain_timeout=5)` - Stop monitoring
+- `requests_stop_monitoring(profile_id, monitor_id, drain_timeout=5)` - Stop monitoring
   - `monitor_id`: ID of the monitoring session to stop
   - `drain_timeout`: **ignored** — the monitor stops immediately
   - Returns JSON with stop status and statistics
   - Captured data outlives the monitor: the two tools below still answer afterwards
-- `requests_list_captured(monitor_id)` - List captured request summaries
+- `requests_list_captured(profile_id, monitor_id)` - List captured request summaries
   - Returns JSON with array of request summaries (metadata only, no full content)
   - A request appears once it has completed, so a navigation started a moment ago
     is not in the list yet
   - `MONITOR_NOT_FOUND` for an id that never existed or has been cleared. Monitors
     are cleared when the client that started them disconnects, and when the
     extension loses its connection to the server
-- `requests_get_content(monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
+- `requests_get_content(profile_id, monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
   - `include_binary`: **ignored** — non-text bodies never come back as content, only as a size
   - `save_request_body_to`, `save_response_body_to`: **ignored** — `saved_to_file` is always `null`
   - Returns JSON with response headers and both bodies. `request_headers` is always
@@ -201,15 +204,15 @@ alternate-data cache.
 from `webRequest` and is captured for every matching request.
 
 ### Window Management
-- `list_windows(populate=True)` - List all browser windows with optional tab details
-- `get_window(window_id, populate=True)` - Get specific window information
-- `get_current_window(populate=True)` - Get current active window
-- `create_window(url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
+- `list_windows(profile_id, populate=True)` - List all browser windows with optional tab details
+- `get_window(profile_id, window_id, populate=True)` - Get specific window information
+- `get_current_window(profile_id, populate=True)` - Get current active window
+- `create_window(profile_id, url=None, window_type="normal", state="normal", focused=True, width=None, height=None, top=None, left=None, incognito=False)` - Create new browser window
   - Firefox always focuses a new window; with `focused=False`, focus goes back to the
     window that had it. The result ends in `(focused)` if the new window has focus
-- `close_window(window_id)` - Close specific window
-- `focus_window(window_id)` - Bring window to front and focus it
-- `update_window(window_id, state=None, focused=None, width=None, height=None, top=None, left=None)` - Update window properties
+- `close_window(profile_id, window_id)` - Close specific window
+- `focus_window(profile_id, window_id)` - Bring window to front and focus it
+- `update_window(profile_id, window_id, state=None, focused=None, width=None, height=None, top=None, left=None)` - Update window properties
   - `focused=False` is refused: Firefox cannot take focus away from a window. Call
     `focus_window` on the window that should have it
 
@@ -218,33 +221,50 @@ from `webRequest` and is captured for every matching request.
 
 ## Usage Examples
 
+The examples use an already connected FastMCP `client`. Inspect discovery, then
+choose a profile ID for the task. Do not automatically choose the first entry
+when several profiles are connected.
+
+```python
+import json
+import re
+
+discovery = await client.call_tool("profiles_list", {"populate": True})
+profiles = json.loads(discovery.content[0].text)["profiles"]
+print(profiles)
+profile_id = "<chosen-profile-id>"
+```
+
+Use that same `profile_id` with IDs discovered in that profile in the following
+examples. Replace illustrative tab/window/bookmark IDs with actual results.
+
 ### Basic Tab Operations
 ```python
 # List all tabs
-tabs = await client.call_tool("tabs_list")
+tabs = await client.call_tool("tabs_list", {"profile_id": profile_id})
 
 # Create new tab
-result = await client.call_tool("tabs_create", {"url": "https://example.com"})
+result = await client.call_tool("tabs_create", {"profile_id": profile_id, "url": "https://example.org"})
 
 # Take screenshot
-screenshot = await client.call_tool("tabs_capture_screenshot", {"format": "png"})
+screenshot = await client.call_tool("tabs_capture_screenshot", {"profile_id": profile_id, "format": "png"})
 ```
 
 ### Gathering Tabs Into Their Own Window
 ```python
 # Find the tabs to gather. Every window is listed, and each line ends with
 # "[window {id}, index {n}]", so the tab IDs can be picked out of the listing.
-listing = await client.call_tool("tabs_list")
+listing = await client.call_tool("tabs_list", {"profile_id": profile_id})
 
 # Open the window they are going to
-window = await client.call_tool("create_window", {"url": "about:blank"})
-window_id = int(re.search(r'ID (\d+)', window["content"]).group(1))
+window = await client.call_tool("create_window", {"profile_id": profile_id, "url": "about:blank"})
+window_id = int(re.search(r'ID (\d+)', window.content[0].text).group(1))
 
 # Move them in, keeping the given order, appended at the end
-await client.call_tool("tabs_move", {"tab_ids": [12, 15, 18], "window_id": window_id})
+await client.call_tool("tabs_move", {"profile_id": profile_id, "tab_ids": [12, 15, 18], "window_id": window_id})
 
 # Confirm they arrived, and nothing else came along
-await client.call_tool("tabs_list", {"window_id": window_id})
+await client.call_tool("tabs_list", {"profile_id": profile_id, "window_id": window_id})
 ```
 
 The new window opens with a blank tab of its own, which stays until closed with
@@ -253,33 +273,36 @@ The new window opens with a blank tab of its own, which stays until closed with
 ### Reordering Tabs
 ```python
 # Move one tab to the front of its window
-await client.call_tool("tabs_move", {"tab_ids": 12, "index": 0})
+await client.call_tool("tabs_move", {"profile_id": profile_id, "tab_ids": 12, "index": 0})
 
 # Move several to the end, in the order given
-await client.call_tool("tabs_move", {"tab_ids": [12, 15], "index": -1})
+await client.call_tool("tabs_move", {"profile_id": profile_id, "tab_ids": [12, 15], "index": -1})
 ```
 
 ### History and Bookmarks
 ```python
 # Search history
-history = await client.call_tool("history_query", {"query": "python", "max_results": 10})
+history = await client.call_tool("history_query", {"profile_id": profile_id, "query": "python", "max_results": 10})
 
 # List bookmarks
-bookmarks = await client.call_tool("bookmarks_list")
+bookmarks = await client.call_tool("bookmarks_list", {"profile_id": profile_id})
 
 # Create bookmark
 bookmark = await client.call_tool("bookmarks_create", {
+    "profile_id": profile_id,
     "title": "Example Site",
-    "url": "https://example.com"
+    "url": "https://example.org"
 })
 
 # Create bookmark folder
 folder = await client.call_tool("bookmarks_create_folder", {
+    "profile_id": profile_id,
     "title": "My Projects"
 })
 
 # Create bookmark in folder
 bookmark = await client.call_tool("bookmarks_create", {
+    "profile_id": profile_id,
     "title": "Project Repository",
     "url": "https://github.com/example/project",
     "parent_id": "folder_id_here"
@@ -287,24 +310,28 @@ bookmark = await client.call_tool("bookmarks_create", {
 
 # Update bookmark title
 await client.call_tool("bookmarks_update", {
+    "profile_id": profile_id,
     "bookmark_id": "bookmark_id_here",
     "title": "New Title"
 })
 
 # Update bookmark URL
 await client.call_tool("bookmarks_update", {
+    "profile_id": profile_id,
     "bookmark_id": "bookmark_id_here",
-    "url": "https://newsite.com"
+    "url": "https://example.org/new"
 })
 
 # Rename a folder
 await client.call_tool("bookmarks_update", {
+    "profile_id": profile_id,
     "bookmark_id": "folder_id_here",
     "title": "Renamed Folder"
 })
 
 # Move a bookmark to the top of another folder
 await client.call_tool("bookmarks_move", {
+    "profile_id": profile_id,
     "bookmark_id": "bookmark_id_here",
     "parent_id": "folder_id_here",
     "index": 0
@@ -314,35 +341,38 @@ await client.call_tool("bookmarks_move", {
 ### Content Interaction
 ```python
 # Get page text (unlimited)
-text = await client.call_tool("content_get_text", {"tab_id": 123})
+text = await client.call_tool("content_get_text", {"profile_id": profile_id, "tab_id": 123})
 
 # Get page text with length limit
 text = await client.call_tool("content_get_text", {
+    "profile_id": profile_id,
     "tab_id": 123,
     "max_length": 1000
 })
 
 # Execute JavaScript
 result = await client.call_tool("content_execute_script", {
+    "profile_id": profile_id,
     "tab_id": 123,
-    "script": "document.title"
+    "code": "document.title"
 })
 ```
 
 ### Window Management
 ```python
 # List all windows
-windows = await client.call_tool("list_windows", {"populate": True})
+windows = await client.call_tool("list_windows", {"profile_id": profile_id, "populate": True})
 
 # Create new window
 window = await client.call_tool("create_window", {
-    "url": "https://example.com",
+    "profile_id": profile_id,
+    "url": "https://example.org",
     "width": 800,
     "height": 600
 })
 
 # Focus window
-await client.call_tool("focus_window", {"window_id": 456})
+await client.call_tool("focus_window", {"profile_id": profile_id, "window_id": 456})
 ```
 
 ### Tab groups
@@ -351,10 +381,10 @@ These are Firefox's own tab groups, and need Firefox 139 or later. None of the
 four tools activates a tab or focuses a window.
 
 ```python
-tabs_group(tab_ids=[12, 15], title="Research", color="blue")
+tabs_group(profile_id=profile_id, tab_ids=[12, 15], title="Research", color="blue")
 # Tabs grouped into group 1789744400280043
-tabs_group(tab_ids=18, group_id=1789744400280043)
-tabs_groups_query(window_id=1)
+tabs_group(profile_id=profile_id, tab_ids=18, group_id=1789744400280043)
+tabs_groups_query(profile_id=profile_id, window_id=1)
 # Tab groups (1 found):
 # - ID 1789744400280043: Research - blue [window 1]
 ```

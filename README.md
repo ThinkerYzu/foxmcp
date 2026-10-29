@@ -20,6 +20,11 @@ client talks to the server, which sends commands to the extension.
 scripts. Use trusted clients and consider a dedicated Firefox profile.
 See [SECURITY.md](SECURITY.md) for the threat model.
 
+This README describes current source. The profile-routing and settings changes
+are [Unreleased](CHANGELOG.md#unreleased); published v1.5.0 artifacts use the
+previous API. To try current source, use the
+[source installation](#install-from-source) with a matching source-built extension.
+
 ## Quick start
 
 v1.5.0 is available on [PyPI](https://pypi.org/project/foxmcp/1.5.0/) and
@@ -104,10 +109,14 @@ For another MCP client, add an HTTP server with URL
 
 ### 5. Try it
 
-Ask your assistant:
+Ask your assistant to discover profiles and choose the intended one before
+performing browser actions. For example:
 
 ```text
-List all open Firefox tabs.
+List the connected Firefox profiles and their windows/tabs.
+Use the profile named Personal for the following task. If the name is ambiguous,
+show me the candidates first.
+List all open Firefox tabs in that profile.
 Open https://example.org in a new tab.
 Get the text from the current page.
 Take a screenshot of the current tab.
@@ -115,12 +124,14 @@ Take a screenshot of the current tab.
 
 To target a particular tab, right-click it in Firefox's tab bar and choose
 **Tab ID = … (click to copy)**. Paste the copied `tab_id = …` into your request.
-Tab IDs change when Firefox restarts.
+Tab IDs are local to their profile. The copied tab ID does not identify its
+profile; give the assistant that context too. Rediscover after Firefox restarts.
 
 ## What you can do
 
 | Area | Capabilities |
 |---|---|
+| Profiles | Discover connected Firefox profiles and address browser calls explicitly |
 | Tabs and groups | List, open, close, switch, reorder, move between windows, group and ungroup; take screenshots |
 | Windows | Create, close, focus, resize, position, minimize and maximize |
 | Page content | Read text or HTML, execute JavaScript, run predefined scripts, load local files for uploads |
@@ -188,6 +199,11 @@ See [stdio setup](docs/configuration.md#serving-mcp-over-stdio).
 
 Click the FoxMCP toolbar icon to change extension connection settings. If you
 change the WebSocket port, change it on both the extension and the server.
+Host/Port and Reconnect Interval save automatically after a 500ms pause. Reset
+persists defaults immediately. Retries use a constant interval (1000ms by
+default, configurable from 100 to 30000ms); there is no manual Reconnect button.
+Both Popup and Options show actual connection and protocol status. See
+[extension configuration](docs/configuration.md#configuring-extension).
 
 For manual startup, run these from the installation directory:
 

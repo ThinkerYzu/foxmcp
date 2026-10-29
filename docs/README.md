@@ -33,7 +33,7 @@ The `requests.*` action family: capturing browser traffic, reading response bodi
 Response schema for `tabs.list`.
 
 #### [files.md](files.md)
-Complete project structure overview with detailed explanations of each component, including implementation status and file purposes.
+Source file map, including shared settings modules, per-profile browser connections, forwarding, packaging and tests.
 
 #### [venv-setup.md](venv-setup.md)
 Virtual environment setup instructions with package installation commands, verification steps, and development environment configuration.
@@ -41,7 +41,8 @@ Virtual environment setup instructions with package installation commands, verif
 ## Quick Navigation
 
 - **Getting Started**: See main [README.md](../README.md) for quick start guide
-- **API Reference**: See [protocol.md](protocol.md) for WebSocket message formats
+- **API Reference**: See [api-reference.md](api-reference.md) for MCP tools and profile discovery
+- **Wire Protocol**: See [protocol.md](protocol.md) for WebSocket messages and handshake requirements
 - **Project Structure**: See [files.md](files.md) for complete file overview
 - **Project Status & Roadmap**: Tracked in the docforge at `~/progm/claudebugzilla/proj_docs/foxmcp/HANDOFF.md`, not in this directory
 - **Environment Setup**: See [venv-setup.md](venv-setup.md) for detailed setup

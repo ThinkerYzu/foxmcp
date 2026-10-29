@@ -299,10 +299,12 @@ group is enabled anyway does nothing, but a name that matches no tool is an
 error, on the same reasoning as an unknown group: the symptom would otherwise be
 the one tool you wanted quietly missing.
 
-Most tools take a `tab_id` that in practice comes from `tabs_list`, so enabling
-one of those on its own leaves you with a tool you have no way to address.
-`tabs_capture_screenshot` is the exception that makes the example above work: its
-`tab_id` is optional, and without one it captures the visible tab.
+`profiles_list(populate=True)` supplies profile, window and tab IDs even when
+the `tabs` group is disabled. Keep discovery enabled, or provide the explicit
+profile and native object IDs from another source. Every browser call still
+requires `profile_id`; enabling an individual tool does not select a profile.
+Without `tab_id`, the screenshot tool captures the visible tab within the
+explicitly targeted profile.
 
 ### Setting both from the environment
 
@@ -356,7 +358,10 @@ individually. See [Loading local files](scripts.md#loading-local-files).
 
 ## Configuring Extension
 
-The Firefox extension includes comprehensive configuration options with **storage.sync** persistence:
+The persistent background owns configuration in `browser.storage.sync`. Popup
+and Options use the same shared controller and background status contract.
+The editable fields show saved user settings; connection status shows the
+effective endpoint, including any test overrides.
 
 ### 1. Access Options
 
@@ -382,21 +387,27 @@ when loaded. Other saved intervals in the supported range are preserved.
 The extension constructs an unencrypted `ws://` address internally. Entering a
 full URL, including `wss://`, in Host is invalid. The built-in server has no TLS
 configuration. **Reset to Defaults** immediately saves and applies the defaults,
-canceling pending edits while preserving test overrides and unrelated storage.
+canceling queued debounce saves while preserving test overrides and unrelated
+storage. An already executing write finishes before the reset write; its stale
+completion cannot overwrite newer UI edits.
 Reset is available in both views and does not open a native confirmation dialog.
 
 Popup and Options share light/dark styling and a segmented **MCP Server URL**
 field containing `ws://`, Host and Port. Configuration fields stay visible.
 Routine save feedback is hidden; validation and storage errors remain visible.
 Both footers show extension/server release diagnostics and the extension's
-locally supported protocol ID (not a negotiated server protocol version).
+locally supported protocol ID. Protocol 3 is enforced during registration;
+Connected means the server acknowledged this profile, not just that the socket
+opened. An incompatible-peer error is shown in both views and stops retries.
+Update both components and reload the extension to register again, or correct
+the endpoint. Release-version mismatch is advisory when protocol IDs agree.
 
 ### 3. Features
 
-- **Real-time storage sync**: Configuration changes persist across browser restarts
+- **Persistent settings**: Saved configuration survives browser restarts
 - **Connection Status**: Real-time connection status monitoring
 - **Status Indicators**: Both pages refresh connection state, the effective endpoint and the next retry every second without replacing unfinished input
-- **Automatic Reconnection**: Extension automatically reconnects when settings change
+- **Automatic Reconnection**: Effective endpoint changes reconnect; interval-only changes preserve a healthy connection
 - **Configuration Preservation**: Test settings maintained during normal use
 
 Editable fields show the saved user configuration; a separate server status
@@ -574,9 +585,10 @@ server = FoxMCPServer()
 
 ## Tuning
 
-`FoxMCPServer` takes only `host`, `port`, `mcp_port`, and `start_mcp`. WebSocket frame
-sizes, ping intervals, and MCP concurrency are not exposed — the server accepts the
-`websockets` and FastMCP defaults.
+WebSocket frame sizes, ping intervals and MCP concurrency are not exposed as
+settings; the server uses the `websockets` and FastMCP defaults. See
+[programmatic configuration](#programmatic-server-configuration) for supported
+constructor arguments.
 
 Two things you can change:
 
@@ -584,6 +596,7 @@ Two things you can change:
 `timeout` to override it for a slow call:
 
 ```python
+# request contains a top-level profile_id from discovery.
 response = await server.send_request_and_wait(request, timeout=60.0)
 ```
 
@@ -669,11 +682,13 @@ foreground is the quickest way to watch the socket come and go.
 
 ### Connection version warnings
 
-Click the FoxMCP toolbar icon to see installed extension and connected server
-versions. The popup refreshes while open. A mismatch warning appears inside that
-popup and asks you to update both together; tools remain available. It does not
-automatically open the popup, display a dialog or send a browser notification.
-An unavailable server version usually means the server is older than the version
-check. A new server similarly warns in its log when an extension does not report
-its version within five seconds. Restart the server after updating its files and
-let the extension reconnect. See [version announcements](protocol.md#connection-version-announcement).
+Popup and Options display the extension release, connected server release and
+supported protocol ID. A release-version mismatch warns without blocking tools
+when both peers support protocol 3. Missing or invalid release versions are
+reported as unavailable; they do not bypass the mandatory profile handshake.
+
+A protocol mismatch is different: registration is refused, both views display
+an update message, and the extension stops retrying that incompatible peer.
+Update both components and reload the extension, or correct the endpoint.
+Restart the server after updating its files. See
+[version announcements](protocol.md#connection-version-announcement).

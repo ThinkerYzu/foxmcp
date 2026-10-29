@@ -26,20 +26,22 @@ lists monitors, so losing it leaves a monitor running with no way to read or sto
 Start a monitor, let the browser do some work, then read what was captured.
 
 ```python
+profile_id = "<chosen-profile-id>"  # Inspect profiles_list() first.
+
 # 1. Start. Returns {"monitor_id": "mon_1755205412345", "status": "active", ...}
-requests_start_monitoring(url_patterns=["https://example.org/*"])
+requests_start_monitoring(profile_id=profile_id, url_patterns=["https://example.org/*"])
 
 # 2. Drive the browser — navigate, click, whatever generates the traffic
-tabs_create(url="https://example.org/")
+tabs_create(profile_id=profile_id, url="https://example.org/")
 
 # 3. See what was caught
-requests_list_captured(monitor_id="mon_1755205412345")
+requests_list_captured(profile_id=profile_id, monitor_id="mon_1755205412345")
 
 # 4. Pull one request apart
-requests_get_content(monitor_id="mon_1755205412345", request_id="1234")
+requests_get_content(profile_id=profile_id, monitor_id="mon_1755205412345", request_id="1234")
 
 # 5. Stop
-requests_stop_monitoring(monitor_id="mon_1755205412345")
+requests_stop_monitoring(profile_id=profile_id, monitor_id="mon_1755205412345")
 ```
 
 A request is listed once it has completed, and step 2 above returns before that
@@ -60,15 +62,15 @@ trustworthy figure, per request.
 
 ## How long a monitor lives
 
-A monitor lives in the extension, not in the server, so it survives a server
-restart on its own. Only the client that started it knows its `monitor_id`, which
-is why it does not outlive that client:
+Captured data lives in the selected profile's extension background page. The
+server records monitor ownership so it can stop captures abandoned by an MCP
+client. A monitor ends when its client departs or its profile connection drops:
 
 | What happens | The monitors it ends |
 |---|---|
 | `requests_stop_monitoring` | that one, and its captured data stays readable |
-| Your MCP client disconnects | every monitor that client started, within a few seconds |
-| The extension loses its server, or you press **Reconnect** | all of them, captured data included |
+| Your MCP client disconnects | every monitor that client started, across its targeted profiles, within a few seconds |
+| A profile connection drops, including when its endpoint changes | all monitors in that profile, captured data included; other profiles are unaffected |
 | The extension answers for a monitor no client owns | that one, on sight |
 
 The middle two are the same rule seen from either side. The last is the backstop for
@@ -190,7 +192,8 @@ what `webRequest` reports at `onBeforeRequest`; a form post arrives as the parse
 ## Where the data lives
 
 Everything is held in memory in the extension's background page. Nothing is written
-to disk and nothing is stored on the server, which keeps no monitoring state at all.
+to disk. The server keeps ownership metadata per profile connection, but does not
+store the captured bodies or request records.
 
 - **Response bodies:** the most recent 200 across all monitors. A monitor on `*`
   sees every request the browser makes, so older bodies are evicted to keep memory

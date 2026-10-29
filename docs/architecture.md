@@ -27,7 +27,10 @@ Overview of the FoxMCP system architecture, components, and data flow.
 └─────────────────┘
 ```
 
-The Firefox extension acts as a bridge between WebExtensions APIs and MCP clients, enabling AI assistants and other tools to interact with browser functionality programmatically.
+Each running Firefox profile has its own extension connection to the same
+server port. The diagram shows one such connection. MCP clients discover all
+connected profiles, then address every browser call with a `profile_id`; there
+is no active-profile default. See [profile discovery](api-reference.md#firefox-profiles).
 
 ## Component Architecture
 
@@ -49,31 +52,42 @@ The Firefox extension acts as a bridge between WebExtensions APIs and MCP client
 - **DOM Interaction**: Extracts text, HTML, and manipulates page content
 - **Communication Bridge**: Relays data between page and background script
 
-#### Popup Interface (`popup/`)
-- **Configuration UI**: Connection settings
-- **Real-time Status**: Live connection status and diagnostics
-- **Storage Management**: Persists settings using `storage.sync`
-- **Test Mode**: Override settings for development and testing
+#### Shared settings UI
 
-#### Options Page (`options.html`, `options.js`)
-- Full settings page, opened in a tab (`options_ui.open_in_tab`), backed by the same `storage.sync` values as the popup
+`config.js` supplies defaults, validation, test overrides and URL construction.
+The persistent background owns serialized storage operations, the 500ms save
+debounce and connection state. `settings.js` is shared by Popup and Options;
+`popup/popup.js` and `options.js` only adapt their DOM elements. Both views poll
+background status every second without overwriting unfinished edits. Shared
+styling lives in `settings.css`, with small page-specific CSS files.
+
+Settings are kept in `storage.sync`. Host/Port form one validation group and the
+interval forms another. Reset persists defaults without a modal and preserves
+test overrides. See [configuration](configuration.md#configuring-extension)
+and the [file map](files.md#extension-directory).
 
 ### 2. Python Server
 
-**Location**: `server/`
+#### Registry and browser connections
 
-#### WebSocket Server (`server.py`)
-- **Connection Management**: Accepts the extension connection and tracks it as `self.extension_connection`
-- **Request Correlation**: Maps request IDs to `asyncio.Future` objects in `self.pending_requests` and resolves them when the matching response arrives
-- **Protocol Implementation**: WebSocket message protocol handling
-- **Security**: Localhost-only binding
-- **Lifecycle**: Graceful startup and shutdown, including cleanup of the extension connection
+`server.py` keeps a registry of `BrowserProfile` objects keyed by `profile_id`.
+Each object in `browser_profile.py` owns one socket, pending reply futures,
+release diagnostics and monitor ownership. Registration validates protocol 3
+and the profile ID; duplicate live IDs are rejected without replacing the
+existing profile. Unrelated profiles stay connected when one disconnects.
+
+`profile_names.py` resolves display names from local Firefox metadata without
+modifying it. Names may be missing, ambiguous or duplicated and are never
+routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-3).
 
 #### MCP Tools (`mcp_tools.py`)
-- **MCP Tool Definitions**: 45 browser functions registered as MCP tools on a `FastMCP("FoxMCP")` instance
-- **Parameter Validation**: Type-annotated tool signatures; FastMCP derives the schema
-- **Response Formatting**: Each tool turns the raw browser response into a human-readable string
-- **Error Handling**: Every tool checks for `error` in the response before reading data
+
+FastMCP exposes 46 tools by default. `profiles_list` and
+`debug_websocket_status` are untargeted; every browser tool requires a nonempty
+`profile_id`. `_send(profile_id, request)` adds routing metadata before forwarding
+to the registry. Native tab/window/group/container/monitor IDs are meaningful
+only within the chosen profile. Unknown or disconnected targets return errors
+without selecting another profile.
 
 ### Firefox containers
 
@@ -120,6 +134,12 @@ is closed with the WebSocket and MCP services.
 }
 ```
 
+The browser envelope above is sent only to the selected extension. MCP calls
+and `/proxy` requests also carry `profile_id` as routing metadata. Both peers
+must complete the protocol-3 `hello`/`ready` handshake before browser requests
+are accepted. Release-version warnings are advisory; protocol-ID mismatch is
+refused. See [protocol](protocol.md#profile-connections-protocol-id-3).
+
 Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.create`, `requests.start_monitoring`. The prefix selects the handler in the extension. See [protocol.md](protocol.md) for the full specification.
 
 #### MCP Protocol
@@ -141,7 +161,8 @@ the extension port. `/discovery` identifies the server and forwarding protocol;
 `/proxy` carries requests and replies; `/` remains the extension connection.
 These routes are available on manual HTTP and plain stdio servers as well.
 
-`BrowserProxyHub` assigns fresh upstream IDs and restores each client's original
+The target `profile_id` passes unchanged through the proxy. Each browser profile
+keeps its own replies and monitors. `BrowserProxyHub` assigns fresh upstream IDs and restores each client's original
 ID in its reply. Proxy connections are tracked separately from the extension
 and MCP HTTP sessions. Monitor ownership follows the proxy socket, with cleanup
 after outstanding requests have finished so a late monitor-creation reply cannot
@@ -244,7 +265,7 @@ EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')
 ```
 
 - **Scheme, not identity**: Firefox generates a per-install UUID, so the extension's origin differs on every profile — `moz-extension://8690897d-…` on one machine, something else on the next. Matching the scheme lets any legitimate install pass
-- **Rejected during the handshake**: The connection never reaches `handle_extension_connection`, which matters because that function closes the existing extension connection to admit a new one — a rejection arriving any later would itself be a denial of service
+- **Rejected before registration**: Origin validation runs before the extension handler. Protocol validation and duplicate-ID checks then reject incompatible registrations without replacing an existing profile.
 - **Matched with `fullmatch()`**: The trailing `.+` is required; a bare prefix pattern rejects everything, including the extension
 - **Rejections are logged** at warning level with the offending origin. The library logs them only in debug mode, which would make a legitimate extension that stopped connecting look identical to a server that was never reached
 
@@ -255,21 +276,38 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 ## Concurrency and Limits
 
 ### 1. Connection Management
-- **Single Extension Connection**: One extension connection at a time. When a new one arrives, the server closes the existing connection first, which prevents connection races between two browsers or a stale socket.
-- **MCP Clients**: Served by FastMCP. There is no per-client state — all clients share the one extension connection, and requests from different clients interleave.
-- **Version Diagnostics**: On connection, both peers announce release versions through a standalone `hello`. The popup and server log warn on mismatch or unavailable legacy versions without blocking tools. State resets per connection; see [protocol](protocol.md#connection-version-announcement).
-- **Reconnection Logic**: After a socket closes or an attempt fails, the extension waits `retryInterval` (1000 ms by default, configurable from 100 to 30000 ms) and retries indefinitely at that same interval. Background-owned debounce applies valid Host/Port and interval edits after 500ms. Endpoint changes replace the connection; interval changes preserve healthy sockets and reschedule pending retries. One tracked timer and socket identity guards prevent obsolete work from closing a new connection or clearing its monitors. Popup and Options read the same background status without replacing unfinished input. Legacy `maxRetries` and `pingTimeout` values are ignored.
+
+- Each connected profile has its own socket and connection identity. Profile IDs
+  survive socket reconnects and change when Firefox or the extension restarts.
+- MCP clients can address the same or different profiles concurrently. They do
+  not share an active-profile setting. Monitor ownership is tracked per client
+  and browser connection.
+- The extension reports Connected after a matching `ready` acknowledgment, not
+  merely after the socket opens. Protocol errors stop retries and are visible
+  in both UI views; release-version mismatches only warn.
+- Ordinary connection failures retry indefinitely at the configured constant
+  interval: 1000ms by default, from 100 to 30000ms. Endpoint edits reconnect;
+  interval edits preserve healthy sockets and reschedule a pending retry.
+  Obsolete timer callbacks and old socket events cannot disturb a replacement
+  connection. See [configuration](configuration.md#tuning).
 
 ### 2. Request Handling
-- **Async Processing**: All operations are asynchronous
-- **Concurrent Requests**: Multiple requests can be in flight on the single socket at once; responses are matched by `id`, not by order, so a slow request does not block the others
-- **Timeouts**: `send_request_and_wait` defaults to 30 seconds and **returns** an `{"error": ...}` dict on expiry rather than raising — callers must check for `error` before reading data
-- **Cleanup**: Every exit path removes its entry from `pending_requests`
+
+- Requests may interleave within and across profiles. Each `BrowserProfile`
+  matches replies by ID in its own `pending_requests` map.
+- `send_request_and_wait` defaults to 30 seconds and returns an error dictionary
+  on timeout. Callers check for errors before consuming response data.
+- Disconnect fails that socket's pending requests and drops its ownership state.
+  The extension sends a response only on the socket that received its request.
+- Request monitors are cleaned up when their owning client or profile connection
+  disappears. Containers and bookmarks are persistent browser data, not client
+  resources. See [monitor lifecycle](web-request-monitoring.md#how-long-a-monitor-lives).
 
 ### 3. Known Limits
-- **No queuing or retry**: A request sent while the extension is disconnected fails immediately; nothing is buffered for later delivery
-- **No response caching**: Every tool call is a fresh round trip to the browser
-- **No message size limit configured**: The `websockets` library default applies
+
+- Commands are not queued, replayed or redirected after a target disconnects.
+- Results are not cached; every browser call makes a fresh round trip.
+- The WebSocket library's default message-size limit applies.
 
 ## Extension Points
 
@@ -293,11 +331,12 @@ case 'windows.new_function':
 **Step 2: MCP Tool** (`mcp_tools.py`) — register the tool and build the request explicitly:
 
 ```python
-@self.mcp.tool()
-async def new_function(window_id: int) -> str:
+@self._tool()
+async def new_function(profile_id: str, window_id: int) -> str:
     """New browser function
 
     Args:
+        profile_id: Target from profiles_list.
         window_id: The ID of the window
 
     Returns:
@@ -311,7 +350,7 @@ async def new_function(window_id: int) -> str:
         "timestamp": datetime.now().isoformat()
     }
 
-    response = await self.websocket_server.send_request_and_wait(request)
+    response = await self._send(profile_id, request)
 
     if "error" in response:
         return f"Error: {response['error']}"
@@ -334,6 +373,7 @@ echo "(function() { return 'Custom functionality'; })()"
 **MCP Tool Usage**
 ```python
 result = content_execute_predefined(
+    profile_id="<chosen-profile-id>",
     tab_id=123,
     script_name="custom_script.sh",
     script_args='["arg1", "arg2"]'
