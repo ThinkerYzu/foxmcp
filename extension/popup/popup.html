@@ -1,76 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <style>
-    body {
-      width: 300px;
-      padding: 10px;
-      font-family: Arial, sans-serif;
-    }
-    .status {
-      padding: 8px;
-      border-radius: 4px;
-      margin: 10px 0;
-    }
-    .connected {
-      background-color: #d4edda;
-      color: #155724;
-    }
-    .disconnected {
-      background-color: #f8d7da;
-      color: #721c24;
-    }
-    .info {
-      font-size: 12px;
-      color: #666;
-      margin-top: 10px;
-    }
-  </style>
+  <meta name="color-scheme" content="light dark">
+  <title>FoxMCP</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h3>FoxMCP Extension</h3>
-  
-  <div id="status" class="status disconnected">
-    Status: Disconnected
-  </div>
-  
-  <div id="retryInfo" style="margin: 5px 0; font-size: 11px; color: #666;"></div>
-  
-  <div id="versionInfo" role="status" style="margin: 5px 0; font-size: 12px;"></div>
-
-  <button id="forceReconnect" style="margin: 5px 2px; padding: 5px 10px;">Reconnect</button>
-  
-  <div id="testResult" style="margin: 10px 0; font-size: 12px;"></div>
-  
-  <details style="margin: 10px 0;">
-    <summary style="cursor: pointer; font-size: 12px;">Configuration</summary>
-    <div style="padding: 10px; border: 1px solid #ddd; margin-top: 5px;">
-      <label style="display: block; margin: 5px 0;">
-        Server URL:
-        <input type="text" id="serverUrl" style="width: 100%; margin-top: 2px;" />
-      </label>
-      <label style="display: block; margin: 5px 0;">
-        Retry Interval (ms):
-        <input type="number" id="retryInterval" min="1000" max="60000" style="width: 100%; margin-top: 2px;" />
-      </label>
-      <label style="display: block; margin: 5px 0;">
-        Max Retry Attempts (-1 for infinite):
-        <input type="number" id="maxRetries" min="-1" max="100" style="width: 100%; margin-top: 2px;" />
-      </label>
-      <label style="display: block; margin: 5px 0;">
-        Ping Timeout (ms):
-        <input type="number" id="pingTimeout" min="1000" max="30000" style="width: 100%; margin-top: 2px;" />
-      </label>
-      <button id="saveConfig" style="margin: 10px 0; padding: 5px 15px;">Save Configuration</button>
+  <header class="header">
+    <div class="brand">
+      <img src="../icons/foxmcp-32.png" alt="" width="28" height="28">
+      <h1>FoxMCP</h1>
     </div>
-  </details>
-  
-  <div class="info">
-    <p>This extension exposes browser data and functions to MCP clients via WebSocket connection.</p>
-    <p id="serverInfo">Server: ws://localhost:8765</p>
-  </div>
-  
+  </header>
+
+  <section class="connection" aria-label="Connection status">
+    <p id="status" class="status disconnected" role="status" aria-live="polite">Loading…</p>
+    <p id="serverInfo" class="server-info"></p>
+  </section>
+
+  <section class="configuration" aria-labelledby="configurationTitle">
+    <h2 id="configurationTitle">Configuration</h2>
+    <fieldset class="endpoint-field">
+      <legend>MCP Server URL</legend>
+      <div class="input-shell server-url">
+        <span class="scheme" aria-hidden="true">ws://</span>
+        <input type="text" id="hostname" aria-label="Host" placeholder="localhost" autocomplete="off" spellcheck="false" required>
+        <input type="number" id="port" aria-label="Port" min="1" max="65535" step="1" placeholder="8765" required>
+      </div>
+    </fieldset>
+    <div class="field retry-field">
+      <div class="field-heading">
+        <label for="retryInterval">Reconnect interval</label>
+        <span id="retryHint" class="hint">100–30,000 ms</span>
+      </div>
+      <div class="input-shell">
+        <input type="number" id="retryInterval" min="100" max="30000" step="1" aria-describedby="retryHint" required>
+        <span class="unit" aria-hidden="true">ms</span>
+      </div>
+    </div>
+    <div class="configuration-actions">
+      <button type="button" id="resetDefaults">Reset to defaults</button>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p id="saveStatus" role="status" aria-live="polite">Loading settings…</p>
+    <p id="versionInfo" class="version-info"></p>
+  </footer>
+
+  <script src="../config.js"></script>
+  <script src="../settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

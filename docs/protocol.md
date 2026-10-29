@@ -89,7 +89,12 @@ The checked protocol ID is `PROTOCOL_VERSION` in `server/browser_proxy.py`,
 exposed as `protocol_version` in discovery and the proxy greeting. It identifies
 the forwarding contract, including the browser API requests and responses
 carried between the extension and MCP server. It is independent of the release
-version in the extension's advisory `hello` announcement. Both the extension handshake and local forwarding peers enforce this ID.
+version in the extension's advisory `hello` announcement. Both the extension
+handshake and local forwarding peers enforce this ID. The extension declares it
+as `PROTOCOL_VERSION` in `extension/background.js`; pairing tests require it to
+match the server contract. Popup and Options display this supported ID even
+while disconnected. A connection becomes ready only after the server registers
+its profile; incompatible peers are refused with an explicit update message.
 
 Increase the protocol ID whenever an existing extension/server API is modified
 or removed. This includes changes to action names, parameter types, defaults or
@@ -1533,7 +1538,12 @@ at birth or answer each removal with another.
 
 ## Test Helper Messages
 
-The extension provides test helper messages for automated testing and validation of UI state synchronization.
+The extension retains these test helper messages as legacy storage/effective
+configuration projections. They do not inspect the actual popup or Options DOM.
+The `maxRetries` and `pingTimeout` response fields remain for compatibility but
+no longer control the connection or appear in the UI. Editable Host/Port fields
+show the user configuration; the connection status separately shows test
+overrides. UI regression tests execute the actual scripts and HTML instead.
 
 ### Get Popup Display State
 

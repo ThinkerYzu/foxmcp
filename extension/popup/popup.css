@@ -1,0 +1,4 @@
+@import url("../settings.css");
+
+body { width: 360px; }
+.configuration-actions { display: flex; justify-content: flex-end; margin-top: 16px; }

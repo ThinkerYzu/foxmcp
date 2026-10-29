@@ -76,6 +76,7 @@ Selected test modules:
 | File | Tests | Covers |
 |---|---|---|
 | `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: mismatch, legacy tools, stale sockets, reset and edit-preserving refresh |
+| `test_extension_settings.py` | 1 | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers and live status |
 | `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
 | `test_history_management.py` | 10 | History query, recent, time ranges, concurrency |
@@ -91,7 +92,7 @@ Selected test modules:
 | `test_history_with_content.py` | 6 | History entries alongside page content |
 | `test_mcp_server_integration.py` | 6 | Dual-port startup, MCP client connections |
 | `test_request_monitoring_integration.py` | 10 | Request capture through the MCP layer |
-| `test_ui_storage_sync.py` | 6 | Popup settings persistence |
+| `test_ui_storage_sync.py` | 6 | Legacy storage/effective-config projections retained for protocol compatibility |
 | `test_browser_functionality.py` | 5 | Tabs, script execution, reload, content, screenshots |
 | `test_connection_origin.py` | 5 | The origin allowlist on the extension WebSocket |
 | `test_mcp_port_not_web_reachable.py` | 5 | That no web page can reach the MCP port — see [Dependency-held guarantees](#dependency-held-guarantees) |

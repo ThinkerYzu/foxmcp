@@ -93,7 +93,8 @@ async def test_http_container_selection_and_storage_isolation(server_with_extens
 async def test_container_handler_failures_without_mutation(server_with_extension, upload_page):
     server = server_with_extension['server']
     tab_id = await open_fixture(server, upload_page)
-    background = (Path(__file__).resolve().parents[2] / 'extension/background.js').read_text()
+    root = Path(__file__).resolve().parents[2]
+    background = (root / 'extension/config.js').read_text() + '\n' + (root / 'extension/background.js').read_text()
     checks = r'''
       const checks = [];
       function check(ok, label) { if (!ok) throw Error(label); checks.push(label); }
@@ -130,7 +131,7 @@ async def test_container_handler_failures_without_mutation(server_with_extension
       const event = {addListener(){}};
       const browser = {runtime:{getManifest:()=>({version:'1.4.0'}),onMessage:event},
         menus:{create(){},onShown:event,onClicked:event},
-        storage:{sync:{get:()=>new Promise(()=>{})}}};
+        storage:{onChanged:event,sync:{get:()=>new Promise(()=>{})}}};
       const quiet = {log(){},error(){},warn(){},trace(){}};
       const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
       return await new AsyncFunction('browser','window','console', SOURCE + '\\n' + CHECKS)(browser,{},quiet);

@@ -157,26 +157,24 @@ start the server once and leave it running: it is up before Firefox connects and
 still up after. Under `--stdio` the server is the short-lived side, alive only
 while your MCP client is, and the two have no way to coordinate.
 
-Two things follow, and neither is fixed in the server.
+Three things follow from that lifecycle.
 
-**A tool call in the first few seconds fails.** The server accepts MCP requests
+**A tool call before the browser reconnects fails.** The server accepts MCP requests
 as soon as your client launches it, but the extension is somewhere in its
-five-second retry cycle and has not connected yet. A tool call in that window
+retry cycle (one second by default) and has not connected yet. A tool call in that window
 returns `No extension connection available` immediately rather than waiting for
 the browser. Run it again.
 
-**The extension slows down without a server, but does not give up.** It retries
-every Retry Interval for 50 attempts, at least four minutes at the default five
-seconds, and then every 30 seconds for as long as the server stays away. Leaving
-Firefox open and your editor closed is the normal case, so a server that comes
-back is picked up on the next attempt:
+**The extension keeps retrying at the configured interval.** Retries continue
+every second by default, without a limit or a slower phase. Leaving Firefox
+open and your editor closed is the normal case, so a server that comes back
+is picked up on the next attempt:
 
 ```
 12:00  editor exits, server dies
-12:00  extension starts retrying, every 5s
-12:05  50 attempts spent, extension retries every 30s
+12:00  extension starts retrying, every 1s
 13:00  editor starts, server comes back
-13:00  extension connects on its next attempt, within 30s
+13:00  extension connects on its next attempt, within 1s
 ```
 
 **A request monitor does not survive the gap.** The extension clears every monitor
@@ -186,13 +184,9 @@ caught, and stop it within the one client session; a `monitor_id` from an earlie
 session answers `MONITOR_NOT_FOUND`. See
 [How long a monitor lives](web-request-monitoring.md#how-long-a-monitor-lives).
 
-To skip the wait, open the extension popup and press **Reconnect**, which dials
-at once and starts the 50 attempts at the Retry Interval again.
-
-**The Retry Interval only sets the pace of the first 50 attempts.** The options
-page accepts 1000 to 60000 ms, and a shorter interval picks up a new server
-sooner. After those attempts the extension waits 30 seconds between tries, or the
-Retry Interval if you set it longer.
+Both the popup and Options accept a Reconnect Interval from 100 to 30000 ms.
+A shorter interval picks up a new server sooner. There is no manual Reconnect
+button; changes apply automatically after a short pause.
 
 **Which mode to use.** It depends on how long your client lives, not on which
 client it is.
@@ -203,8 +197,8 @@ extension has reconnected long before you ask for anything.
 
 A terminal client is the opposite. Every `claude` invocation starts a server and
 kills it on exit, so a morning of short sessions cycles the server all morning.
-Each plain stdio session pays the first-call gap, and after a break of more than
-a few minutes the extension can take up to 30 seconds to notice the new server.
+Each plain stdio session pays the first-call gap; the wait is bounded by the
+configured interval regardless of how long the editor has been closed.
 
 Use `--single-instance` to share an automatically started server, or keep an HTTP
 server running if the browser connection should stay up between work sessions.
@@ -372,18 +366,42 @@ The Firefox extension includes comprehensive configuration options with **storag
 
 ### 2. Configure Connection
 
-- **Hostname**: Server hostname (default: `localhost`)
-- **WebSocket Port**: Server WebSocket port (default: `8765`)
-- **Advanced Options**: Retry intervals, max retries, ping timeouts
+- **Host**: Server hostname or IP address, without a scheme or port (default: `localhost`)
+- **Port**: Integer from 1 to 65535 (default: `8765`)
+- **Reconnect Interval (ms)**: Integer from 100 to 30000 (default: `1000`)
 - **Test Configuration**: Built-in test override system for development
+
+Both interfaces save valid edits automatically after a 500ms pause. Host and
+Port are applied together; an incomplete endpoint does not replace the saved
+address. The interval can be saved independently. Closing the popup does not
+cancel an edit already queued in the background. Validation and storage errors
+are shown beside the settings; the previous active settings remain in use.
+Previously saved intervals between 30001 and 60000ms are reduced to 30000ms
+when loaded. Other saved intervals in the supported range are preserved.
+
+The extension constructs an unencrypted `ws://` address internally. Entering a
+full URL, including `wss://`, in Host is invalid. The built-in server has no TLS
+configuration. **Reset to Defaults** immediately saves and applies the defaults,
+canceling pending edits while preserving test overrides and unrelated storage.
+Reset is available in both views and does not open a native confirmation dialog.
+
+Popup and Options share light/dark styling and a segmented **MCP Server URL**
+field containing `ws://`, Host and Port. Configuration fields stay visible.
+Routine save feedback is hidden; validation and storage errors remain visible.
+Both footers show extension/server release diagnostics and the extension's
+locally supported protocol ID (not a negotiated server protocol version).
 
 ### 3. Features
 
 - **Real-time storage sync**: Configuration changes persist across browser restarts
 - **Connection Status**: Real-time connection status monitoring
-- **Status Indicators**: Live connection status with retry attempt information
+- **Status Indicators**: Both pages refresh connection state, the effective endpoint and the next retry every second without replacing unfinished input
 - **Automatic Reconnection**: Extension automatically reconnects when settings change
 - **Configuration Preservation**: Test settings maintained during normal use
+
+Editable fields show the saved user configuration; a separate server status
+shows any active test overrides. Ping Timeout and Max Retry Attempts are no
+longer settings. Old stored values are ignored, including a retry limit of zero.
 
 ## Programmatic Server Configuration
 
@@ -572,15 +590,19 @@ response = await server.send_request_and_wait(request, timeout=60.0)
 A timeout returns an error dict rather than raising, so callers must check for
 `"error"` in the response.
 
-**Extension reconnection.** `CONFIG` at the top of `extension/background.js` sets
-`retryInterval` (5000 ms) and `maxRetries` (`-1`). Both are also editable from the
-extension popup. Changing the source values requires a rebuild.
+**Extension reconnection.** The first connection is attempted after settings
+load. When the socket closes or a connection attempt fails, the extension waits
+`retryInterval` (1000 ms by default), then retries. Retries continue indefinitely
+at that same interval, including after 50 attempts. Edit **Reconnect Interval
+(ms)** in either interface to change the delay; no rebuild or Reconnect button
+is needed. Updating the interval preserves a healthy socket and restarts an
+already pending delay from the time the setting is applied.
 
-`-1` retries forever: 50 attempts at `retryInterval`, then one every 30 seconds
-(`FAST_RETRIES` and `SLOW_RETRY_INTERVAL` in the same file). A positive value stops
-after that many attempts, until you press **Reconnect** in the popup or restart the
-extension. This matters most under `--stdio`, where the server comes and goes with
-your client: see [The reconnect gap](#the-reconnect-gap).
+The delay starts when WebSocket reports the closure, rather than when a physical
+network problem begins. The server's WebSocket library uses its native Ping/Pong
+keepalive; the removed extension Ping Timeout never controlled that mechanism.
+This matters most under `--stdio`, where the server comes and goes with your
+client: see [The reconnect gap](#the-reconnect-gap).
 
 ## Troubleshooting Configuration
 
@@ -625,38 +647,11 @@ make clean && make package && rm -rf dist/profile-cache/*
 
 ## Security Configuration
 
-### Production Deployment
-
-```python
-# Production configuration
-server = FoxMCPServer(
-    host="localhost",      # Never use 0.0.0.0 in production
-    enable_cors=False,     # Disable CORS for security
-    require_auth=True,     # Enable authentication
-    ssl_cert="cert.pem",   # Use SSL certificates
-    ssl_key="key.pem"
-)
-```
-
-### Development vs Production
-
-```python
-import os
-
-# Environment-based configuration
-if os.getenv("ENVIRONMENT") == "production":
-    server = FoxMCPServer(
-        host="localhost",
-        enable_debug=False,
-        require_auth=True
-    )
-else:
-    server = FoxMCPServer(
-        host="localhost",
-        enable_debug=True,
-        require_auth=False
-    )
-```
+The built-in browser listener serves unencrypted WebSocket connections on
+localhost. `FoxMCPServer` has no `ssl_cert`, `ssl_key`, `require_auth`,
+`enable_cors` or `enable_debug` constructor settings. The CLI restricts the bind
+address to localhost; the browser listener enforces loopback peers, local Host
+headers and extension origins. See [protocol access checks](protocol.md#discovery-and-proxy-routes).
 
 ## Checking Server Health
 

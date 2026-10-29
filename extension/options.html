@@ -1,199 +1,66 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>FoxMCP Extension Options</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 20px;
-        }
-        
-        .section {
-            margin-bottom: 25px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-        
-        .section h3 {
-            margin-top: 0;
-            color: #333;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        
-        input[type="text"], input[type="number"] {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-        
-        .form-row {
-            display: flex;
-            gap: 10px;
-            align-items: end;
-        }
-        
-        .form-row .form-group {
-            flex: 1;
-        }
-        
-        .form-row .form-group:last-child {
-            flex: 0 0 100px;
-        }
-        
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        button:hover {
-            background-color: #45a049;
-        }
-        
-        .status {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 4px;
-            text-align: center;
-            font-weight: bold;
-        }
-        
-        .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .help-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: #ccc;
-        }
-        
-        .status-indicator.connected {
-            background-color: #4CAF50;
-        }
-        
-        .status-indicator.disconnected {
-            background-color: #f44336;
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FoxMCP Settings</title>
+  <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
-    <div class="header">
-        <h1>🦊 FoxMCP Extension Options</h1>
-        <p>Configure your connection to the FoxMCP server</p>
+  <main class="settings-page">
+  <header class="header">
+    <div class="brand">
+      <img src="icons/foxmcp-32.png" alt="" width="28" height="28">
+      <h1>FoxMCP</h1>
+      <span class="page-label">Settings</span>
     </div>
+  </header>
 
-    <div class="section">
-        <h3>Server Configuration</h3>
-        <form id="optionsForm">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="hostname">Hostname:</label>
-                    <input type="text" id="hostname" value="localhost" required>
-                    <div class="help-text">Server hostname or IP address</div>
-                </div>
-                <div class="form-group">
-                    <label for="port">WebSocket Port:</label>
-                    <input type="number" id="port" value="8765" min="1" max="65535" required>
-                    <div class="help-text">Default: 8765</div>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="wsUrl">WebSocket URL:</label>
-                <input type="text" id="wsUrl" readonly style="background-color: #f0f0f0;">
-                <div class="help-text">This URL is automatically generated from hostname and port</div>
-            </div>
-            
-            <button type="submit">Save Settings</button>
-        </form>
-        
-        <div id="status" class="status" style="display: none;"></div>
+  <section class="connection" aria-label="Connection status">
+    <div class="connection-heading" role="status" aria-live="polite">
+      <span id="connectionIndicator" class="status-indicator disconnected" aria-hidden="true"></span>
+      <p id="connectionText" class="status">Loading…</p>
     </div>
+    <p id="serverInfo" class="server-info"></p>
+  </section>
 
-    <div class="section">
-        <h3>Connection Status</h3>
-        <div class="connection-status">
-            <div id="connectionIndicator" class="status-indicator disconnected"></div>
-            <span id="connectionText">Disconnected</span>
-            <button type="button" id="refreshStatus">Refresh</button>
-        </div>
+  <section class="configuration" aria-labelledby="configurationTitle">
+    <h2 id="configurationTitle">Configuration</h2>
+    <fieldset class="endpoint-field">
+      <legend>MCP Server URL</legend>
+      <div class="input-shell server-url">
+        <span class="scheme" aria-hidden="true">ws://</span>
+        <input type="text" id="hostname" aria-label="Host" placeholder="localhost" autocomplete="off" spellcheck="false" required>
+        <input type="number" id="port" aria-label="Port" min="1" max="65535" step="1" placeholder="8765" required>
+      </div>
+    </fieldset>
+    <div class="field retry-field">
+      <div class="field-heading">
+        <label for="retryInterval">Reconnect interval</label>
+        <span id="retryHint" class="hint">100–30,000 ms</span>
+      </div>
+      <div class="input-shell">
+        <input type="number" id="retryInterval" min="100" max="30000" step="1" aria-describedby="retryHint" required>
+        <span class="unit" aria-hidden="true">ms</span>
+      </div>
     </div>
-
-    <div class="section">
-        <h3>Advanced Options</h3>
-        <div class="form-group">
-            <label for="retryInterval">Retry Interval (ms):</label>
-            <input type="number" id="retryInterval" value="5000" min="1000" max="60000">
-            <div class="help-text">Time between reconnection attempts (1000-60000ms)</div>
-        </div>
-        
-        <div class="form-group">
-            <label for="maxRetries">Max Retry Attempts:</label>
-            <input type="number" id="maxRetries" value="-1" min="-1" max="100">
-            <div class="help-text">Maximum reconnection attempts (-1 for unlimited)</div>
-        </div>
-        
-        <div class="form-group">
-            <label for="pingTimeout">Ping Timeout (ms):</label>
-            <input type="number" id="pingTimeout" value="5000" min="1000" max="30000">
-            <div class="help-text">Timeout for ping requests (1000-30000ms)</div>
-        </div>
-        
-        <button type="button" id="saveAdvanced">Save Advanced Settings</button>
-        <button type="button" id="resetDefaults">Reset to Defaults</button>
+    <div class="configuration-actions">
+      <p class="hint">Changes apply automatically after a short pause.</p>
+      <button type="button" id="resetDefaults">Reset to defaults</button>
     </div>
+  </section>
 
-    <script src="options.js"></script>
+  <footer class="footer">
+    <p id="saveStatus" role="status" aria-live="polite">Loading settings…</p>
+    <p id="versionInfo" class="version-info"></p>
+  </footer>
+
+  </main>
+
+  <script src="config.js"></script>
+  <script src="settings.js"></script>
+  <script src="options.js"></script>
 </body>
 </html>

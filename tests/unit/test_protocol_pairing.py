@@ -11,6 +11,8 @@ import ast
 import re
 from pathlib import Path
 
+from server.browser_proxy import PROTOCOL_VERSION
+
 
 # Every file that puts an action name on the wire. server.py carries the test
 # helper protocol (test.*) while mcp_tools.py carries everything a client can
@@ -37,6 +39,14 @@ MINIMUM_EXPECTED_ACTIONS = 30
 def _repo_root():
     """Path to the checkout, from this file's location"""
     return Path(__file__).resolve().parent.parent.parent
+
+
+def test_extension_protocol_diagnostic_matches_server_contract():
+    """A server protocol bump must also update the ID displayed by the extension."""
+    source = (_repo_root() / HANDLER_FILE).read_text(encoding='utf-8')
+    match = re.search(r'const PROTOCOL_VERSION = (\d+);', source)
+    assert match, 'Extension must declare its supported protocol ID'
+    assert int(match[1]) == PROTOCOL_VERSION
 
 
 def _actions_sent_by_server():
