@@ -195,7 +195,8 @@ jobs:
 
                   # Reaches the bridge and comes back as a result rather than a
                   # protocol error, which is what a stray write to stdout would be.
-                  result = await client.call_tool("tabs_list", {"profile_id": "unavailable-profile"})
+                  # A valid integer target reaches routing even without a browser.
+                  result = await client.call_tool("tabs_list", {"profile_id": 1})
                   assert "profile is not connected" in result.content[0].text
 
           asyncio.run(main())
