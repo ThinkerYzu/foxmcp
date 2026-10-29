@@ -15,7 +15,6 @@ import socket
 import subprocess
 import sys
 import tempfile
-import uuid
 
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -38,7 +37,7 @@ def unused_port() -> int:
         return sock.getsockname()[1]
 
 
-async def answer_extension(port: int, ready: asyncio.Event, scripts: list, profile_id: str) -> None:
+async def answer_extension(port: int, ready: asyncio.Event, scripts: list) -> None:
     """Stand in for Firefox to verify the installed command's bridge."""
     for attempt in range(200):
         try:
@@ -52,7 +51,7 @@ async def answer_extension(port: int, ready: asyncio.Event, scripts: list, profi
             await asyncio.sleep(0.1)
     try:
         await connection.send(json.dumps({
-            "type": "hello", "data": {"version": distribution("foxmcp").version, "protocol_version": 3, "profile_id": profile_id}
+            "type": "hello", "data": {"version": distribution("foxmcp").version, "protocol_version": 4}
         }))
         async for raw in connection:
             request = json.loads(raw)
@@ -102,8 +101,7 @@ async def check_client(client: Client, port: int, script_name: str | None) -> No
     """Verify discovery, a bridge call, and execution of a packaged/custom script."""
     ready = asyncio.Event()
     scripts = []
-    profile_id = str(uuid.uuid4())
-    extension = asyncio.create_task(answer_extension(port, ready, scripts, profile_id))
+    extension = asyncio.create_task(answer_extension(port, ready, scripts))
     try:
         await asyncio.wait_for(ready.wait(), 25)
         tools = {tool.name: tool for tool in await client.list_tools()}
@@ -117,7 +115,8 @@ async def check_client(client: Client, port: int, script_name: str | None) -> No
         else:
             assert "FOXMCP_EXT_SCRIPTS is not set" in description, description
         profiles = await client.call_tool("profiles_list", {})
-        assert profile_id in profiles.content[0].text, profiles
+        profile_id = json.loads(profiles.content[0].text)["profiles"][0]["profile_id"]
+        assert type(profile_id) is int and profile_id > 0
         result = await client.call_tool("tabs_list", {"profile_id": profile_id})
         assert "Package smoke" in result.content[0].text, result
         result = await client.call_tool(

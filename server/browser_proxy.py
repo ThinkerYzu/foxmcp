@@ -15,7 +15,7 @@ from websockets.exceptions import ConnectionClosed
 
 logger = logging.getLogger(__name__)
 SERVER_NAME = "FoxMCP"
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 EXTENSION_ORIGIN_PATTERN = re.compile(r"moz-extension://.+")
 
 

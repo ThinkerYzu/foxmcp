@@ -80,7 +80,7 @@ See [reconnection](configuration.md#tuning).
 | [cli.py](../server/cli.py), [version.py](../server/version.py) | Installed command setup and release-version reporting. |
 
 See [profile discovery](api-reference.md#firefox-profiles),
-[protocol 3](protocol.md#profile-connections-protocol-id-3) and
+[protocol 4](protocol.md#profile-connections-protocol-id-4) and
 [shared stdio](architecture.md#shared-stdio-server) for the contracts.
 Dependencies are declared in [server/requirements.txt](../server/requirements.txt)
 and [pyproject.toml](../pyproject.toml).

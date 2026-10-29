@@ -1,28 +1,29 @@
 # WebSocket Message Protocol
 
-## Profile connections (protocol ID 3)
+## Profile connections (protocol ID 4)
 
 Multiple Firefox profiles connect concurrently at `/`. A new profile never closes
 another profile's connection. Every browser request names an explicit `profile_id`;
 window, tab, group, container, bookmark and monitor IDs are local to that profile.
 There is no global current profile or automatic fallback to another profile.
 
-The extension generates a UUID when its background script starts. That `profile_id`
-survives WebSocket reconnections but changes on Firefox/extension restart, so stale
-object IDs cannot address a newly started browser session.
+The server assigns an increasing positive integer `profile_id` to each accepted
+connection, starting at 1. IDs are never reused during a server lifetime. Every
+reconnect gets a new ID; callers must rediscover targets. A server restart resets
+the sequence and invalidates previous MCP sessions and cached targets.
 
 The server sends `hello` with `data.version` and `data.protocol_version`. Within
 five seconds the extension sends:
 
 ```json
-{"type":"hello","data":{"version":"1.5.0","protocol_version":3,"profile_id":"ca2c72af-58e1-4e37-91dd-797131004677"}}
+{"type":"hello","data":{"version":"1.5.0","protocol_version":4}}
 ```
 
-After registration the server sends `{"type":"ready","data":{"profile_id":"..."}}`.
-Malformed, missing or incompatible handshakes close with code 1008 and an update
-instruction. Both extension and server must support ID 3. A duplicate live
-`profile_id` is refused with code 4009; the original stays connected and the
-extension can retry after the original socket closes.
+After registration the server sends `{"type":"ready","data":{}}`.
+The extension never generates, stores or receives `profile_id`. The server strips
+this routing field from commands before sending them to Firefox. Malformed,
+missing or incompatible handshakes close with code 1008 and an update instruction.
+Both extension and server must support ID 4.
 
 Each socket owns its pending replies and monitors. Disconnecting one profile
 fails only that profile's requests and removes only its monitor records. Replies
@@ -50,7 +51,7 @@ or replace the current extension. Local callers are trusted, as on the ordinary 
 ```json
 {
   "server": "FoxMCP",
-  "protocol_version": 3,
+  "protocol_version": 4,
   "proxy_path": "/proxy",
   "pid": 1234,
   "lifetime": "automatic"
@@ -68,7 +69,7 @@ the default is 30. `proxy.status` returns `data.status` describing the current
 Firefox connections without sending a command to an extension.
 `proxy.profiles` returns the same `data.profiles` structure as `profiles_list`;
 its `data.populate` boolean defaults to true. Other browser requests require a
-nonempty top-level `profile_id`, carried unchanged through `/proxy`. The ID is
+positive integer top-level `profile_id`, carried unchanged through `/proxy`. The ID is
 routing metadata, not part of an action's `data` parameters. Missing or unavailable
 IDs return an error without sending the request to any extension.
 
@@ -157,7 +158,7 @@ from 1 to 2 for the
 existing tab-list response and filter contract. New lifecycle actions alone do
 not require a further bump. Extension/server release matching remains advisory;
 only forwarding peers enforced ID 2 in that release. Current source requires
-the protocol-3 profile handshake described above. The complete v1.5.0 review is recorded in
+the protocol-4 profile handshake described above. The complete v1.5.0 review is recorded in
 [release preparation](../RELEASES.md#protocol-compatibility-review), including
 other changes since the baseline. Reassess if the final diff changes before
 publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
@@ -167,7 +168,7 @@ publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
 The mandatory profile handshake above also carries each peer's release version.
 The extension reads its manifest; the Python server uses `server/version.py`.
 Release-version equality remains advisory, independently of the checked protocol ID:
-compatible protocol-3 peers keep serving tools even when release versions differ.
+compatible protocol-4 peers keep serving tools even when release versions differ.
 The server logs a mismatch and both settings views display it, preserving unsaved settings
 while refreshing. Numeric versions contain one to four dot-separated components
 and at most 64 characters. Invalid or absent release versions remain unavailable;

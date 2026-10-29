@@ -24,8 +24,10 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**691 collected, 0 skipped**: 481 unit and 210 integration tests, validated on
-2026-10-28 for the tree merged in `01d7ecd`. Collection changes as tests are added;
+**701 collected, 0 skipped**: 491 unit and 210 integration tests, validated on
+2026-10-28 for server-owned profile IDs. The full run passed 699 tests; two stale
+string-ID test placeholders were corrected, then all 12 stdio tests passed on
+an isolated rerun. The combined report passes the module guard. Collection changes as tests are added;
 use the JUnit module guard rather than a fixed count as the completeness gate.
 
 A run that finishes in about seventy seconds instead of ten minutes is a warning,
@@ -48,7 +50,7 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 481 | no |
+| `unit/` | 491 | no |
 | `integration/` | 210 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
@@ -78,7 +80,7 @@ Selected test modules:
 
 | File | Tests | Covers |
 |---|---|---|
-| `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: protocol-3 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
+| `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: protocol-4 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
 | `test_extension_settings.py` | 1 | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers, profile registration/errors and live status |
 | `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
@@ -112,11 +114,11 @@ contains two complementary acceptance tests:
 
 | Test | Browser side | Call path | Checks |
 |---|---|---|---|
-| `test_two_real_firefox_profiles_reconnect_and_restart_independently` | Two real Firefox processes with disposable profiles | Calls registered tool functions directly; MCP HTTP is disabled for this test | Profile discovery/name resolution, separate tab creation/listing, reconnect retaining identity, independent restart replacing identity and rejection of the old target. The other profile stays registered. |
+| `test_two_real_firefox_profiles_reconnect_and_restart_independently` | Two real Firefox processes with disposable profiles | Calls registered tool functions directly; MCP HTTP is disabled for this test | Profile discovery/name resolution, separate tab creation/listing, reconnect and independent restart each replacing identity and rejection of the old target. The other profile stays registered. |
 | `test_profiles_are_visible_and_routable_from_http_and_shared_stdio` | Two simulated extension responders on real WebSockets | Actual FastMCP HTTP and shared-stdio clients | Discovery, concurrent routing despite identical native IDs, upload delivery to the correct profile, pending-request failure on disconnect, surviving-profile access and client-owned monitor cleanup. |
 
-Both run in the normal integration suite and passed in the 691-test validation
-of the tree merged as `01d7ecd`. This is not a single test combining two real
+Both run in the normal integration suite and passed in the 701-test validation
+of server-owned profile IDs. This is not a single test combining two real
 Firefox profiles with both MCP transports. The final-package smoke check below
 uses one disposable Firefox profile per transport to exercise every tool.
 
@@ -293,7 +295,7 @@ tests that used them broke on upgrade.
 
 ```python
 tabs_list = (await mcp_tools.mcp.get_tool("tabs_list")).fn
-result = await tabs_list(profile_id="<chosen-profile-id>")
+result = await tabs_list(profile_id=profile_id)
 
 names = [tool.name for tool in await mcp_tools.mcp.list_tools()]
 ```
@@ -383,9 +385,9 @@ async with connect_as_extension(f"ws://localhost:{port}") as websocket:
     ...
 ```
 
-The helper sends an extension Origin and completes the protocol-3 profile
-registration. `websocket.profile_id` exposes its disposable identity; you can
-supply `profile_id=` to test duplicate or reconnect scenarios. Its first `recv()`
+The helper sends an extension Origin and completes the protocol-4 profile
+registration. `websocket.profile_id` exposes the server-assigned identity,
+discovered through the local proxy; callers cannot choose it. Its first `recv()`
 returns the buffered server greeting. A plain connection without the Origin is
 rejected with `403`; an Origin alone is insufficient without the handshake.
 

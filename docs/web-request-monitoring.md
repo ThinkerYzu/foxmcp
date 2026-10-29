@@ -26,7 +26,7 @@ lists monitors, so losing it leaves a monitor running with no way to read or sto
 Start a monitor, let the browser do some work, then read what was captured.
 
 ```python
-profile_id = "<chosen-profile-id>"  # Inspect profiles_list() first.
+profile_id = 1  # Use the integer returned by profiles_list().  # Inspect profiles_list() first.
 
 # 1. Start. Returns {"monitor_id": "mon_1755205412345", "status": "active", ...}
 requests_start_monitoring(profile_id=profile_id, url_patterns=["https://example.org/*"])

@@ -252,7 +252,7 @@ def call_tool(stub_server):
 
     async def call(name, **kwargs):
         tool = await tools.mcp.get_tool(name)
-        return await tool.fn(profile_id="test-profile", **kwargs)
+        return await tool.fn(profile_id=1, **kwargs)
 
     return call
 

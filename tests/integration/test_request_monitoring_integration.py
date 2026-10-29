@@ -187,7 +187,7 @@ class TestRequestMonitoringIntegration:
                 tools[name] = tool.fn
 
         # Step 1: Start monitoring
-        start_result = await tools["requests_start_monitoring"](profile_id="test-profile",
+        start_result = await tools["requests_start_monitoring"](profile_id=1,
             url_patterns=["https://api.example.com/*", "https://example.org/*"],
             options={
                 "capture_request_bodies": True,
@@ -208,7 +208,7 @@ class TestRequestMonitoringIntegration:
         assert start_request["data"]["options"]["max_body_size"] == 100000
 
         # Step 2: List captured requests
-        list_result = await tools["requests_list_captured"](profile_id="test-profile", monitor_id=monitor_id)
+        list_result = await tools["requests_list_captured"](profile_id=1, monitor_id=monitor_id)
         list_data = json.loads(list_result)
 
         assert list_data["monitor_id"] == monitor_id
@@ -226,7 +226,7 @@ class TestRequestMonitoringIntegration:
 
         # Step 3: Get content for specific request
         json_request = next(req for req in list_data["requests"] if req["content_type"] == "application/json")
-        content_result = await tools["requests_get_content"](profile_id="test-profile",
+        content_result = await tools["requests_get_content"](profile_id=1,
             monitor_id=monitor_id,
             request_id=json_request["request_id"],
             include_binary=True
@@ -240,7 +240,7 @@ class TestRequestMonitoringIntegration:
         assert "John Doe" in content_data["request_body"]["content"]
 
         # Step 4: Stop monitoring
-        stop_result = await tools["requests_stop_monitoring"](profile_id="test-profile",
+        stop_result = await tools["requests_stop_monitoring"](profile_id=1,
             monitor_id=monitor_id,
             drain_timeout=10
         )
@@ -281,7 +281,7 @@ class TestRequestMonitoringIntegration:
 
         start_monitoring = (await mcp_tools.mcp.get_tool("requests_start_monitoring")).fn
 
-        result = await start_monitoring(profile_id="test-profile",
+        result = await start_monitoring(profile_id=1,
             url_patterns=["*"],
             tab_id=456,
             options={"capture_request_bodies": False}
@@ -328,7 +328,7 @@ class TestRequestMonitoringIntegration:
 
         get_content = (await mcp_tools.mcp.get_tool("requests_get_content")).fn
 
-        result = await get_content(profile_id="test-profile",
+        result = await get_content(profile_id=1,
             monitor_id="mon_test",
             request_id="req_binary_test",
             include_binary=True,
@@ -356,7 +356,7 @@ class TestRequestMonitoringIntegration:
         })
 
         list_captured = (await mcp_tools.mcp.get_tool("requests_list_captured")).fn
-        result = await list_captured(profile_id="test-profile", monitor_id="invalid_monitor")
+        result = await list_captured(profile_id=1, monitor_id="invalid_monitor")
 
         data = json.loads(result)
         assert "error" in data
@@ -364,7 +364,7 @@ class TestRequestMonitoringIntegration:
 
         # Test empty URL patterns
         start_monitoring = (await mcp_tools.mcp.get_tool("requests_start_monitoring")).fn
-        result = await start_monitoring(profile_id="test-profile", url_patterns=[])
+        result = await start_monitoring(profile_id=1, url_patterns=[])
 
         data = json.loads(result)
         assert "error" in data
@@ -375,7 +375,7 @@ class TestRequestMonitoringIntegration:
         """Test that performance and timing data is properly captured"""
 
         list_captured = (await mcp_tools.mcp.get_tool("requests_list_captured")).fn
-        result = await list_captured(profile_id="test-profile", monitor_id="mon_test")
+        result = await list_captured(profile_id=1, monitor_id="mon_test")
 
         data = json.loads(result)
         requests = data["requests"]
@@ -403,9 +403,9 @@ class TestRequestMonitoringIntegration:
 
         # Start multiple concurrent requests
         tasks = [
-            tools["requests_start_monitoring"](profile_id="test-profile", url_patterns=["*"]),
-            tools["requests_list_captured"](profile_id="test-profile", monitor_id="mon_test"),
-            tools["requests_get_content"](profile_id="test-profile", monitor_id="mon_test", request_id="req_001")
+            tools["requests_start_monitoring"](profile_id=1, url_patterns=["*"]),
+            tools["requests_list_captured"](profile_id=1, monitor_id="mon_test"),
+            tools["requests_get_content"](profile_id=1, monitor_id="mon_test", request_id="req_001")
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)

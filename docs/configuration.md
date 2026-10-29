@@ -231,7 +231,11 @@ profiles. There is no shared current-profile setting between agents.
 
 The server reads Firefox's own names locally: the new profile-manager SQLite
 store takes precedence over `profiles.ini`. It matches the extension Origin UUID
-against the profile's persisted extension UUID map. Metadata is read-only and
+against the profile's persisted extension UUID map. The server searches standard
+Windows/macOS locations and Linux legacy, XDG, Snap and Flatpak locations. Custom
+profile paths are found when referenced by metadata in those locations. The
+server needs filesystem access to this metadata; remote or sandboxed setups may
+leave names unknown. Metadata is read-only and
 refreshed on discovery. Profiles without a resolvable name remain visible with
 `name=null` and `name_error`. This requires Firefox metadata on the server's
 machine; a separate native helper is not installed.
@@ -396,7 +400,7 @@ Popup and Options share light/dark styling and a segmented **MCP Server URL**
 field containing `ws://`, Host and Port. Configuration fields stay visible.
 Routine save feedback is hidden; validation and storage errors remain visible.
 Both footers show extension/server release diagnostics and the extension's
-locally supported protocol ID. Protocol 3 is enforced during registration;
+locally supported protocol ID. Protocol 4 is enforced during registration;
 Connected means the server acknowledged this profile, not just that the socket
 opened. An incompatible-peer error is shown in both views and stops retries.
 Update both components and reload the extension to register again, or correct
@@ -684,7 +688,7 @@ foreground is the quickest way to watch the socket come and go.
 
 Popup and Options display the extension release, connected server release and
 supported protocol ID. A release-version mismatch warns without blocking tools
-when both peers support protocol 3. Missing or invalid release versions are
+when both peers support protocol 4. Missing or invalid release versions are
 reported as unavailable; they do not bypass the mandatory profile handshake.
 
 A protocol mismatch is different: registration is refused, both views display

@@ -152,10 +152,15 @@ async def test_two_real_firefox_profiles_reconnect_and_restart_independently(fre
             assert "#" + label in listing and "#" + other not in listing
         old_connection = server.profiles[alpha]
         await old_connection.extension_connection.close()
-        await until(lambda: alpha in server.profiles and server.profiles[alpha] is not old_connection)
+        await until(lambda: alpha not in server.profiles and len(server.profiles) == 2)
+        reconnected_alpha = next(key for key in server.profiles if key != beta)
+        assert reconnected_alpha > max(alpha, beta)
+        stale = await server.send_request_and_wait({"id": "reconnect-stale", "type": "request",
+            "action": "tabs.list", "profile_id": alpha, "data": {}})
+        assert "not connected" in stale["error"]
         assert beta in server.profiles
         assert await asyncio.to_thread(managers[0].restart_firefox)
-        await until(lambda: alpha not in server.profiles and len(server.profiles) == 2)
+        await until(lambda: reconnected_alpha not in server.profiles and len(server.profiles) == 2)
         assert beta in server.profiles
         result = await server.send_request_and_wait({"id": "stale", "type": "request",
             "action": "tabs.list", "profile_id": alpha, "data": {}})

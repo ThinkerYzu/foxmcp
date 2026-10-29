@@ -111,10 +111,9 @@ class TestConnectionOrigin:
             self.uri(server),
             additional_headers={'Origin': other_install}
         ) as peer:
-            import uuid
             from server.browser_proxy import PROTOCOL_VERSION
             await peer.recv()
             await peer.send(json.dumps({'type': 'hello', 'data': {
-                'profile_id': str(uuid.uuid4()), 'protocol_version': PROTOCOL_VERSION}}))
+                'protocol_version': PROTOCOL_VERSION}}))
             assert json.loads(await peer.recv())['type'] == 'ready'
             assert server.profiles

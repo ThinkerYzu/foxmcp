@@ -99,7 +99,7 @@ chmod +x /path/to/your/scripts/*.sh
 {
   "name": "content_execute_predefined",
   "arguments": {
-    "profile_id": "<chosen-profile-id>",
+    "profile_id": 1,
     "tab_id": 123,
     "script_name": "get_title.sh",
     "script_args": ""
@@ -112,7 +112,7 @@ chmod +x /path/to/your/scripts/*.sh
 {
   "name": "content_execute_predefined",
   "arguments": {
-    "profile_id": "<chosen-profile-id>",
+    "profile_id": 1,
     "tab_id": 123,
     "script_name": "get_page_info.sh",
     "script_args": "[\"url\"]"
@@ -125,7 +125,7 @@ chmod +x /path/to/your/scripts/*.sh
 {
   "name": "content_execute_predefined",
   "arguments": {
-    "profile_id": "<chosen-profile-id>",
+    "profile_id": 1,
     "tab_id": 123,
     "script_name": "add_banner.sh",
     "script_args": "[\"Welcome to our site!\", \"green\"]"

@@ -72,13 +72,14 @@ and the [file map](files.md#extension-directory).
 
 `server.py` keeps a registry of `BrowserProfile` objects keyed by `profile_id`.
 Each object in `browser_profile.py` owns one socket, pending reply futures,
-release diagnostics and monitor ownership. Registration validates protocol 3
-and the profile ID; duplicate live IDs are rejected without replacing the
-existing profile. Unrelated profiles stay connected when one disconnects.
+release diagnostics and monitor ownership. Registration validates protocol 4
+and assigns a new integer ID. The extension never handles this ID; it is stripped
+from commands before forwarding. Unrelated profiles stay connected when one
+disconnects.
 
 `profile_names.py` resolves display names from local Firefox metadata without
 modifying it. Names may be missing, ambiguous or duplicated and are never
-routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-3).
+routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-4).
 
 #### MCP Tools (`mcp_tools.py`)
 
@@ -136,9 +137,9 @@ is closed with the WebSocket and MCP services.
 
 The browser envelope above is sent only to the selected extension. MCP calls
 and `/proxy` requests also carry `profile_id` as routing metadata. Both peers
-must complete the protocol-3 `hello`/`ready` handshake before browser requests
+must complete the protocol-4 `hello`/`ready` handshake before browser requests
 are accepted. Release-version warnings are advisory; protocol-ID mismatch is
-refused. See [protocol](protocol.md#profile-connections-protocol-id-3).
+refused. See [protocol](protocol.md#profile-connections-protocol-id-4).
 
 Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.create`, `requests.start_monitoring`. The prefix selects the handler in the extension. See [protocol.md](protocol.md) for the full specification.
 
@@ -277,8 +278,9 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 
 ### 1. Connection Management
 
-- Each connected profile has its own socket and connection identity. Profile IDs
-  survive socket reconnects and change when Firefox or the extension restarts.
+- Each connected profile has its own socket and connection identity.
+  Server-assigned integer profile IDs change on every socket reconnect and are
+  never reused during a server lifetime.
 - MCP clients can address the same or different profiles concurrently. They do
   not share an active-profile setting. Monitor ownership is tracked per client
   and browser connection.
@@ -332,7 +334,7 @@ case 'windows.new_function':
 
 ```python
 @self._tool()
-async def new_function(profile_id: str, window_id: int) -> str:
+async def new_function(profile_id: int, window_id: int) -> str:
     """New browser function
 
     Args:
@@ -373,7 +375,7 @@ echo "(function() { return 'Custom functionality'; })()"
 **MCP Tool Usage**
 ```python
 result = content_execute_predefined(
-    profile_id="<chosen-profile-id>",
+    profile_id=profile_id,
     tab_id=123,
     script_name="custom_script.sh",
     script_args='["arg1", "arg2"]'

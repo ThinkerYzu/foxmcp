@@ -12,7 +12,6 @@ from contextlib import suppress
 import asyncio
 import json
 import logging
-import re
 import socket
 import sys
 import os
@@ -137,6 +136,7 @@ class FoxMCPServer:
         self.start_mcp = start_mcp
 
         self.profiles = {}
+        self._next_profile_id = 1
         self.profile_names = FirefoxProfileNames()
 
         # Connection event management
@@ -186,23 +186,19 @@ class FoxMCPServer:
             data = hello.get("data") if isinstance(hello, dict) else None
             if (not isinstance(data, dict) or hello.get("type") != "hello"
                     or type(data.get("protocol_version")) is not int
-                    or data["protocol_version"] != PROTOCOL_VERSION
-                    or not isinstance(data.get("profile_id"), str)
-                    or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", data["profile_id"]) is None):
-                logger.warning("Rejected extension: protocol 3 and profile_id required; update extension")
-                await websocket.close(code=1008, reason="FoxMCP protocol 3 and profile_id required; update extension")
+                    or data["protocol_version"] != PROTOCOL_VERSION):
+                logger.warning("Rejected extension: protocol 4 required; update extension")
+                await websocket.close(code=1008, reason="FoxMCP protocol 4 required; update extension")
                 return
-            profile_id = data["profile_id"]
-            if profile_id in self.profiles:
-                await websocket.close(code=4009, reason="Profile already connected")
-                return
+            profile_id = self._next_profile_id
+            self._next_profile_id += 1
             origin = websocket.request.headers.get("Origin", "")
             profile = BrowserProfile(self, websocket, profile_id, origin)
             self.profiles[profile_id] = profile
             await profile.handle_extension_message(json.dumps(hello))
             if profile.extension_version is None:
                 logger.warning("Extension version unavailable for profile %s; browser tools remain available", profile_id)
-            await websocket.send(json.dumps({"type": "ready", "data": {"profile_id": profile_id}}))
+            await websocket.send(json.dumps({"type": "ready", "data": {}}))
             self._notify_connection_waiters()
             logger.info("Firefox profile %s connected from %s", profile_id, websocket.remote_address)
             async for message in websocket:
@@ -271,8 +267,8 @@ class FoxMCPServer:
             return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(
                 self.send_request_and_wait(request, timeout), self._browser_loop))
         profile_id = request.get("profile_id")
-        if not isinstance(profile_id, str) or not profile_id:
-            return {"error": "profile_id is required; call profiles_list first"}
+        if type(profile_id) is not int or profile_id < 1:
+            return {"error": "profile_id is required and must be a positive integer; call profiles_list first"}
         profile = self.profiles.get(profile_id)
         if profile is None or profile.extension_connection.close_code is not None:
             return {"error": "Firefox profile is not connected; call profiles_list again", "profile_id": profile_id}
@@ -330,7 +326,7 @@ class FoxMCPServer:
                 logger.warning(f"Error reaping monitors of departed clients: {e}")
 
     # Test Helper Methods
-    async def get_popup_state(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
+    async def get_popup_state(self, profile_id: int, timeout: float = 30.0) -> Dict[str, Any]:
         """Get current popup display state from extension"""
         request = {
             "id": f"test_popup_{datetime.now().isoformat()}",
@@ -342,7 +338,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def get_options_state(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
+    async def get_options_state(self, profile_id: int, timeout: float = 30.0) -> Dict[str, Any]:
         """Get current options page display state from extension"""
         request = {
             "id": f"test_options_{datetime.now().isoformat()}",
@@ -354,7 +350,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def get_storage_values(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
+    async def get_storage_values(self, profile_id: int, timeout: float = 30.0) -> Dict[str, Any]:
         """Get raw storage.sync values from extension"""
         request = {
             "id": f"test_storage_{datetime.now().isoformat()}",
@@ -366,7 +362,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def validate_ui_sync(self, profile_id: str, expected_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
+    async def validate_ui_sync(self, profile_id: int, expected_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Validate UI-storage synchronization with expected values"""
         request = {
             "id": f"test_validate_{datetime.now().isoformat()}",
@@ -378,7 +374,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def refresh_ui_state(self, profile_id: str, timeout: float = 30.0) -> Dict[str, Any]:
+    async def refresh_ui_state(self, profile_id: int, timeout: float = 30.0) -> Dict[str, Any]:
         """Trigger UI state refresh in extension"""
         request = {
             "id": f"test_refresh_{datetime.now().isoformat()}",
@@ -390,7 +386,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def visit_url_for_test(self, profile_id: str, url: str, wait_time: float = 6.0, timeout: float = 20.0) -> Dict[str, Any]:
+    async def visit_url_for_test(self, profile_id: int, url: str, wait_time: float = 6.0, timeout: float = 20.0) -> Dict[str, Any]:
         """Visit a URL to create browser history entry for testing"""
         request = {
             "id": f"test_visit_url_{datetime.now().isoformat()}",
@@ -405,7 +401,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def visit_multiple_urls_for_test(self, profile_id: str, urls: list, wait_time: float = 6.0, delay_between: float = 2.0, timeout: float = 90.0) -> Dict[str, Any]:
+    async def visit_multiple_urls_for_test(self, profile_id: int, urls: list, wait_time: float = 6.0, delay_between: float = 2.0, timeout: float = 90.0) -> Dict[str, Any]:
         """Visit multiple URLs to create browser history entries for testing"""
         request = {
             "id": f"test_visit_multiple_{datetime.now().isoformat()}",
@@ -421,7 +417,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def clear_test_history(self, profile_id: str, urls: list = None, clear_all: bool = False, timeout: float = 30.0) -> Dict[str, Any]:
+    async def clear_test_history(self, profile_id: int, urls: list = None, clear_all: bool = False, timeout: float = 30.0) -> Dict[str, Any]:
         """Clear test history entries for cleanup"""
         request = {
             "id": f"test_clear_history_{datetime.now().isoformat()}",
@@ -436,7 +432,7 @@ class FoxMCPServer:
         response = await self.send_request_and_wait({**request, "profile_id": profile_id}, timeout)
         return response.get('data', response) if isinstance(response, dict) and 'data' in response else response
 
-    async def test_storage_sync_workflow(self, profile_id: str, test_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
+    async def test_storage_sync_workflow(self, profile_id: int, test_values: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """Complete test workflow: set values, validate sync, return results"""
         results = {
             "workflow_success": False,

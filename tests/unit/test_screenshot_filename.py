@@ -185,7 +185,7 @@ class TestScreenshotOfOneTab:
 
         async def run(**kwargs):
             tool = await tools.mcp.get_tool("tabs_capture_screenshot")
-            return await tool.fn(profile_id="test-profile", **kwargs)
+            return await tool.fn(profile_id=1, **kwargs)
 
         return run
 

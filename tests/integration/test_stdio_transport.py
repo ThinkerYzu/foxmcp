@@ -99,7 +99,7 @@ class StdioClient:
             else:
                 profiles = json.loads(await self.call_tool('profiles_list', {'populate': False}))['profiles']
                 assert len(profiles) <= 1, 'Test must choose a profile explicitly'
-                arguments['profile_id'] = profiles[0]['profile_id'] if profiles else 'unavailable-test-profile'
+                arguments['profile_id'] = profiles[0]['profile_id'] if profiles else 1
         result = await self.request('tools/call', {'name': name, 'arguments': arguments})
         return '\n'.join(block['text'] for block in result['content']
                          if block['type'] == 'text')

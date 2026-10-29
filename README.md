@@ -235,9 +235,9 @@ venv/bin/python server/server.py --port 9000 --mcp-port 4000
 Use `profiles_list` first to inspect all connected Firefox profiles, their real
 names, windows and tabs. Every browser command requires the chosen `profile_id`
 alongside its window/tab IDs. Profiles can share the same server port without
-replacing each other. IDs survive a socket reconnect and change after a browser
-or extension restart; rediscover then. Update both extension and server for
-protocol 3. See [profile discovery](docs/api-reference.md#firefox-profiles).
+replacing each other. The server assigns positive integer IDs from 1. IDs change on every reconnect;
+rediscover after a disconnect or server restart. Update both extension and server for
+protocol 4. See [profile discovery](docs/api-reference.md#firefox-profiles).
 
 All **46 tools** are enabled by default. Available groups are `profiles`, `windows`, `tabs`,
 `containers`, `bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.

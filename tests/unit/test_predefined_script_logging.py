@@ -48,7 +48,7 @@ def run_script():
 
     async def call(**kwargs):
         tool = await tools.mcp.get_tool("content_execute_predefined")
-        return await tool.fn(profile_id="test-profile", **kwargs)
+        return await tool.fn(profile_id=1, **kwargs)
 
     return call
 

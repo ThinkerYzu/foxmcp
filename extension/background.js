@@ -10,9 +10,7 @@ let isConnected = false;
 const EXTENSION_VERSION = browser.runtime.getManifest().version;
 let serverVersion = null;
 // Supported and enforced contract; pairing tests keep it aligned with the server.
-const PROTOCOL_VERSION = 3;
-// A browser/extension restart invalidates old window and tab addresses.
-const PROFILE_ID = crypto.randomUUID();
+const PROTOCOL_VERSION = 4;
 let connectionError = null;
 const requestSockets = new Map();
 
@@ -152,7 +150,7 @@ function connectToMCPServer() {
 
     socket.onopen = () => {
       if (websocket !== socket) return;
-      socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION, protocol_version: PROTOCOL_VERSION, profile_id: PROFILE_ID } }));
+      socket.send(JSON.stringify({ type: 'hello', data: { version: EXTENSION_VERSION, protocol_version: PROTOCOL_VERSION } }));
       isConnected = false; // Wait for the server to register this profile.
       connectionError = null;
 
@@ -283,7 +281,7 @@ function getConnectionStatus() {
   return {
     connected: isConnected, state: connectionState, configError,
     extensionVersion: EXTENSION_VERSION, protocolVersion: PROTOCOL_VERSION, serverVersion, retryAttempts,
-    profileId: PROFILE_ID, connectionError,
+    connectionError,
     config: {...CONFIG}, configuredConfig: {...configuredConfig}, hasTestOverrides,
     activeUrl: websocket ? websocket.url : null,
     retryDelayMs: reconnectTimer === null ? null : CONFIG.retryInterval, nextRetryAt,
@@ -377,13 +375,13 @@ async function handleMessage(message, socket = websocket) {
   }
 
   if (type === 'ready') {
-    if (!data || data.profile_id !== PROFILE_ID) return;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return;
     isConnected = true;
     connectionError = null;
     retryAttempts = 0;
     connectionState = 'connected';
     cancelReconnect();
-    console.log(`Connected to MCP server as profile ${PROFILE_ID}`);
+    console.log('Connected to MCP server');
     return;
   }
   if (type !== 'request' || !isConnected) return;

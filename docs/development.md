@@ -243,7 +243,7 @@ formats it for the caller:
 
 ```python
 @self._tool()
-async def tabs_list(profile_id: str) -> str:
+async def tabs_list(profile_id: int) -> str:
     """List all open browser tabs"""
     request = {
         "id": str(uuid.uuid4()),
@@ -360,6 +360,12 @@ transports. See the [coverage matrix](../tests/README.md#multiple-profile-covera
 2026-10-28 passed 691 tests with no skips (481 unit, 210 integration), plus all
 46 final-archive tools over HTTP/stdio. These counts describe that source tree;
 use the module guard below when the suite changes.
+
+The server-owned profile-ID follow-up passed 701 tests (491 unit, 210
+integration) across a full run and an isolated rerun of the stdio module after
+correcting two stale string-ID test placeholders. No tests were skipped, and
+the combined report passes the module guard. Packaged HTTP and stdio each pass
+all 46 tools, including upload byte/event checks.
 
 The shared `scripts/check-test-report.py` guard requires successful test cases
 from every unit and integration module on disk. It detects missing integration

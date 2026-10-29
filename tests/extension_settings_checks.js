@@ -54,7 +54,7 @@
           const hello = this.sent.at(-1).data;
           this.onmessage({data: JSON.stringify({type: 'hello', data: {
             version: hello.version, protocol_version: hello.protocol_version}})});
-          this.onmessage({data: JSON.stringify({type: 'ready', data: {profile_id: hello.profile_id}})});
+          this.onmessage({data: JSON.stringify({type: 'ready', data: {}})});
         }
       }
       close(code = 1000, reason = '') {
@@ -117,18 +117,18 @@
   registering.open(false);
   check(!registration.api.status().connected && registration.api.status().state === 'connecting', 'transport open waits for profile registration');
   const announced = registering.sent[0].data;
-  check(announced.protocol_version === 3 && announced.profile_id === registration.api.status().profileId, 'protocol and profile identity announced');
+  check(announced.protocol_version === 4 && !Object.hasOwn(announced, 'profile_id') && !Object.hasOwn(registration.api.status(), 'profileId'), 'extension has no routing identity');
   await registering.onmessage({data: JSON.stringify({type: 'request', action: 'ping', id: 'early'})});
   check(registering.sent.length === 1, 'browser requests ignored before profile registration');
-  await registering.onmessage({data: JSON.stringify({type: 'ready', data: {profile_id: 'wrong-profile'}})});
-  check(!registration.api.status().connected, 'wrong profile acknowledgement ignored');
-  await registering.onmessage({data: JSON.stringify({type: 'hello', data: {version: '1.5.0', protocol_version: 3}})});
-  await registering.onmessage({data: JSON.stringify({type: 'ready', data: {profile_id: announced.profile_id}})});
+  await registering.onmessage({data: JSON.stringify({type: 'ready'})});
+  check(!registration.api.status().connected, 'malformed acknowledgement ignored');
+  await registering.onmessage({data: JSON.stringify({type: 'hello', data: {version: '1.5.0', protocol_version: 4}})});
+  await registering.onmessage({data: JSON.stringify({type: 'ready', data: {}})});
   check(registration.api.status().connected && registration.api.status().state === 'connected', 'registration sets connected state');
   registering.close();
   await registration.tick(1000);
   registration.api.socket.open();
-  check(registration.api.status().profileId === announced.profile_id && registration.api.status().connected, 'reconnect preserves profile identity and settings state');
+  check(!Object.hasOwn(registration.api.status(), 'profileId') && registration.api.status().connected, 'reconnect needs no routing identity');
   const rejected = await background();
   rejected.api.socket.open(false);
   await rejected.api.socket.onmessage({data: JSON.stringify({type: 'hello', data: {version: '1.5.0', protocol_version: 2}})});
@@ -259,13 +259,13 @@
   for (const name of ['popup', 'options']) {
     const app = await background({hostname: 'example.org', port: 9999, testHostname: 'localhost', testPort: 31000});
     app.api.socket.open();
-    await app.api.socket.onmessage({data: JSON.stringify({type: 'hello', data: {version: '0.0.1', protocol_version: 3}})});
+    await app.api.socket.onmessage({data: JSON.stringify({type: 'hello', data: {version: '0.0.1', protocol_version: 4}})});
     const page = await view(name, app);
     check(page.elements.hostname.value === 'example.org' && Number(page.elements.port.value) === 9999, name + ' displays user configuration');
     check(page.elements.serverInfo.textContent.includes('localhost:31000') && page.elements.serverInfo.textContent.includes('overrides'), name + ' shows actual endpoint and overrides');
     check(!page.elements.serverUrl && !page.elements.maxRetries && !page.elements.pingTimeout && !page.elements.saveConfig && !page.elements.forceReconnect, name + ' removes obsolete controls');
     check(page.elements.versionInfo.textContent.includes('Version mismatch'), name + ' version warning retained');
-    check(page.elements.versionInfo.textContent.includes('Protocol 3'), name + ' supported protocol version visible in footer');
+    check(page.elements.versionInfo.textContent.includes('Protocol 4'), name + ' supported protocol version visible in footer');
     await page.input('port', '1234');
     await page.refresh();
     check(Number(page.elements.port.value) === 1234, name + ' polling preserves draft');
@@ -279,7 +279,7 @@
     app.api.socket.close(); await page.refresh();
     const text = page.elements[name === 'popup' ? 'status' : 'connectionText'].textContent;
     check(text.includes('Retry') && text.includes('2000ms'), name + ' live status shows actual retry interval');
-    check(page.elements.versionInfo.textContent.includes('Protocol 3'), name + ' supported protocol remains visible while disconnected');
+    check(page.elements.versionInfo.textContent.includes('Protocol 4'), name + ' supported protocol remains visible while disconnected');
     {
       await page.click('resetDefaults'); await page.refresh();
       check(page.elements.hostname.value === 'localhost' && Number(page.elements.port.value) === 8765 && app.stored.retryInterval === 1000, name + ' reset applies immediately');
@@ -301,7 +301,7 @@
     await reopened.refresh();
     check(reopened.elements.versionInfo.textContent.includes('Update server and extension together'), name + ' protocol error visible in footer');
     check(reopened.elements[name === 'popup' ? 'status' : 'connectionText'].textContent.includes('Update server and extension together'), name + ' protocol error visible in connection status');
-    check(app.timers.size === 0 && app.api.status().protocolVersion === 3, name + ' protocol rejection has no pending retry and displays current protocol');
+    check(app.timers.size === 0 && app.api.status().protocolVersion === 4, name + ' protocol rejection has no pending retry and displays current protocol');
     reopened.unavailable(); await reopened.refresh();
     check(reopened.elements[name === 'popup' ? 'status' : 'connectionText'].textContent === 'Status unavailable', name + ' does not claim disconnected when background is unavailable');
     reopened.close();

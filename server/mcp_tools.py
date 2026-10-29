@@ -470,8 +470,8 @@ class FoxMCPTools:
 
             Use profile_id explicitly in every browser command. Window, tab, group,
             container and monitor IDs belong to that profile only. Inspect window
-            tabs (titles and URLs) to choose the correct target. A profile_id survives
-            socket reconnection but changes when Firefox or its extension restarts.
+            tabs (titles and URLs) to choose the correct target. A profile_id identifies one connection and changes on every reconnect.
+            Call profiles_list again after a disconnect or server restart.
             Unavailable names and per-profile window errors are reported separately.
 
             Args:
@@ -483,7 +483,7 @@ class FoxMCPTools:
         """Setup window management tools"""
 
         @self._tool()
-        async def list_windows(profile_id: str, populate: bool = True) -> str:
+        async def list_windows(profile_id: int, populate: bool = True) -> str:
             """
             List all browser windows
             
@@ -524,7 +524,7 @@ class FoxMCPTools:
             return "Unable to retrieve windows"
 
         @self._tool()
-        async def get_window(profile_id: str, window_id: int, populate: bool = True) -> str:
+        async def get_window(profile_id: int, window_id: int, populate: bool = True) -> str:
             """
             Get information about a specific window
             
@@ -571,7 +571,7 @@ class FoxMCPTools:
         # extension has. So both calls evaluate the same expression. A separate tool
         # shipped until 1.2.0 and always returned the same window as this one.
         @self._tool()
-        async def get_current_window(profile_id: str, populate: bool = True) -> str:
+        async def get_current_window(profile_id: int, populate: bool = True) -> str:
             """Get the current active window, which is also the last focused window
 
             Args:
@@ -604,7 +604,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def create_window(
-            profile_id: str,
+            profile_id: int,
             url: Optional[str] = None,
             window_type: str = "normal",
             state: str = "normal", 
@@ -667,7 +667,7 @@ class FoxMCPTools:
             return "Window created but unable to retrieve details"
 
         @self._tool() 
-        async def close_window(profile_id: str, window_id: int) -> str:
+        async def close_window(profile_id: int, window_id: int) -> str:
             """
             Close a browser window
             
@@ -699,7 +699,7 @@ class FoxMCPTools:
             return f"Unable to close window {window_id}"
 
         @self._tool()
-        async def focus_window(profile_id: str, window_id: int) -> str:
+        async def focus_window(profile_id: int, window_id: int) -> str:
             """
             Bring a window to front and focus it
             
@@ -732,7 +732,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def update_window(
-            profile_id: str,
+            profile_id: int,
             window_id: int,
             state: Optional[str] = None,
             focused: Optional[bool] = None,
@@ -799,7 +799,7 @@ class FoxMCPTools:
     def _setup_container_tools(self):
         """Container discovery and profile resources, independent of client lifetime."""
         @self._tool()
-        async def containers_list(profile_id: str) -> str:
+        async def containers_list(profile_id: int) -> str:
             """List Firefox containers as JSON with opaque cookie_store_id, name, color
             and icon; default_cookie_store_id identifies normal browsing separately.
             IDs belong to the connected profile. Names may repeat.
@@ -839,7 +839,7 @@ class FoxMCPTools:
             return value
 
         @self._tool()
-        async def containers_create(profile_id: str, name: str, color: str = "blue", icon: str = "fingerprint") -> str:
+        async def containers_create(profile_id: int, name: str, color: str = "blue", icon: str = "fingerprint") -> str:
             """Create a persistent Firefox container. Return JSON container metadata.
             Duplicate names are permitted. Firefox validates color and icon.
             """
@@ -852,7 +852,7 @@ class FoxMCPTools:
             return await container_request(profile_id, "containers.create", data)
 
         @self._tool()
-        async def containers_update(profile_id: str, cookie_store_id: str, name: Optional[str] = None,
+        async def containers_update(profile_id: int, cookie_store_id: str, name: Optional[str] = None,
                                     color: Optional[str] = None, icon: Optional[str] = None) -> str:
             """Update a named Firefox container, preserving its ID and omitted properties.
             Supply at least one of name, color or icon. Return JSON container metadata.
@@ -867,7 +867,7 @@ class FoxMCPTools:
             return await container_request(profile_id, "containers.update", {"cookieStoreId": store, **data})
 
         @self._tool()
-        async def containers_remove(profile_id: str, cookie_store_id: str) -> str:
+        async def containers_remove(profile_id: int, cookie_store_id: str) -> str:
             """Remove a named Firefox container and its stored site data. Refuses open
             tabs with CONTAINER_IN_USE and tab_ids. Close tabs explicitly first.
             The check cannot exclude races with browser UI. No automatic cleanup.
@@ -883,7 +883,7 @@ class FoxMCPTools:
 
         # Tab List Tool
         @self._tool()
-        async def tabs_list(profile_id: str, window_id: Optional[Union[int, str]] = None,
+        async def tabs_list(profile_id: int, window_id: Optional[Union[int, str]] = None,
                             cookie_store_id: Optional[str] = None) -> str:
             """
             List open browser tabs, optionally filtered by window and cookie store
@@ -970,7 +970,7 @@ class FoxMCPTools:
         # Tab Create Tool
         @self._tool()
         async def tabs_create(
-            profile_id: str,
+            profile_id: int,
             url: str,
             active: bool = True,
             pinned: bool = False,
@@ -1033,7 +1033,7 @@ class FoxMCPTools:
 
         # Tab Close Tool
         @self._tool()
-        async def tabs_close(profile_id: str, tab_id: int) -> str:
+        async def tabs_close(profile_id: int, tab_id: int) -> str:
             """Close a browser tab
 
             Args:
@@ -1064,7 +1064,7 @@ class FoxMCPTools:
 
         # Tab Switch Tool
         @self._tool()
-        async def tabs_switch(profile_id: str, tab_id: int) -> str:
+        async def tabs_switch(profile_id: int, tab_id: int) -> str:
             """Switch to a specific browser tab
 
             Args:
@@ -1095,7 +1095,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_group(
-            profile_id: str,
+            profile_id: int,
             tab_ids: Union[int, str, List[Union[int, str]]],
             group_id: Optional[Union[int, str]] = None,
             title: Optional[str] = None,
@@ -1148,7 +1148,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_ungroup(
-            profile_id: str,
+            profile_id: int,
             tab_ids: Union[int, str, List[Union[int, str]]]
         ) -> str:
             """Remove tabs from their tab group
@@ -1179,7 +1179,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_groups_update(
-            profile_id: str,
+            profile_id: int,
             group_id: Union[int, str],
             title: Optional[str] = None,
             color: Optional[str] = None,
@@ -1220,7 +1220,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def tabs_groups_query(
-            profile_id: str,
+            profile_id: int,
             window_id: Optional[Union[int, str]] = None,
             title: Optional[str] = None,
             color: Optional[str] = None,
@@ -1270,7 +1270,7 @@ class FoxMCPTools:
         # Tab Move Tool
         @self._tool()
         async def tabs_move(
-            profile_id: str,
+            profile_id: int,
             tab_ids: Union[int, str, List[Union[int, str]]],
             window_id: Optional[Union[int, str]] = None,
             index: int = -1
@@ -1361,7 +1361,7 @@ class FoxMCPTools:
         # Tab Screenshot Tool
         @self._tool()
         async def tabs_capture_screenshot(
-            profile_id: str,
+            profile_id: int,
             filename: Optional[str] = None,
             window_id: Optional[int] = None,
             format: str = "png",
@@ -1488,7 +1488,7 @@ class FoxMCPTools:
         # History Query Tool
         @self._tool()
         async def history_query(
-            profile_id: str,
+            profile_id: int,
             query: str,
             max_results: int = 200,
             start_time: Optional[str] = None,
@@ -1539,7 +1539,7 @@ class FoxMCPTools:
 
         # Get Recent History Tool
         @self._tool()
-        async def history_get_recent(profile_id: str, count: int = 10) -> str:
+        async def history_get_recent(profile_id: int, count: int = 10) -> str:
             """Get recent browser history
 
             Args:
@@ -1585,7 +1585,7 @@ class FoxMCPTools:
 
         # Delete History Item Tool
         @self._tool()
-        async def history_delete_item(profile_id: str, url: str) -> str:
+        async def history_delete_item(profile_id: int, url: str) -> str:
             """Delete a specific history item
 
             Args:
@@ -1619,7 +1619,7 @@ class FoxMCPTools:
 
         # List Bookmarks Tool
         @self._tool()
-        async def bookmarks_list(profile_id: str, folder_id: Optional[str] = None) -> str:
+        async def bookmarks_list(profile_id: int, folder_id: Optional[str] = None) -> str:
             """List browser bookmarks
 
             Folders are marked 📁 and bookmarks 🔖. Every line carries its own ID, its
@@ -1681,7 +1681,7 @@ class FoxMCPTools:
 
         # Search Bookmarks Tool
         @self._tool()
-        async def bookmarks_search(profile_id: str, query: str) -> str:
+        async def bookmarks_search(profile_id: int, query: str) -> str:
             """Search browser bookmarks by title or URL
 
             Matches bookmarks only — **folders are never returned**, so a folder cannot be
@@ -1733,7 +1733,7 @@ class FoxMCPTools:
         # Create Bookmark Tool
         @self._tool()
         async def bookmarks_create(
-            profile_id: str,
+            profile_id: int,
             title: str,
             url: str,
             parent_id: Optional[str] = None
@@ -1775,7 +1775,7 @@ class FoxMCPTools:
         # Create Bookmark Folder Tool
         @self._tool()
         async def bookmarks_create_folder(
-            profile_id: str,
+            profile_id: int,
             title: str,
             parent_id: Optional[str] = None
         ) -> str:
@@ -1814,7 +1814,7 @@ class FoxMCPTools:
         # Update Bookmark Tool
         @self._tool()
         async def bookmarks_update(
-            profile_id: str,
+            profile_id: int,
             bookmark_id: str,
             title: Optional[str] = None,
             url: Optional[str] = None
@@ -1858,7 +1858,7 @@ class FoxMCPTools:
         # Move Bookmark Tool
         @self._tool()
         async def bookmarks_move(
-            profile_id: str,
+            profile_id: int,
             bookmark_id: str,
             parent_id: Optional[str] = None,
             index: Optional[int] = None
@@ -1922,7 +1922,7 @@ class FoxMCPTools:
 
         # Delete Bookmark Tool
         @self._tool()
-        async def bookmarks_delete(profile_id: str, bookmark_id: str) -> str:
+        async def bookmarks_delete(profile_id: int, bookmark_id: str) -> str:
             """Delete a bookmark
 
             Args:
@@ -1972,7 +1972,7 @@ class FoxMCPTools:
             tab_id: int = Field(description="ID of the tab to navigate back in")
 
         @self._tool()
-        async def navigation_back(profile_id: str, params: NavigationBackParams) -> str:
+        async def navigation_back(profile_id: int, params: NavigationBackParams) -> str:
             """Navigate back in browser history for a tab"""
             request = {
                 "id": str(uuid.uuid4()),
@@ -2003,7 +2003,7 @@ class FoxMCPTools:
             tab_id: int = Field(description="ID of the tab to navigate forward in")
 
         @self._tool()
-        async def navigation_forward(profile_id: str, params: NavigationForwardParams) -> str:
+        async def navigation_forward(profile_id: int, params: NavigationForwardParams) -> str:
             """Navigate forward in browser history for a tab"""
             request = {
                 "id": str(uuid.uuid4()),
@@ -2030,7 +2030,7 @@ class FoxMCPTools:
 
         # Reload Page Tool
         @self._tool()
-        async def navigation_reload(profile_id: str, tab_id: int, bypass_cache: bool = False) -> str:
+        async def navigation_reload(profile_id: int, tab_id: int, bypass_cache: bool = False) -> str:
             """Reload a page in a tab
 
             Returns as soon as the reload is issued, not when the page has
@@ -2068,7 +2068,7 @@ class FoxMCPTools:
 
         # Go to URL Tool
         @self._tool()
-        async def navigation_go_to_url(profile_id: str, tab_id: int, url: str) -> str:
+        async def navigation_go_to_url(profile_id: int, tab_id: int, url: str) -> str:
             """Navigate to a specific URL in a tab
 
             Args:
@@ -2104,7 +2104,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def content_load_file(
-            profile_id: str,
+            profile_id: int,
             tab_id: int, path: str, mime_type: Optional[str] = None
         ) -> str:
             """Load a server-local file for website uploads/imports; does not submit it.
@@ -2154,7 +2154,7 @@ class FoxMCPTools:
 
         # Get Page Text Tool
         @self._tool()
-        async def content_get_text(profile_id: str, tab_id: int, max_length: Optional[int] = None) -> str:
+        async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:
             """Get text content from a tab's page
 
             Args:
@@ -2198,7 +2198,7 @@ class FoxMCPTools:
 
         # Get Page HTML Tool
         @self._tool()
-        async def content_get_html(profile_id: str, tab_id: int) -> str:
+        async def content_get_html(profile_id: int, tab_id: int) -> str:
             """Get HTML content from a tab's page
 
             Args:
@@ -2236,7 +2236,7 @@ class FoxMCPTools:
 
         # Execute Script Tool
         @self._tool()
-        async def content_execute_script(profile_id: str, tab_id: int, code: str) -> str:
+        async def content_execute_script(profile_id: int, tab_id: int, code: str) -> str:
             """Execute JavaScript code in a tab
 
             Args:
@@ -2276,7 +2276,7 @@ class FoxMCPTools:
         # Execute Predefined Script Tool
         @self._tool(describe_more=lambda: describe_predefined_scripts(os.environ.get('FOXMCP_EXT_SCRIPTS')))
         async def content_execute_predefined(
-            profile_id: str,
+            profile_id: int,
             tab_id: int,
             script_name: str,
             script_args: str = ""
@@ -2487,7 +2487,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def requests_start_monitoring(
-            profile_id: str,
+            profile_id: int,
             url_patterns: List[str],
             options: Optional[Dict[str, Any]] = None,
             tab_id: Optional[int] = None
@@ -2560,7 +2560,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def requests_stop_monitoring(
-            profile_id: str,
+            profile_id: int,
             monitor_id: str,
             drain_timeout: int = 5
         ) -> str:
@@ -2602,7 +2602,7 @@ class FoxMCPTools:
             return json.dumps({"error": "Unable to stop monitoring"})
 
         @self._tool()
-        async def requests_list_captured(profile_id: str, monitor_id: str) -> str:
+        async def requests_list_captured(profile_id: int, monitor_id: str) -> str:
             """
             List all captured request summaries from a monitoring session
 
@@ -2640,7 +2640,7 @@ class FoxMCPTools:
 
         @self._tool()
         async def requests_get_content(
-            profile_id: str,
+            profile_id: int,
             monitor_id: str,
             request_id: str,
             include_binary: bool = False,

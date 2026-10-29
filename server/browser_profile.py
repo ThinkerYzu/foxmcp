@@ -175,6 +175,8 @@ class BrowserProfile:
             return False
 
         try:
+            # Routing belongs to the server; the extension only knows its socket.
+            message = {key: value for key, value in message.items() if key != 'profile_id'}
             message['timestamp'] = datetime.now().isoformat()
             await self.extension_connection.send(json.dumps(message))
             return True

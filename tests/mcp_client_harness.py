@@ -198,7 +198,7 @@ class DirectMCPTestClient:
                 if 'profile_id' in tool.parameters.get('required', []) and 'profile_id' not in arguments:
                     profiles = getattr(self.mcp_tools.websocket_server, 'profiles', {})
                     assert len(profiles) <= 1, 'Test must explicitly select a Firefox profile'
-                    arguments['profile_id'] = next(iter(profiles), 'unavailable-test-profile')
+                    arguments['profile_id'] = next(iter(profiles), 1)
                 result = await tool.fn(**arguments)
                 
                 return {

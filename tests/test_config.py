@@ -64,11 +64,10 @@ class TestExtensionConnection:
     """A simulated extension with the real profile handshake and server greeting."""
     __test__ = False
 
-    def __init__(self, uri, profile_id=None, **kwargs):
-        import uuid
+    def __init__(self, uri, **kwargs):
         from urllib.parse import urlsplit
         self.uri, self.kwargs = uri, kwargs
-        self.profile_id = profile_id or str(uuid.uuid4())
+        self.profile_id = None
         self.port = urlsplit(uri).port
         self.greeting = None
 
@@ -81,10 +80,32 @@ class TestExtensionConnection:
             'Origin': EXTENSION_TEST_ORIGIN}, **self.kwargs)
         self.greeting = await asyncio.wait_for(self.socket.recv(), 5)
         await self.socket.send(json.dumps({'type': 'hello', 'data': {
-            'version': VERSION, 'protocol_version': PROTOCOL_VERSION,
-            'profile_id': self.profile_id}}))
+            'version': VERSION, 'protocol_version': PROTOCOL_VERSION}}))
         ready = json.loads(await asyncio.wait_for(self.socket.recv(), 5))
         assert ready['type'] == 'ready', ready
+        assert 'profile_id' not in ready.get('data', {}), ready
+        # Answer discovery only for this test socket, using a unique window title
+        # to identify it. Real extensions never learn or store the routing ID.
+        import uuid
+        marker = uuid.uuid4().hex
+        async with websockets.connect(self.uri.rstrip('/') + '/proxy') as proxy:
+            await proxy.recv()
+            await proxy.send(json.dumps({'id': marker, 'type': 'request',
+                                         'action': 'proxy.profiles', 'data': {}}))
+            async def answer_discovery():
+                while True:
+                    request = json.loads(await self.socket.recv())
+                    assert request['action'] == 'windows.list', request
+                    await self.socket.send(json.dumps({'id': request['id'], 'type': 'response',
+                        'action': 'windows.list', 'data': {'windows': [{'id': 1, 'title': marker}]}}))
+            responder = asyncio.create_task(answer_discovery())
+            try:
+                snapshot = json.loads(await asyncio.wait_for(proxy.recv(), 10))
+                self.profile_id = next(p['profile_id'] for p in snapshot['data']['profiles']
+                    if any(w.get('title') == marker for w in p['windows']))
+            finally:
+                responder.cancel()
+                await asyncio.gather(responder, return_exceptions=True)
         connected_test_profiles.setdefault(self.port, set()).add(self.profile_id)
         return self
 

@@ -17,15 +17,14 @@ from server.version import VERSION
 class Peer:
     remote_address = ("127.0.0.1", 12345)
 
-    def __init__(self, profile_id=None, hello=None):
-        self.profile_id = profile_id or str(uuid.uuid4())
+    def __init__(self, hello=None):
+        self.profile_id = None
         self.close_code = None
         self.messages = asyncio.Queue()
         self.ready = asyncio.Event()
         self.request = SimpleNamespace(headers={"Origin": "moz-extension://" + str(uuid.uuid4())})
         self.recv = AsyncMock(return_value=json.dumps(hello if hello is not None else {
-            "type": "hello", "data": {"profile_id": self.profile_id,
-                                       "protocol_version": PROTOCOL_VERSION, "version": VERSION}}))
+            "type": "hello", "data": {"protocol_version": PROTOCOL_VERSION, "version": VERSION}}))
         self.send = AsyncMock(side_effect=self.sent)
 
     async def sent(self, raw):
@@ -59,6 +58,8 @@ async def connected(server, peer=None):
     task = asyncio.create_task(server.handle_extension_connection(peer))
     try:
         await asyncio.wait_for(peer.ready.wait(), 1)
+        peer.profile_id = next(key for key, profile in server.profiles.items()
+                               if profile.extension_connection is peer)
         yield peer
     finally:
         await peer.close()
@@ -76,25 +77,27 @@ async def test_two_profiles_do_not_replace_each_other(server):
         assert set(server.profiles) == {first.profile_id, second.profile_id}
         assert first.close_code is second.close_code is None
         status = await server.get_extension_status()
-        assert first.profile_id in status and second.profile_id in status
+        assert str(first.profile_id) in status and str(second.profile_id) in status
+        assert (first.profile_id, second.profile_id) == (1, 2)
+        assert all("profile_id" not in json.loads(call.args[0]).get("data", {})
+                   for peer in (first, second) for call in peer.send.call_args_list)
     assert not server.profiles
     assert "No browser extension" in await server.get_extension_status()
 
 
 @pytest.mark.asyncio
-async def test_duplicate_id_does_not_replace_owner(server):
-    async with connected(server) as first:
-        duplicate = Peer(first.profile_id)
-        await server.handle_extension_connection(duplicate)
-        assert duplicate.close_code == 4009
-        assert first.close_code is None
-        assert server.profiles[first.profile_id].extension_connection is first
+async def test_peer_cannot_choose_its_id(server):
+    hello = {"type": "hello", "data": {"protocol_version": PROTOCOL_VERSION,
+                                       "profile_id": 999, "version": VERSION}}
+    async with connected(server, Peer(hello=hello)) as first, connected(server, Peer(hello=hello)) as second:
+        assert (first.profile_id, second.profile_id) == (1, 2)
+        assert first.close_code is second.close_code is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("hello", [None, [], {}, {"type": "hello", "data": {"version": VERSION}},
     {"type": "hello", "data": {"profile_id": str(uuid.uuid4()), "protocol_version": 2}},
-    {"type": "hello", "data": {"profile_id": "not-a-uuid", "protocol_version": PROTOCOL_VERSION}}])
+    {"type": "hello", "data": {"protocol_version": 3}}])
 async def test_invalid_or_legacy_handshake_is_rejected(server, hello):
     peer = Peer()
     peer.recv.return_value = json.dumps(hello)
@@ -174,18 +177,21 @@ async def test_all_browser_tools_require_explicit_profile(server):
             assert "profile_id" not in tool.parameters.get("required", [])
         else:
             assert "profile_id" in tool.parameters["required"], tool.name
+            assert tool.parameters["properties"]["profile_id"]["type"] == "integer"
     with pytest.raises(Exception, match="profile_id"):
         await server.mcp_app.call_tool("tabs_list", {})
 
 
 @pytest.mark.asyncio
-async def test_old_profile_id_is_invalid_after_browser_restart(server):
+async def test_old_profile_id_is_invalid_after_reconnect(server):
     async with connected(server) as old:
         old_id = old.profile_id
     async with connected(server) as new:
+        new.send.reset_mock()
         result = await server.send_request_and_wait(command(old_id))
         assert "not connected" in result["error"]
-        assert new.profile_id != old_id
+        assert new.profile_id == old_id + 1
+        new.send.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -210,7 +216,7 @@ async def test_stale_cleanup_cannot_clear_a_new_connection(server):
     from server.browser_profile import BrowserProfile
 
     async with connected(server) as old:
-        replacement = BrowserProfile(server, Peer(old.profile_id), old.profile_id, old.request.headers["Origin"])
+        replacement = BrowserProfile(server, Peer(), old.profile_id, old.request.headers["Origin"])
         replacement.register_monitor("new-monitor", "owner")
         server.profiles[old.profile_id] = replacement
     assert server.profiles[old.profile_id] is replacement
@@ -227,3 +233,25 @@ async def test_cloned_origins_are_not_given_a_misleading_known_name(server):
         profiles = (await server.list_profiles(include_windows=False))["profiles"]
         assert len(profiles) == 2
         assert all(p["name"] is None and "ambiguous" in p["name_error"] for p in profiles)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile_id", [None, "1", True, False, 0, -1, 1.0, [], {}])
+async def test_routing_rejects_nonpositive_or_noninteger_ids(server, profile_id):
+    async with connected(server) as peer:
+        peer.send.reset_mock()
+        result = await server.send_request_and_wait(command(profile_id))
+        assert "profile_id is required" in result["error"]
+        peer.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_routing_id_is_never_forwarded_to_extension(server):
+    async with connected(server) as peer:
+        peer.send.reset_mock()
+        pending = asyncio.create_task(server.send_request_and_wait(command(peer.profile_id)))
+        await asyncio.sleep(0)
+        outgoing = json.loads(peer.send.call_args.args[0])
+        assert "profile_id" not in outgoing
+        await peer.messages.put(json.dumps({"id": "request", "type": "response", "data": {}}))
+        assert (await pending)["profile_id"] == peer.profile_id

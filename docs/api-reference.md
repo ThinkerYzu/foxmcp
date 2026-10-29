@@ -28,7 +28,7 @@ Names are labels, may repeat, and cannot substitute for a routing ID.
 
 | Profile field | Meaning |
 |---|---|
-| `profile_id` | Required browser-call target; stable across socket reconnects, replaced after Firefox/extension restart. |
+| `profile_id` | Server-assigned positive integer target, unique during the server lifetime; replaced on every reconnect. |
 | `name` | Local Firefox name, or `null` when unavailable or ambiguous. |
 | `name_error` | Name-resolution explanation, or `null` on success. |
 | `extension_version` | Reported extension release version, or `null` when unavailable. |
@@ -36,13 +36,17 @@ Names are labels, may repeat, and cannot substitute for a routing ID.
 | `error` | Present when querying this profile's windows failed; other profiles remain listed. |
 
 There is no active-profile setting, `profiles_select` tool or implicit fallback.
-A missing/disconnected target fails. Rediscover after a browser/extension restart
-before reusing native object IDs. Both halves must support protocol 3.
+A missing/disconnected target fails. Rediscover after any connection loss or
+server restart before reusing native object IDs. Both halves must support
+protocol 4. IDs are scoped to the server lifetime, so do not persist them as
+permanent Firefox profile identifiers.
 
 Names are read from Firefox's local metadata on the server machine. The new
 profile-manager database takes precedence over legacy `profiles.ini`. Temporary,
 inaccessible or ambiguous profiles have `name=null` and an explicit `name_error`;
 they remain usable by ID. Names refresh on discovery and need not be unique.
+Discovery requires the server to have access to the browser profile files; it
+does not rely on an extension-supplied name or a user-entered label.
 
 ### Tab Management
 - `tabs_list(profile_id, window_id=None, cookie_store_id=None)` - List tabs with optional
@@ -232,7 +236,7 @@ import re
 discovery = await client.call_tool("profiles_list", {"populate": True})
 profiles = json.loads(discovery.content[0].text)["profiles"]
 print(profiles)
-profile_id = "<chosen-profile-id>"
+profile_id = 1  # Use the integer returned by profiles_list().
 ```
 
 Use that same `profile_id` with IDs discovered in that profile in the following
