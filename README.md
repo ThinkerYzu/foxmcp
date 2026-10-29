@@ -205,17 +205,31 @@ default, configurable from 100 to 30000ms); there is no manual Reconnect button.
 Both Popup and Options show actual connection and protocol status. See
 [extension configuration](docs/configuration.md#configuring-extension).
 
-For manual startup, run these from the installation directory:
+With `uvx`, pass server options after `foxmcp`:
 
 ```bash
 # Custom WebSocket and MCP HTTP ports
-venv/bin/python server/server.py --port 9000 --mcp-port 4000
+uvx foxmcp --port 9000 --mcp-port 4000
 
 # Hide tool groups from clients
-venv/bin/python server/server.py --disable-tools bookmarks,history
+uvx foxmcp --disable-tools bookmarks,history
 
 # Hide a group but keep its screenshot tool
-venv/bin/python server/server.py --disable-tools tabs --enable-tools tabs_capture_screenshot
+uvx foxmcp --disable-tools tabs --enable-tools tabs_capture_screenshot
+```
+
+For a client-managed stdio server, include the same options in its launch
+command, for example:
+
+```bash
+uvx foxmcp --stdio --single-instance --disable-tools bookmarks,history
+```
+
+For a GitHub archive or source installation, the same options follow
+`venv/bin/python server/server.py`. Run from that installation directory:
+
+```bash
+venv/bin/python server/server.py --port 9000 --mcp-port 4000
 ```
 
 Use `profiles_list` first to inspect all connected Firefox profiles, their real
