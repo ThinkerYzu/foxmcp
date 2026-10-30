@@ -41,8 +41,12 @@ server restart before reusing native object IDs. Both halves must support
 protocol 4. IDs are scoped to the server lifetime, so do not persist them as
 permanent Firefox profile identifiers.
 
-Names are read from Firefox's local metadata on the server machine. The new
-profile-manager database takes precedence over legacy `profiles.ini`. Temporary,
+Names are read from Firefox's local metadata on the server machine. Registered
+`profiles.ini` names take precedence, preserving their spelling and case; the
+profile-manager database supplies names for profiles without an INI name. On
+Linux, a unique held profile lock distinguishes a running profile from stale
+copies sharing its extension UUID. Multiple running candidates or unavailable
+activity evidence leave duplicate matches ambiguous. Temporary,
 inaccessible or ambiguous profiles have `name=null` and an explicit `name_error`;
 they remain usable by ID. Names refresh on discovery and need not be unique.
 Discovery requires the server to have access to the browser profile files; it

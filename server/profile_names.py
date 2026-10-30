@@ -24,6 +24,32 @@ def firefox_roots():
             home / ".var/app/org.mozilla.firefox/.mozilla/firefox"]
 
 
+def locked_profile_files():
+    """Read whole-file POSIX write locks on Linux without acquiring any locks.
+
+    Return device/inode keys, or None when activity evidence is unavailable.
+    A leftover lock symlink or file alone is not evidence of a running Firefox.
+    """
+    if sys.platform != "linux":
+        return None
+    try:
+        lines = Path("/proc/locks").read_text(encoding="ascii").splitlines()
+    except (OSError, ValueError):
+        return None
+    result = set()
+    for line in lines:
+        fields = line.split()
+        if (len(fields) != 8 or fields[1:4] != ["POSIX", "ADVISORY", "WRITE"]
+                or fields[6:] != ["0", "EOF"]):
+            continue
+        try:
+            major, minor, inode = fields[5].split(":")
+            result.add((int(major, 16), int(minor, 16), int(inode)))
+        except ValueError:
+            continue
+    return result
+
+
 class FirefoxProfileNames:
     """Match Origin UUIDs against metadata; never evaluate prefs.js as code."""
 
@@ -45,14 +71,10 @@ class FirefoxProfileNames:
                         path = Path(ini.get(section, "Path"))
                         if ini.getboolean(section, "IsRelative", fallback=True):
                             path = root / path
-                        # A StoreID delegates the display name to the new manager.
-                        # Its legacy INI name can differ even in a healthy profile;
-                        # do not report it if the authoritative database is unreadable.
-                        paths[path.resolve()] = (None if ini.get(section, "StoreID", fallback="")
-                                                 else ini.get(section, "Name", fallback=None))
+                        paths[path.resolve()] = ini.get(section, "Name", fallback=None)
             except (OSError, ValueError, configparser.Error) as error:
                 failures.append(type(error).__name__)
-            # The new profile manager's display name supersedes profiles.ini.
+            # Group metadata also registers profiles absent from profiles.ini.
             for database in (root / "Profile Groups").glob("*.sqlite"):
                 try:
                     with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro",
@@ -62,7 +84,9 @@ class FirefoxProfileNames:
                             path = Path(path)
                             if not path.is_absolute():
                                 path = root / path
-                            paths[path.resolve()] = name
+                            path = path.resolve()
+                            if not paths.get(path):
+                                paths[path] = name
                 except (OSError, ValueError, sqlite3.Error) as error:
                     failures.append(type(error).__name__)
             for path, name in paths.items():
@@ -80,11 +104,33 @@ class FirefoxProfileNames:
                 except (OSError, ValueError, TypeError, AttributeError) as error:
                     failures.append(type(error).__name__)
         result = {}
+        locked_files = None
+        checked_locks = False
         for origin in origins:
             try:
                 matches = candidates.get(urlsplit(origin).hostname, {})
             except ValueError:
                 matches = {}
+            if len(matches) > 1:
+                if not checked_locks:
+                    locked_files = locked_profile_files()
+                    checked_locks = True
+                if locked_files is not None:
+                    try:
+                        running = {}
+                        for path, name in matches.items():
+                            try:
+                                info = (path / ".parentlock").stat()
+                            except FileNotFoundError:
+                                continue
+                            key = (os.major(info.st_dev), os.minor(info.st_dev), info.st_ino)
+                            if key in locked_files:
+                                running[path] = name
+                        if len(running) == 1:
+                            matches = running
+                    except OSError:
+                        # An inaccessible candidate might also be running.
+                        pass
             if len(matches) == 1 and next(iter(matches.values())):
                 result[origin] = {"name": next(iter(matches.values())), "name_error": None}
             else:

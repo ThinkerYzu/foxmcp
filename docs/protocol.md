@@ -84,6 +84,15 @@ Request monitors are owned by the proxy that starts them. On disconnect, pending
 requests finish before cleanup, including monitor-creation replies that arrive
 after the caller has gone. Only that proxy's monitors are stopped.
 
+### Profile name lookup correction (2026-10-30)
+
+Protocol ID remains 4: preferring registered INI names and using Linux held
+profile locks to disambiguate stale metadata changes only server-local label
+lookup. No extension/server handshake, action, parameter, response or error
+contract changes. The MCP name/name_error fields keep their existing meaning;
+names remain best-effort labels and never routing keys. See
+[profile selection](configuration.md#selecting-a-firefox-profile).
+
 ## Protocol ID compatibility policy
 
 The checked protocol ID is `PROTOCOL_VERSION` in `server/browser_proxy.py`,

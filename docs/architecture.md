@@ -78,7 +78,9 @@ from commands before forwarding. Unrelated profiles stay connected when one
 disconnects.
 
 `profile_names.py` resolves display names from local Firefox metadata without
-modifying it. Names may be missing, ambiguous or duplicated and are never
+modifying it. Registered INI names take precedence over group labels; on Linux,
+held profile locks can distinguish running profiles from stale UUID copies.
+Names may be missing, ambiguous or duplicated and are never
 routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-4).
 
 #### MCP Tools (`mcp_tools.py`)

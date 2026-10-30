@@ -237,7 +237,9 @@ names, windows and tabs. Every browser command requires the chosen `profile_id`
 alongside its window/tab IDs. Profiles can share the same server port without
 replacing each other. The server assigns positive integer IDs from 1. IDs change on every reconnect;
 rediscover after a disconnect or server restart. Update both extension and server for
-protocol 4. See [profile discovery](docs/api-reference.md#firefox-profiles).
+protocol 4. Follow the [multiple-profile setup](docs/configuration.md#connecting-multiple-firefox-profiles-to-one-server)
+to connect each Firefox instance, then use
+[profile discovery](docs/api-reference.md#firefox-profiles) to choose a target.
 
 All **46 tools** are enabled by default. Available groups are `profiles`, `windows`, `tabs`,
 `containers`, `bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.

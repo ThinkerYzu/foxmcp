@@ -126,7 +126,8 @@ Without `--single-instance`, three things are different:
 
 ### One session at a time
 
-The extension dials a single WebSocket port, so a single server can serve it.
+Each profile's extension dials one WebSocket endpoint. A server can accept
+[several Firefox profiles](#connecting-multiple-firefox-profiles-to-one-server).
 That is true in either mode. In HTTP mode it is a setup decision you make once.
 Under `--stdio` it becomes a limit on how you work, because every client that
 launches a server launches its own.
@@ -222,6 +223,53 @@ selection remains available with known IDs. Containers are persistent profile
 resources shared across clients; disconnects never remove them. Removal clears
 stored site data and refuses open tabs. See [API reference](api-reference.md#firefox-containers).
 
+## Connecting multiple Firefox profiles to one server
+
+One FoxMCP server can serve several Firefox profiles at the same time. Each
+profile runs its own extension and connects to the same WebSocket endpoint.
+Use compatible server and extension builds in every profile; the current source
+requires protocol 4. An older published build may need updating to support this
+setup.
+
+1. **Start one server.** For example, from a configured source checkout:
+
+   ```bash
+   python server/server.py --port 8765 --mcp-port 3000
+   ```
+
+   Leave it running. This example serves Firefox connections on port `8765`
+   and MCP clients at `http://localhost:3000/mcp/`.
+
+2. **Open each Firefox profile.** Keep each profile running in its own Firefox
+   instance. Install or load the compatible FoxMCP extension separately in
+   every profile.
+
+3. **Point every extension at the same server.** In each profile, open the
+   FoxMCP popup or Options and set **Host** to `localhost` and **Port** to
+   `8765`. Valid edits save automatically. These fields address the browser
+   WebSocket listener, not the MCP HTTP listener. If the server uses a custom
+   `--port`, enter that same port in every profile. See
+   [Configuring Extension](#configuring-extension).
+
+4. **Check every profile is connected.** Each extension should show Connected
+   after registration. If one does not, check its Host/Port and protocol
+   diagnostics while keeping the server and that Firefox instance running.
+
+5. **Discover profiles from your MCP client.** Connect the client to
+   `http://localhost:3000/mcp/` and call `profiles_list(populate=True)`. Each
+   connected profile appears with its own `profile_id`, name, windows and tabs.
+   Pass the selected ID to browser tools, for example
+   `tabs_list(profile_id=1)`, using an ID from the discovery result. See
+   [Selecting a Firefox profile](#selecting-a-firefox-profile) for ID lifetimes
+   and name lookup.
+
+Several MCP clients can use this same server and discover the same profiles.
+For clients that launch through stdio, use
+[`--stdio --single-instance`](#serving-mcp-over-stdio) to share a browser server.
+A separate server per Firefox profile is optional; see
+[Multiple Server Instances](#multiple-server-instances) when separate endpoints
+are desired.
+
 ## Selecting a Firefox profile
 
 All connected profiles are visible through `profiles_list(populate=True)`, including
@@ -229,20 +277,27 @@ their windows and tabs. Pass the selected `profile_id` to every browser tool.
 Window/tab IDs alone are insufficient: the same numbers can exist in several
 profiles. There is no shared current-profile setting between agents.
 
-The server reads Firefox's own names locally: the new profile-manager SQLite
-store takes precedence over `profiles.ini`. It matches the extension Origin UUID
+The server reads Firefox's own names locally: a nonempty registered
+`profiles.ini` name takes precedence over the profile-manager SQLite label.
+Group metadata supplies names for profiles without a registered INI name.
+Names retain their exact spelling and case. It matches the extension Origin UUID
 against the profile's persisted extension UUID map. The server searches standard
 Windows/macOS locations and Linux legacy, XDG, Snap and Flatpak locations. Custom
-profile paths are found when referenced by metadata in those locations. The
-server needs filesystem access to this metadata; remote or sandboxed setups may
-leave names unknown. Metadata is read-only and
-refreshed on discovery. Profiles without a resolvable name remain visible with
+profile paths are found when referenced by metadata in those locations. On
+Linux, if multiple paths share a UUID, the server reads `/proc/locks` and checks
+their `.parentlock` device/inode identities. Exactly one held whole-file POSIX
+write lock selects the running profile over stale copies. It never acquires a
+lock or trusts leftover lock files or symlinks. Multiple active candidates,
+unavailable activity evidence (including other platforms), or inaccessible
+candidate lock files leave the name ambiguous. The server needs filesystem
+access to this metadata; remote or sandboxed setups may leave names unknown.
+Metadata is read-only and refreshed on discovery. Profiles without a resolvable name remain visible with
 `name=null` and `name_error`. This requires Firefox metadata on the server's
 machine; a separate native helper is not installed.
 
-Protocol ID 3 requires updating both server and extension. The extension keeps its
-ID across socket reconnects; restarting Firefox or reloading the extension creates
-a new ID. Rediscover before using previously returned window/tab IDs. Commands
+Protocol ID 4 requires updating both server and extension. The server assigns a
+new integer ID on every connection, including extension reconnects. Rediscover
+before using previously returned profile/window/tab IDs. Commands
 never fall back to another connected profile.
 
 ## Reducing the Tool Surface
@@ -434,8 +489,9 @@ server = FoxMCPServer(port=8765, start_mcp=False)
 ## MCP Client Connection
 
 1. **Start the server** (both WebSocket and MCP servers)
-2. **Load Firefox extension** (connects automatically to WebSocket)
-3. **Connect MCP client** to `http://localhost:3000`
+2. **Load Firefox extension** in each profile you want to connect (see
+   [multiple-profile setup](#connecting-multiple-firefox-profiles-to-one-server))
+3. **Connect MCP client** to `http://localhost:3000/mcp/`
 
 Or let the client start the server for you — see
 [Serving MCP over stdio](#serving-mcp-over-stdio), where step 1 is the client's
@@ -486,7 +542,14 @@ Ports are set on the command line, not through the environment — see
 
 ## Multiple Server Instances
 
-You can run multiple FoxMCP servers on different ports:
+Use separate server instances when you want separate browser endpoints. To
+connect several Firefox profiles to a shared endpoint, follow
+[Connecting multiple Firefox profiles to one server](#connecting-multiple-firefox-profiles-to-one-server).
+
+Each independent server needs its own WebSocket port and, when HTTP is enabled,
+its own MCP port. Configure each Firefox profile's extension with the WebSocket
+port of its chosen server, and each MCP client with that server's MCP endpoint.
+For example:
 
 ```bash
 # Server 1 - Default ports
