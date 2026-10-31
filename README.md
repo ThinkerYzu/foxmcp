@@ -20,16 +20,16 @@ client talks to the server, which sends commands to the extension.
 scripts. Use trusted clients and consider a dedicated Firefox profile.
 See [SECURITY.md](SECURITY.md) for the threat model.
 
-This README describes v1.6.0, currently being prepared for release. Its download
-URLs become available when publication completes. The latest published release
-is [v1.5.0](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0), which uses
-the previous API. To try the candidate now, use the
-[source installation](#install-from-source) with a matching source-built extension.
+Version 1.6.0 is published on [PyPI](https://pypi.org/project/foxmcp/1.6.0/)
+and [GitHub](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.6.0).
+The matching extension has been submitted to Mozilla and awaits review; the
+public Add-ons listing still serves 1.5.0. Until approval, use the matching
+GitHub XPI with [temporary add-on loading](docs/development.md#loading-in-firefox).
 
 **Upgrading:** Update the server and extension together, restart shared workers,
 and refresh your client's tool schemas. Call `profiles_list` and pass its integer
 `profile_id` to every browser tool, even with one profile connected. Rediscover
-targets after reconnection. See [release notes](RELEASES.md#v160---multiple-profiles-and-windows-installation-prepared-2026-10-30).
+targets after reconnection. See [release notes](RELEASES.md#v160---multiple-profiles-and-windows-installation-2026-10-30).
 
 ## Quick start
 

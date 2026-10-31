@@ -6,12 +6,21 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
-## v1.6.0 - Multiple profiles and Windows installation (prepared 2026-10-30)
+## v1.6.0 - Multiple profiles and Windows installation (2026-10-30)
 
 ### Publication status
 
-Prepared locally; not tagged or published. The latest published release is
-v1.5.0. Release download URLs for v1.6.0 become available after publication.
+- [GitHub release](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.6.0)
+  and [PyPI](https://pypi.org/project/foxmcp/1.6.0/) published. All nine public
+  assets downloaded; archive/Python checksums and all three tagged installers
+  verified. All four packages' provenance verifies against `refs/tags/v1.6.0`,
+  source `53232dcf3555d841df966917a8724431d680624d` and `release.yml`.
+- PyPI wheel/sdist hashes verify and bytes exactly match GitHub. Fresh isolated
+  `uvx --from foxmcp==1.6.0 foxmcp --help` and stdio discovery/routing pass with
+  all 46 tools. Full browser operations are covered by the final-package gate.
+- AMO submission succeeded, version `6645147` awaits Mozilla review. The public
+  listing still serves 1.5.0. Signed standard-Firefox validation remains pending
+  availability of the signed 1.6.0 extension.
 
 ### Highlights
 
@@ -78,24 +87,22 @@ Name lookup, Windows process fixes and release metadata introduce no further
 extension/server contract change. Both implementations and pairing tests enforce
 3. See [protocol policy](docs/protocol.md#protocol-id-compatibility-policy).
 
-### Preparation gates
+### Release validation
 
-The pre-correction source baseline's [post-landing CI](https://github.com/ThinkerYzu/foxmcp/actions/runs/41153037451)
-passed, including native Windows, the full suite and packaged HTTP/stdio checks.
-Local candidate checks pass: all eight version fields, 506 unit tests with no
-skips and full unit-module collection, fatal Python lint, 183 local documentation
-links/anchors, archive checksums and XPI/server version metadata. Wheel and sdist
-builds pass metadata validation and `twine check`. All four package types carry
-protocol ID 3. Ten focused integration tests pass without skips, including real
-Firefox handshakes, settings/reconnects, multiple profiles and proxy routing.
-Forwarder compatibility tests reject released ID 2 and candidate ID 3 in both
-directions.
+The exact candidate `53232dc` passed ordinary push CI and the required
+[non-publishing rehearsal](https://github.com/ThinkerYzu/foxmcp/actions/runs/41164576099)
+before the annotated tag was created. The
+[tagged publishing workflow](https://github.com/ThinkerYzu/foxmcp/actions/runs/41165907197)
+is green. Both runs passed 716 tests with zero skips and every required module,
+all four native Windows Python/PowerShell combinations, source installation,
+wheel/sdist checks and all 46 final-archive tools over HTTP and stdio with ten
+feature groups per transport. Downloaded tagged JUnit and public package
+checksums were independently verified.
 
-The release candidate still requires its own successful non-publishing workflow
-rehearsal before tagging. Publication must verify GitHub assets/checksums and
-provenance, both Windows script download URLs, PyPI distributions and AMO status
-separately. Signed-extension testing in standard Firefox remains a post-signing
-check; Windows CI does not validate a signed extension in real Windows Firefox.
+Protocol review above records exactly one increase from released ID 2 to 3.
+The existing AMO deployment gate was approved for this release; submission
+success does not establish Mozilla approval or signed-extension validation.
+Windows CI does not validate a signed extension in real Windows Firefox.
 
 ## v1.5.0 - Containers, shared connections and Python packaging (2026-10-25)
 
