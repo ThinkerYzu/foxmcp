@@ -84,6 +84,15 @@ Request monitors are owned by the proxy that starts them. On disconnect, pending
 requests finish before cleanup, including monitor-creation replies that arrive
 after the caller has gone. Only that proxy's monitors are stopped.
 
+### Server composition refactor (2026-10-31)
+
+Protocol ID remains 3. Compared with released v1.6.0, extracting `BrowserServer`
+and `MCPFrontend`, injecting local/remote browser access and moving file-transfer
+ownership change Python structure only. Extension and proxy handshakes, action
+parameters, response/error envelopes, profile/request IDs, access checks and
+monitor/worker lifetimes retain their contracts. This review does not authorize
+publishing a release; repeat the complete release review before tagging.
+
 ### Profile name lookup correction (2026-10-30)
 
 Protocol ID remains 3: preferring registered INI names and using Linux held

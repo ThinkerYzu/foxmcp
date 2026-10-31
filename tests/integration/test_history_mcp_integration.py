@@ -43,7 +43,7 @@ class TestHistoryMCPIntegration:
         # Verify the MCP components exist
         mcp_tools = server.mcp_tools
         assert hasattr(mcp_tools, 'mcp')  # FastMCP instance
-        assert hasattr(mcp_tools, 'websocket_server')  # WebSocket server reference
+        assert mcp_tools.browser is server  # Direct browser access, injected at construction
         
         # Verify server configuration
         assert server.start_mcp == True  # MCP was enabled

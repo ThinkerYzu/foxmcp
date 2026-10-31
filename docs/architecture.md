@@ -9,33 +9,64 @@ default). It can serve MCP clients directly and accept browser commands from
 separate MCP stdio processes at the same time.
 
 ```mermaid
-flowchart LR
-    clientA["MCP client A"]
-    clientB["MCP client B"]
-    httpClients["MCP HTTP clients"]
+flowchart TB
+    stdioClient["MCP stdio client"]
+    httpClient["MCP HTTP client"]
 
-    processA["MCP process A<br/>FastMCP tools + RemoteBrowser"]
-    processB["MCP process B<br/>FastMCP tools + RemoteBrowser"]
-
-    subgraph owner["Browser-owning process"]
-        httpTools["FastMCP tools<br/>(HTTP mode only)"]
-        hub["BrowserProxyHub"]
-        registry["Profile registry<br/>BrowserProfile per connection"]
-        httpTools <--> registry
-        hub <--> registry
+    subgraph stdioProcess["Shared-stdio process (one per client)"]
+        frontend["MCPFrontend"]
+        tools["FoxMCPTools"]
+        remote["RemoteBrowser"]
+        files["FileTransferServer"]
+        frontend -->|tools| tools
+        frontend -->|file_transfers| files
+        tools <-->|browser| remote
     end
 
-    firefox1["Firefox profile 1<br/>Extension + WebExtensions APIs"]
-    firefox2["Firefox profile 2<br/>Extension + WebExtensions APIs"]
+    subgraph ownerProcess["Browser-owner process"]
+        directFrontend["MCPFrontend (HTTP mode only)"]
+        directTools["FoxMCPTools"]
+        directFrontend -->|tools| directTools
 
-    clientA <-->|"stdin / stdout"| processA
-    clientB <-->|"stdin / stdout"| processB
-    processA <-->|"/proxy WebSocket :8765"| hub
-    processB <-->|"/proxy WebSocket :8765"| hub
-    httpClients <-->|"MCP HTTP :3000"| httpTools
-    registry <-->|"/ WebSocket :8765"| firefox1
-    registry <-->|"/ WebSocket :8765"| firefox2
+        subgraph browserServer["BrowserServer"]
+            hub["BrowserProxyHub"]
+            profiles["BrowserServer.profiles"]
+            profile1["BrowserProfile"]
+            profile2["BrowserProfile"]
+            hub <--> profiles
+            profiles --> profile1
+            profiles --> profile2
+        end
+        directTools <-->|browser| profiles
+    end
+
+    firefox1["Firefox profile 1 extension"]
+    firefox2["Firefox profile 2 extension"]
+
+    stdioClient <-->|"stdin / stdout"| frontend
+    remote <-->|"/proxy WebSocket :8765"| hub
+    httpClient <-->|"MCP HTTP :3000"| directFrontend
+    profile1 <-->|"/ WebSocket :8765"| firefox1
+    profile2 <-->|"/ WebSocket :8765"| firefox2
 ```
+
+Each Python component label names an actual class or attribute. The outer boxes
+label process boundaries. Registry arrows represent calls through
+`BrowserServer.send_request_and_wait` or `BrowserServer.list_profiles`; the
+`profiles` dictionary itself does not execute requests. The HTTP frontend owns
+its own `FileTransferServer` too, omitted from the diagram for space.
+
+| Diagram symbol | Source definition | Reference in code |
+|---|---|---|
+| `MCPFrontend` | [mcp_frontend.py](../server/mcp_frontend.py) | Startup constructs it with `browser` |
+| `FoxMCPTools` | [mcp_tools.py](../server/mcp_tools.py) | `MCPFrontend.tools` |
+| `RemoteBrowser` | [browser_proxy.py](../server/browser_proxy.py) | `MCPFrontend.browser` in shared stdio |
+| `BrowserServer` | [browser_server.py](../server/browser_server.py) | `MCPFrontend.browser` for direct access |
+| `BrowserProxyHub` | [browser_proxy.py](../server/browser_proxy.py) | `BrowserServer.proxy_hub` |
+| `BrowserServer.profiles` | [browser_server.py](../server/browser_server.py) | Maps profile IDs to `BrowserProfile` instances |
+| `BrowserProfile` | [browser_profile.py](../server/browser_profile.py) | One socket and its pending replies |
+| `FileTransferServer` | [file_transfer.py](../server/file_transfer.py) | `MCPFrontend.file_transfers` |
+
 
 The browser owner's `/discovery` HTTP route shares port 8765 with `/proxy` and
 the extension WebSockets. Each stdio process uses it before opening its proxy
@@ -92,7 +123,9 @@ and the [file map](files.md#extension-directory).
 
 #### Registry and browser connections
 
-`server.py` keeps a registry of `BrowserProfile` objects keyed by `profile_id`.
+`BrowserServer` in `browser_server.py` keeps `profiles`, a registry of
+`BrowserProfile` objects keyed by `profile_id`. Its `proxy_hub` is the
+`BrowserProxyHub` serving discovery and forwarding on the same listener.
 Each object in `browser_profile.py` owns one socket, pending reply futures,
 release diagnostics and monitor ownership. Registration validates protocol 3
 and assigns a new integer ID. The extension never handles this ID; it is stripped
@@ -114,13 +147,39 @@ to the registry. Native tab/window/group/container/monitor IDs are meaningful
 only within the chosen profile. Unknown or disconnected targets return errors
 without selecting another profile.
 
-In an owning process, tools call `FoxMCPServer` directly. In a shared stdio
-process, `single_instance.run_proxy` supplies a `RemoteBrowser` instead. The
-same tools run locally in either case: tool filtering, predefined-script
-selection/execution, file grants and MCP result formatting belong to the
-process serving that MCP client. Only browser commands, profile discovery and
-connection-status queries cross `/proxy`. The owner's tool configuration does
-not limit the browser actions available to forwarding clients.
+`MCPFrontend` in `mcp_frontend.py` constructs `FoxMCPTools` with an explicit
+`browser` dependency: either `BrowserServer` for direct access or `RemoteBrowser`
+for shared stdio. `MCPFrontend.browser` and `FoxMCPTools.browser` refer to the
+same object, fixed at construction. Both implementations provide
+`send_request_and_wait`, `list_profiles` and `get_extension_status`.
+
+The frontend owns tool selection, predefined-script configuration/execution,
+its `FileTransferServer` and MCP transport/results. Tools receive file transfers
+separately as `FoxMCPTools.file_transfers`. Only browser commands, profile
+discovery and connection-status queries cross `/proxy`. The owner's tool
+configuration does not limit browser actions available to forwarding clients.
+
+#### Startup composition (`server.py`)
+
+`main` assembles the selected mode, and `serve` coordinates direct owner/frontend
+lifetimes:
+
+| Mode | Components constructed |
+|---|---|
+| HTTP | `BrowserServer` + `MCPFrontend(browser_server)`; frontend runs `start_http` |
+| Plain `--stdio` | `BrowserServer` + `MCPFrontend(browser_server)`; frontend runs `serve_stdio` |
+| `--stdio --single-instance` | `run_proxy` discovers the owner, then constructs `RemoteBrowser` + `MCPFrontend(remote_browser)` |
+| Automatic worker / `--no-mcp` | `BrowserServer` only |
+
+An HTTP frontend supplies `live_mcp_session_ids` to the browser owner for monitor
+cleanup. `BrowserProfile` uses that callback without reaching into an MCP app.
+A proxy's monitor ownership stays with `BrowserProxyHub`; `RemoteBrowser`'s
+monitor hooks leave tracking to that upstream hub.
+
+`FoxMCPServer` remains a compatibility facade for existing in-process callers
+and tests. It subclasses `BrowserServer` and holds an `MCPFrontend`, exposing
+the old `mcp_tools`, `mcp_app` and related accessors without duplicate state.
+Production CLI startup uses the explicit components above.
 
 ### Firefox containers
 
@@ -155,8 +214,8 @@ without an extra dependency or a fixed port. It runs independently of the MCP
 transport, including stdio. Host/Origin checks and opaque one-use grants keep
 the endpoint from acting as a directory server. It grants no CORS access and
 is closed when its owning MCP process shuts down. In shared stdio mode, that
-process supplies its own `FileTransferServer` to `RemoteBrowser`: only the grant
-URL and metadata pass through `/proxy` and the selected extension fetches the
+process owns its `MCPFrontend.file_transfers`; `RemoteBrowser` only forwards
+browser commands. The grant URL and metadata pass through `/proxy` and the selected extension fetches the
 file directly from the originating process. File bytes do not pass through the
 browser owner's proxy.
 
@@ -190,10 +249,11 @@ Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.cre
   beside the WebSocket server rather than a thread, since the stdio transport is
   asyncio throughout. These describe direct browser-owning modes; shared stdio
   runs FastMCP locally and connects to the owner's browser listener instead of
-  binding another one
+  binding another one.
 
 HTTP tool calls cross from uvicorn's event loop to the browser listener's loop
-using `asyncio.run_coroutine_threadsafe`. Registry access, extension sockets and
+using `BrowserServer.send_request_and_wait` and
+`asyncio.run_coroutine_threadsafe`. Registry access, extension sockets and
 pending reply futures stay on that browser loop, shared by direct HTTP calls
 and incoming proxy calls.
 
@@ -242,15 +302,17 @@ the shared worker. See [configuration](configuration.md#sharing-one-server-acros
 
 ```text
 Direct HTTP or plain stdio:
-  MCP client -> FastMCP tool -> FoxMCPTools._send(profile_id, request)
-             -> FoxMCPServer registry -> selected BrowserProfile
+  MCP client -> MCPFrontend -> FoxMCPTools._send(profile_id, request)
+             -> BrowserServer.send_request_and_wait -> BrowserServer.profiles[profile_id]
+             -> BrowserProfile.send_request_and_wait
              -> extension WebSocket -> WebExtensions API
 
 Shared stdio:
-  MCP client -> local FastMCP tool -> FoxMCPTools._send(profile_id, request)
-             -> RemoteBrowser -> /proxy WebSocket -> BrowserProxyHub
-             -> fresh upstream request ID -> FoxMCPServer registry
-             -> selected BrowserProfile -> extension WebSocket -> WebExtensions API
+  MCP client -> MCPFrontend -> FoxMCPTools._send(profile_id, request)
+             -> RemoteBrowser.send_request_and_wait -> /proxy WebSocket
+             -> BrowserProxyHub.forward -> BrowserServer.send_request_and_wait
+             -> BrowserServer.profiles[profile_id] -> BrowserProfile.send_request_and_wait
+             -> extension WebSocket -> WebExtensions API
 ```
 
 For both paths, the selected `BrowserProfile` matches the extension reply to its
@@ -267,11 +329,11 @@ profile for its windows and tabs without choosing a default profile.
 ### 2. Predefined Scripts Flow
 
 ```text
-MCP client -> content_execute_predefined in its MCP-serving process
+MCP client -> MCPFrontend.tools -> content_execute_predefined
            -> validate and run local external script
            -> script stdout supplies JavaScript
            -> content.execute_script with explicit profile_id and tabId
-           -> direct registry call OR RemoteBrowser /proxy forwarding
+           -> FoxMCPTools._send -> BrowserServer OR RemoteBrowser via /proxy
            -> selected Firefox extension -> isolated content-script context
            -> execution result returns along the request path
            -> local tool formats the MCP response
@@ -457,7 +519,7 @@ See [scripts.md](scripts.md) for the full guide.
 
 ### 3. Test Infrastructure
 - **Centralized Fixtures**: Shared test setup in `conftest.py`
-- **Port Coordination**: `port_coordinator.py` allocates ports dynamically, and `FoxMCPServer` detects pytest to avoid the default MCP port — so the suite can run while a development server is up
+- **Port Coordination**: `port_coordinator.py` allocates ports dynamically, and `MCPFrontend` detects pytest to avoid the default MCP port — so the suite can run while a development server is up
 - **Firefox Management**: Automated temporary profile creation and extension installation via `setup_and_start_firefox()`
 - **Cleanup**: Automatic resource cleanup after tests
 
@@ -468,13 +530,16 @@ See [scripts.md](scripts.md) for the full guide.
 Constructed in code:
 
 ```python
-server = FoxMCPServer(
-    host="localhost",      # Security: localhost only
-    port=8765,             # WebSocket port
-    mcp_port=3000,         # MCP server port (None → 3000, or dynamic under pytest)
-    start_mcp=True,        # Enable MCP integration
-    use_stdio=False        # True: serve MCP on stdin/stdout without an MCP HTTP port
-)
+from server.browser_server import BrowserServer
+from server.mcp_frontend import MCPFrontend
+from server.server import serve
+
+browser_server = BrowserServer(host="localhost", port=8765)
+frontend = MCPFrontend(browser_server, host="localhost", port=3000)
+await serve(browser_server, frontend)  # HTTP MCP + browser listener
+
+# Plain stdio uses MCPFrontend(browser_server, use_stdio=True), then
+# await serve(browser_server, frontend, use_stdio=True).
 ```
 
 Or from the command line:

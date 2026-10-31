@@ -221,7 +221,7 @@ class TestWindowMCPTools:
         # The tools should be registered with the MCP instance
         # We can't easily introspect FastMCP tools, but we can verify the setup completed
         assert hasattr(tools, 'mcp')
-        assert hasattr(tools, 'websocket_server')
+        assert hasattr(tools, 'browser')
 
 
 if __name__ == "__main__":

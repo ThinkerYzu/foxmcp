@@ -19,7 +19,9 @@ foxmcp/
 │   ├── popup/                 # Toolbar popup HTML, DOM adapter and CSS
 │   └── icons/                 # Packaged extension icons
 ├── server/                    # Source package, installed as foxmcp
-│   ├── server.py              # Browser registry, explicit routing and MCP startup
+│   ├── server.py              # Explicit startup composition and compatibility facade
+│   ├── browser_server.py      # BrowserServer: listener, profile registry and routing
+│   ├── mcp_frontend.py        # MCPFrontend: MCP transport, tools and file transfers
 │   ├── browser_profile.py     # One browser connection, replies and monitor ownership
 │   ├── browser_proxy.py       # Shared-port discovery and client forwarding
 │   ├── profile_names.py       # Read-only Firefox profile-name lookup
@@ -70,12 +72,14 @@ See [reconnection](configuration.md#tuning).
 
 | File | Responsibility |
 |---|---|
-| [server.py](../server/server.py) | Keeps `profiles`, validates registrations and routes requests using an explicit `profile_id`. Starts HTTP/stdio MCP, browser and local-file services. |
+| [server.py](../server/server.py) | `main` explicitly assembles each startup mode; `serve` coordinates direct frontend/owner lifetime. `FoxMCPServer` is the compatibility facade. |
+| [browser_server.py](../server/browser_server.py) | `BrowserServer` owns the listener, `profiles`, `proxy_hub`, handshake, explicit routing, monitor reaping and browser test helpers. |
+| [mcp_frontend.py](../server/mcp_frontend.py) | `MCPFrontend` owns `tools`, injected `browser`, MCP HTTP/stdio transport and `file_transfers`. Supplies HTTP-session liveness to the browser owner. |
 | [browser_profile.py](../server/browser_profile.py) | Owns one profile socket, pending reply futures, connection identity, version diagnostics and monitor ownership. A disconnect affects only that connection. |
-| [browser_proxy.py](../server/browser_proxy.py) | Implements `/discovery` and `/proxy`, validates local clients and forwards browser commands while preserving the target profile. |
+| [browser_proxy.py](../server/browser_proxy.py) | `BrowserProxyHub` and `RemoteBrowser` implement `/discovery` and `/proxy`, validates local clients and forwards browser commands while preserving the target profile. |
 | [profile_names.py](../server/profile_names.py) | Resolves names from Firefox's local metadata without modifying it. Reports unavailable or ambiguous names. |
 | [mcp_tools.py](../server/mcp_tools.py) | Registers 46 tools by default. `profiles_list` discovers targets; browser tools require `profile_id`. Runs predefined scripts locally before sending generated JavaScript. |
-| [single_instance.py](../server/single_instance.py) | Joins or starts the shared worker for `--stdio --single-instance`. |
+| [single_instance.py](../server/single_instance.py) | Discovers/starts the browser owner using `BrowserEndpoint` settings, then constructs a shared-stdio frontend. Manages detached worker election and lifetime. |
 | [file_transfer.py](../server/file_transfer.py) | Streams regular local files through one-use HTTP grants; does not encode file contents into the WebSocket request. |
 | [cli.py](../server/cli.py), [version.py](../server/version.py) | Installed command setup and release-version reporting. |
 

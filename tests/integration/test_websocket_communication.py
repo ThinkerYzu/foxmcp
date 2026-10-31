@@ -53,12 +53,12 @@ class TestWebSocketCommunication:
 
             # Verify websockets.serve was called with correct parameters
             mock_serve.assert_called_once_with(
-                server.browser_hub.handle_connection,
+                server.proxy_hub.handle_connection,
                 "localhost",
                 8767,
                 reuse_address=os.name != 'nt',
                 origins=[EXTENSION_ORIGIN_PATTERN, None],
-                process_request=server.browser_hub.process_request,
+                process_request=server.proxy_hub.process_request,
                 process_response=server.log_rejected_handshake
             )
 

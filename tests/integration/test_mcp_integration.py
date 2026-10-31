@@ -97,7 +97,7 @@ class TestMCPIntegration:
         mcp_tools = FoxMCPTools(mock_websocket_server)
         
         assert mcp_tools is not None
-        assert mcp_tools.websocket_server == mock_websocket_server
+        assert mcp_tools.browser == mock_websocket_server
         assert mcp_tools.mcp is not None
         assert hasattr(mcp_tools, 'get_mcp_app')
         

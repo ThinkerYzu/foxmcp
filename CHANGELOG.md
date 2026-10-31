@@ -5,6 +5,16 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Separate `MCPFrontend` from `BrowserServer`, with direct local access or
+  `RemoteBrowser` forwarding chosen at construction. Architecture diagrams and
+  source names now match. Browser-only workers construct no MCP frontend;
+  shared-stdio frontends construct no browser listener or registry. CLI, tool
+  schemas and protocol ID 3 remain unchanged.
+
 ## [1.6.0] - 2026-10-30
 
 ### Added

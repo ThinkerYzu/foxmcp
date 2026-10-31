@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 
 import httpx
 import websockets
@@ -17,6 +18,14 @@ try:
     from .browser_proxy import RemoteBrowser, SERVER_NAME, PROTOCOL_VERSION
 except ImportError:
     from browser_proxy import RemoteBrowser, SERVER_NAME, PROTOCOL_VERSION
+
+
+@dataclass(frozen=True)
+class BrowserEndpoint:
+    """Connection/startup settings, with no listener, registry or MCP tools."""
+
+    host: str
+    port: int
 
 
 logger = logging.getLogger(__name__)
@@ -34,19 +43,19 @@ def runtime_directory():
     return directory
 
 
-async def run_worker(server, idle_timeout):
+async def run_worker(browser_server, idle_timeout):
     """Let the listening socket arbitrate election between detached contenders."""
-    server.browser_hub.idle_timeout = idle_timeout
+    browser_server.proxy_hub.idle_timeout = idle_timeout
     tasks = []
     try:
         try:
-            await server.start_browser_listener()
+            await browser_server.start_browser_listener()
         except OSError as error:
             if error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048:
                 return
             raise
-        tasks = [asyncio.create_task(server.browser_hub.wait_until_idle()),
-                 asyncio.create_task(server.websocket_server.wait_closed())]
+        tasks = [asyncio.create_task(browser_server.proxy_hub.wait_until_idle()),
+                 asyncio.create_task(browser_server.websocket_server.wait_closed())]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             await task
@@ -54,16 +63,14 @@ async def run_worker(server, idle_timeout):
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        await server._stop()
+        await browser_server._stop()
 
 
-def spawn_worker(server, idle_timeout, log_path):
+def spawn_worker(endpoint, idle_timeout, log_path):
     command = [sys.executable, str(Path(__file__).with_name("server.py")),
                "--stdio", "--single-instance", "--single-instance-worker",
-               "--host", server.host, "--port", str(server.port),
-               "--single-instance-idle-timeout", str(idle_timeout),
-               "--disable-tools", ",".join(sorted(server.mcp_tools.disabled_groups)),
-               "--enable-tools", ",".join(sorted(server.mcp_tools.enabled_tools))]
+               "--host", endpoint.host, "--port", str(endpoint.port),
+               "--single-instance-idle-timeout", str(idle_timeout)]
     if os.name == "nt":
         return spawn_windows_worker(command, log_path)
     with open(log_path, "ab") as log:
@@ -161,18 +168,18 @@ async def probe(host, port):
     return metadata
 
 
-async def discover(server, idle_timeout):
+async def discover(endpoint, idle_timeout):
     """Join an owner or start a contender; a failed bind retries discovery."""
     log_path = None
     deadline = time.monotonic() + START_TIMEOUT
     worker = None
     while time.monotonic() < deadline:
-        metadata = await probe(server.host, server.port)
+        metadata = await probe(endpoint.host, endpoint.port)
         if metadata is not None:
             connection = None
             try:
                 connection = await websockets.connect(
-                    f"ws://{server.host}:{server.port}/proxy", open_timeout=2,
+                    f"ws://{endpoint.host}:{endpoint.port}/proxy", open_timeout=2,
                     max_size=None, proxy=None,
                 )
                 hello = json.loads(await asyncio.wait_for(connection.recv(), 2))
@@ -191,23 +198,30 @@ async def discover(server, idle_timeout):
                 raise
         elif worker is None or worker.poll() == 0:
             if log_path is None:
-                log_path = runtime_directory() / f"instance-{server.port}.log"
-            worker = spawn_worker(server, idle_timeout, log_path)
+                log_path = runtime_directory() / f"instance-{endpoint.port}.log"
+            worker = spawn_worker(endpoint, idle_timeout, log_path)
         elif worker.poll() is not None:
             raise RuntimeError(f"Shared FoxMCP server failed to start; see {log_path}")
         await asyncio.sleep(0.1)
     detail = f"; see {log_path}" if log_path is not None else ""
-    raise RuntimeError(f"Cannot reach FoxMCP on {server.host}:{server.port}{detail}")
+    raise RuntimeError(f"Cannot reach FoxMCP on {endpoint.host}:{endpoint.port}{detail}")
 
 
-async def run_proxy(server, idle_timeout):
-    websocket = await discover(server, idle_timeout)
-    browser = RemoteBrowser(websocket, server.file_transfers)
-    # Tool definitions and script execution stay in this stdio process. Only
-    # browser requests cross the socket, so each chat keeps its own settings.
-    server.mcp_tools.websocket_server = browser
+async def run_proxy(host, port, idle_timeout, *, disabled_tool_groups=None, enabled_tools=None):
+    """Serve local MCP using the shared owner's remote browser interface."""
     try:
-        await server.mcp_app.run_async(transport="stdio", show_banner=False)
+        from .mcp_frontend import MCPFrontend
+    except ImportError:
+        from mcp_frontend import MCPFrontend
+    websocket = await discover(BrowserEndpoint(host, port), idle_timeout)
+    browser = RemoteBrowser(websocket)
+    frontend = None
+    try:
+        frontend = MCPFrontend(browser, host=host, use_stdio=True,
+                               disabled_tool_groups=disabled_tool_groups,
+                               enabled_tools=enabled_tools)
+        await frontend.serve_stdio()
     finally:
         await browser.close()
-        await asyncio.to_thread(server.file_transfers.close)
+        if frontend is not None:
+            await frontend.close()

@@ -14,10 +14,10 @@ from pathlib import Path
 from server.browser_proxy import PROTOCOL_VERSION
 
 
-# Every file that puts an action name on the wire. server.py carries the test
+# Every file that puts an action name on the wire. browser_server.py carries the test
 # helper protocol (test.*) while mcp_tools.py carries everything a client can
 # reach, and a handler only looks orphaned if both are read.
-SENDER_FILES = ("server/mcp_tools.py", "server/server.py", "server/browser_profile.py")
+SENDER_FILES = ("server/mcp_tools.py", "server/browser_server.py", "server/browser_profile.py")
 
 HANDLER_FILE = "extension/background.js"
 

@@ -55,7 +55,7 @@ async def test_timeout_does_not_replay_browser_commands(monkeypatch):
     from server.browser_proxy import RemoteBrowser
     websocket = AsyncMock()
     websocket.__aiter__.return_value = []
-    browser = RemoteBrowser(websocket, Mock())
+    browser = RemoteBrowser(websocket)
     await browser.reader
     response = await browser.send_request_and_wait({"id": "id", "action": "tabs.create"})
     assert "disconnected" in response["error"]

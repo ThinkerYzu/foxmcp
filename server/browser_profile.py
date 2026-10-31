@@ -20,8 +20,8 @@ class BrowserProfile:
     NO_MCP_SESSION = "no-mcp-session"
     MONITOR_LIFECYCLE_ACTIONS = ("requests.start_monitoring", "requests.stop_monitoring")
 
-    def __init__(self, server, websocket, profile_id, origin):
-        self.server = server
+    def __init__(self, browser_server, websocket, profile_id, origin):
+        self.browser_server = browser_server
         self.profile_id = profile_id
         self.origin = origin
         self.connection_id = uuid.uuid4().hex
@@ -30,12 +30,8 @@ class BrowserProfile:
         self.pending_requests = {}
         self.monitor_owners = {}
         self.monitors_being_stopped = set()
-        self.browser_hub = server.browser_hub
-        self._browser_loop = server._browser_loop
-
-    @property
-    def mcp_http_app(self):
-        return self.server.mcp_http_app
+        self.proxy_hub = browser_server.proxy_hub
+        self._browser_loop = browser_server._browser_loop
 
     def disconnected(self):
         """Fail this socket's requests and release only its monitor ownership."""
@@ -244,32 +240,8 @@ class BrowserProfile:
         self.monitor_owners.pop(monitor_id, None)
 
     def _live_mcp_session_ids(self) -> Optional[set]:
-        """Sessions of the MCP clients still connected, or None if that cannot be told
-
-        None and the empty set mean different things: None is "no answer
-        available" and must not be read as "every client has gone".
-
-        `_server_instances` is private to the MCP SDK's
-        StreamableHTTPSessionManager, and fastmcp reaches into it the same way in
-        its own shutdown path. A terminated session stays in that dict rather than
-        being removed, so `is_terminated` is what separates a client that has gone
-        from one that is merely quiet.
-        """
-        app = self.mcp_http_app
-        if app is None:
-            return None
-
-        for route in getattr(app, 'routes', []):
-            manager = getattr(getattr(route, 'app', None), 'session_manager', None)
-            transports = getattr(manager, '_server_instances', None)
-            if transports is not None:
-                return {
-                    session_id
-                    for session_id, transport in list(transports.items())
-                    if not getattr(transport, 'is_terminated', False)
-                }
-
-        return None
+        """Ask the owner for session liveness without depending on FastMCP."""
+        return self.browser_server.live_mcp_session_ids()
 
     async def stop_monitors_of_gone_clients(self):
         """Stop every running monitor whose MCP client has disconnected
@@ -287,7 +259,7 @@ class BrowserProfile:
             return
 
         live_sessions = self._live_mcp_session_ids()
-        proxy_sessions = set(self.browser_hub.clients.values())
+        proxy_sessions = set(self.proxy_hub.clients.values())
         abandoned = [
             monitor_id for monitor_id, session_id in self.monitor_owners.items()
             if (session_id.startswith('proxy:') and session_id not in proxy_sessions)

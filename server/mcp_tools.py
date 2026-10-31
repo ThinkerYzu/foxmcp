@@ -370,7 +370,7 @@ class TabsListResponse(TypedDict):
     debug: Dict[str, Any]
 
 class FoxMCPTools:
-    """MCP tools that communicate with Firefox extension via WebSocket"""
+    """MCP tools using BrowserServer or RemoteBrowser for browser access."""
 
     # The tool groups a user can turn off, mapped to the method that registers each.
     #
@@ -396,8 +396,8 @@ class FoxMCPTools:
         'debug': '_setup_debug_tools',
     }
 
-    def __init__(self, websocket_server, disabled_groups=None, enabled_tools=None):
-        """Initialize with reference to WebSocket server
+    def __init__(self, browser, disabled_groups=None, enabled_tools=None, *, file_transfers=None):
+        """Initialize with browser access and frontend-owned file transfers
 
         disabled_groups names tool groups to leave unregistered, so their
         descriptions never reach a client's context - see TOOL_GROUPS for the
@@ -411,7 +411,8 @@ class FoxMCPTools:
         silently dropped the one tool that was wanted - would defeat the point of
         the options.
         """
-        self.websocket_server = websocket_server
+        self.browser = browser
+        self.file_transfers = file_transfers
         self.disabled_groups = self._validate_groups(disabled_groups)
         self.enabled_tools = set(enabled_tools or ())
 
@@ -442,6 +443,32 @@ class FoxMCPTools:
                 f"Valid groups: {', '.join(sorted(cls.TOOL_GROUPS))}"
             )
         return groups
+
+    @classmethod
+    def validate_selection(cls, disabled_groups, enabled_tools):
+        """Validate CLI names using the same definitions, without creating FastMCP."""
+        cls._validate_groups(disabled_groups)
+        enabled = set(enabled_tools or ())
+        if not enabled:
+            return
+
+        class Catalogue:
+            def __init__(self):
+                self.names = set()
+
+            def _tool(self, describe_more=None):
+                def record(fn):
+                    self.names.add(fn.__name__)
+                    return fn
+                return record
+
+        catalogue = Catalogue()
+        for setup in cls.TOOL_GROUPS.values():
+            getattr(cls, setup)(catalogue)
+        unknown = enabled - catalogue.names
+        if unknown:
+            raise ValueError(f"Unknown tool(s): {', '.join(sorted(unknown))}. "
+                             f"Valid tools: {', '.join(sorted(catalogue.names))}")
 
     def _setup_tools(self):
         """Set up all MCP tool definitions, minus any disabled group
@@ -521,7 +548,7 @@ class FoxMCPTools:
                 logger.info(f"Tool group '{group}' disabled - not registering its tools")
 
     async def _send(self, profile_id, request, timeout=30.0):
-        return await self.websocket_server.send_request_and_wait(
+        return await self.browser.send_request_and_wait(
             {**request, "profile_id": profile_id}, timeout=timeout)
 
     def _setup_profile_tools(self):
@@ -539,7 +566,7 @@ class FoxMCPTools:
             Args:
                 populate: Include each window's tabs with titles and URLs.
             """
-            return await self.websocket_server.list_profiles(populate=populate)
+            return await self.browser.list_profiles(populate=populate)
 
     def _setup_window_tools(self):
         """Setup window management tools"""
@@ -2023,7 +2050,7 @@ class FoxMCPTools:
             Says whether the browser extension is connected, and from where. Every
             other tool fails with a timeout when it is not, so check here first.
             """
-            return await self.websocket_server.get_extension_status()
+            return await self.browser.get_extension_status()
 
     def _setup_navigation_tools(self):
         """Setup navigation tools"""
@@ -2186,7 +2213,7 @@ class FoxMCPTools:
                 mime_type: Optional MIME override; otherwise inferred from the filename,
                     falling back to application/octet-stream.
             """
-            service = self.websocket_server.file_transfers
+            service = self.file_transfers
             token = None
             try:
                 token, url, metadata = service.grant(path, mime_type)
@@ -2534,7 +2561,7 @@ class FoxMCPTools:
         if not monitor_id:
             return
 
-        register = getattr(self.websocket_server, 'register_monitor', None)
+        register = getattr(self.browser, 'register_monitor', None)
         if register is None:
             return
 
@@ -2657,7 +2684,7 @@ class FoxMCPTools:
                 return json.dumps({"error": f"Failed to stop monitoring: {response['error']}"})
 
             if response.get("type") == "response" and "data" in response:
-                forget = getattr(self.websocket_server, 'forget_monitor', None)
+                forget = getattr(self.browser, 'forget_monitor', None)
                 if forget:
                     forget(profile_id, monitor_id, response.get("connection_id"))
                 return json.dumps(response["data"])

@@ -536,7 +536,10 @@ class TestBrowserFunctionality:
         print("\n1️⃣  Without tab_id it is the visible tab, which is neither of ours...")
         _, png = await capture()
         r, g, b = png_pixel(png, 20, 20)
-        assert r < 100 and b < 100, f"the visible tab is the blank one, got {(r, g, b)}"
+        # A blank tab can be light or dark depending on Firefox's theme.
+        # It must be neutral, unlike either painted background tab below.
+        assert max(r, g, b) - min(r, g, b) < 30, (
+            f"the visible blank tab should be neutral, got {(r, g, b)}")
 
         print("\n2️⃣  tab_id of a background tab gives that tab's own page, blue...")
         content, png = await capture(tab_id=blue)

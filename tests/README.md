@@ -1,7 +1,7 @@
 # FoxMCP Test Suite
 
 Unit and integration tests for FoxMCP. The integration tests launch a real Firefox
-with the extension installed, so a full run takes about ten minutes.
+with the extension installed; allow about fifteen to twenty minutes for a full run.
 
 ## Running Tests
 
@@ -24,24 +24,38 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**716 collected**: 506 unit and 210 integration tests. No skips are allowed. The
-[CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178)
-passed all 701 tests in one run on 2026-10-29, including the module/no-skip guard.
+**727 collected**: 517 unit and 210 integration tests. No skips are allowed.
+The 2026-10-31 diagram-aligned refactor passed all 727 tests in one local run
+(982 seconds), including the module/no-skip guard. Final ZIP/XPI installation
+checks exercised all 46 tools over HTTP and stdio and verified exact upload
+bytes/events. Wheel and source-distribution installs passed on Python 3.10 and
+3.14. Native Windows execution for this refactor still requires CI.
+
+The previous released v1.6.0 tree passed 716 tests without skips and four native
+Windows combinations. Earlier profile-ID integration passed 701 tests in the
+[2026-10-29 CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178).
+These are historical baselines, separate from the current local result.
 Collection changes as tests are added; use the JUnit module guard rather than a
 fixed count as the completeness gate.
 
-The 2026-10-30 profile-name correction passed all 498 unit tests and both
-multiple-profile integration tests (real Firefox reconnect/restart and
-HTTP/shared-stdio routing). All 17 name-resolution cases pass, including real
-child-held Linux locks. The full 210-test integration suite was not rerun for
-that correction; the 701-test CI result above remains the prior full-suite
-baseline.
-
-A run that finishes in about seventy seconds instead of ten minutes is a warning,
+A run that finishes in about seventy seconds instead of several minutes is a warning,
 not good news: it means the Firefox integration tests skipped themselves. Check
 that Firefox can be found (see [Finding Firefox](#finding-firefox)).
 
-### Source-installation smoke checks
+#### Startup composition coverage
+
+`unit/test_server_composition.py` checks the source roles documented in the
+[architecture diagram](../docs/architecture.md#system-overview). Browser-only
+and automatic-worker startup must not construct MCP tools/frontends; shared
+stdio must not construct a browser owner. Direct frontends use BrowserServer
+without an adapter, own their local-file service and supply HTTP-session
+liveness for monitor cleanup. CLI tool validation rejects internal helper names
+without constructing FastMCP, and accepts every registered tool name.
+
+The real-process proxy, shared-stdio, multiple-profile and final-package checks
+continue to verify routing, uploads and cleanup across process boundaries.
+
+## Source-installation smoke checks
 
 CI tests source installation separately on Python 3.10 and 3.14, including HTTP
 and stdio startup, tool discovery and tool filtering. The stdio check runs without
@@ -66,7 +80,7 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 506 | no |
+| `unit/` | 517 | no |
 | `integration/` | 210 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
@@ -87,6 +101,7 @@ Selected test modules, including local-file coverage:
 | `test_ping_pong.py` | 8 | Ping-pong protocol |
 | `test_connection_versions.py` | 10 | Version parsing and advisory diagnostics; per-profile connection tests are in `test_server.py` |
 | `test_server.py` | 28 | Server-assigned integer IDs, handshake validation, routing isolation, reconnect invalidation and monitor ownership |
+| `test_server_composition.py` | 9 | Startup role isolation, direct/remote injection, file-service ownership, HTTP monitor liveness and tool-name validation |
 | `test_screenshot_filename.py` | 14 | Screenshot filename generation |
 | `test_profile_names.py` | 17 | Registered/group name precedence, real Linux profile locks, stale copies and unavailable/ambiguous metadata |
 

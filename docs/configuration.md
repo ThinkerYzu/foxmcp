@@ -475,15 +475,34 @@ longer settings. Old stored values are ignored, including a retry limit of zero.
 
 ## Programmatic Server Configuration
 
+Construct the components explicitly to match the
+[architecture diagram](architecture.md#system-overview):
+
 ```python
-# Default configuration (localhost-only, secure)
-server = FoxMCPServer()  # WebSocket: localhost:8765, MCP: localhost:3000
+from server.browser_server import BrowserServer
+from server.mcp_frontend import MCPFrontend
+from server.server import serve
 
-# Custom ports (still localhost-only)
+browser_server = BrowserServer(host="localhost", port=8765)
+frontend = MCPFrontend(browser_server, host="localhost", port=3000)
+await serve(browser_server, frontend)
+```
+
+For browser-only operation, construct `BrowserServer` and await its
+`start_server()` without a frontend. For plain stdio, construct the frontend
+with `use_stdio=True` and call `serve(..., use_stdio=True)`. Shared stdio is
+assembled by the CLI's `--stdio --single-instance` path; see
+[startup composition](architecture.md#startup-composition-serverpy).
+
+The existing `FoxMCPServer` constructor remains a compatibility facade for
+in-process callers:
+
+```python
+from server.server import FoxMCPServer
+
+server = FoxMCPServer()  # Browser port 8765, MCP port 3000
 server = FoxMCPServer(host="localhost", port=9000, mcp_port=4000)
-
-# WebSocket only (disable MCP)
-server = FoxMCPServer(port=8765, start_mcp=False)
+server = FoxMCPServer(port=8765, start_mcp=False)  # Browser listener only when started
 ```
 
 ## MCP Client Connection
@@ -708,7 +727,7 @@ client: see [The reconnect gap](#the-reconnect-gap).
    curl http://localhost:3000
    ```
 
-   The server logs to stdout, so run it in the foreground to watch connections
+   The server logs to stderr, so run it in the foreground to watch connections
    arrive.
 
 ### Debug Logging

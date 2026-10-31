@@ -22,8 +22,8 @@ EXTENSION_ORIGIN_PATTERN = re.compile(r"moz-extension://.+")
 class BrowserProxyHub:
     """Route extension and local-client sockets without mixing their identities."""
 
-    def __init__(self, server):
-        self.server = server
+    def __init__(self, browser_server):
+        self.browser_server = browser_server
         self.clients = {}
         self.idle_timeout = None  # Manually started servers have no idle shutdown.
         self.last_departure = time.monotonic()
@@ -94,7 +94,7 @@ class BrowserProxyHub:
         if websocket.request.path == "/proxy":
             await self.handle_proxy(websocket)
         else:
-            await self.server.handle_extension_connection(websocket)
+            await self.browser_server.handle_extension_connection(websocket)
 
     async def handle_proxy(self, websocket):
         owner = f"proxy:{uuid.uuid4().hex}"
@@ -141,7 +141,7 @@ class BrowserProxyHub:
             await asyncio.gather(*list(pending.values()), return_exceptions=True)
             self.clients.pop(websocket, None)
             try:
-                await self.server.stop_monitors_of_gone_clients()
+                await self.browser_server.stop_monitors_of_gone_clients()
             finally:
                 self.last_departure = time.monotonic()
 
@@ -153,24 +153,24 @@ class BrowserProxyHub:
                 response = {
                     "type": "response",
                     "action": action,
-                    "data": {"status": await self.server.get_extension_status()},
+                    "data": {"status": await self.browser_server.get_extension_status()},
                 }
             elif action == "proxy.profiles":
                 response = {"type": "response", "action": action,
-                            "data": await self.server.list_profiles(
+                            "data": await self.browser_server.list_profiles(
                                 populate=request.get("data", {}).get("populate", True))}
             else:
                 upstream = {**request, "id": uuid.uuid4().hex}
                 upstream.pop("timeout", None)
-                response = await self.server.send_request_and_wait(
+                response = await self.browser_server.send_request_and_wait(
                     upstream, timeout=timeout
                 )
                 if response.get("type") == "response":
                     data = response.get("data", {})
                     if action == "requests.start_monitoring":
-                        self.server.register_monitor(request.get("profile_id"), data.get("monitor_id"), owner, response.get("connection_id"))
+                        self.browser_server.register_monitor(request.get("profile_id"), data.get("monitor_id"), owner, response.get("connection_id"))
                     elif action == "requests.stop_monitoring":
-                        self.server.forget_monitor(
+                        self.browser_server.forget_monitor(
                             request.get("profile_id"), request.get("data", {}).get("monitor_id"), response.get("connection_id")
                         )
             await websocket.send(json.dumps({**response, "id": original_id}))
@@ -201,9 +201,8 @@ class BrowserProxyHub:
 class RemoteBrowser:
     """The browser interface used by local MCP tools, over a shared proxy socket."""
 
-    def __init__(self, websocket, file_transfers):
+    def __init__(self, websocket):
         self.websocket = websocket
-        self.file_transfers = file_transfers
         self.pending = {}
         self.reader = asyncio.create_task(self.read_responses())
 
@@ -263,6 +262,12 @@ class RemoteBrowser:
         return response.get("data", {}).get("status") or response.get(
             "error", "Unknown browser status"
         )
+
+    def register_monitor(self, profile_id, monitor_id, session_id, connection_id):
+        """Proxy hub records ownership against this connection upstream."""
+
+    def forget_monitor(self, profile_id, monitor_id, connection_id):
+        """Proxy hub forgets stopped monitors upstream."""
 
     async def close(self):
         await self.websocket.close()

@@ -63,8 +63,9 @@ make test-integration  # integration only
 make check             # lint + test
 ```
 
-The v1.4.0 suite has **471 tests**; allow about fifteen minutes for a full run. See [`../tests/README.md`](../tests/README.md)
-for the suite layout, fixtures, and troubleshooting.
+Allow about fifteen to twenty minutes for a full run. The maintained
+[test guide](../tests/README.md#expected-result) records the current collection,
+validation results, fixtures and troubleshooting.
 
 ### Other
 
@@ -84,7 +85,9 @@ foxmcp/
 ├── docs/            # Documentation
 ├── extension/       # Firefox extension source
 ├── server/          # Python server
-│   ├── server.py          # Profile registry, routing and MCP startup
+│   ├── server.py          # Startup composition and compatibility facade
+│   ├── browser_server.py  # BrowserServer: listener, registry and routing
+│   ├── mcp_frontend.py    # MCPFrontend: MCP transport, tools and local files
 │   ├── browser_profile.py # Per-profile sockets, replies and monitor ownership
 │   ├── browser_proxy.py   # Shared-port discovery and forwarding
 │   ├── profile_names.py   # Read-only Firefox metadata lookup
@@ -357,11 +360,12 @@ through registered tool functions, and simulated profiles reached by actual
 HTTP/shared-stdio clients. The latter checks native-ID collisions and transport
 isolation. No single test combines two real Firefox profiles with both MCP
 transports. See the [coverage matrix](../tests/README.md#multiple-profile-coverage).
-The server-owned profile-ID change passed all 701 tests (491 unit, 210
-integration), with no skips, in the
-[2026-10-29 CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178).
-The module/no-skip guard also passed. Local packaged HTTP and stdio each pass all
-46 tools, including upload byte/event checks.
+The 2026-10-31 server-composition refactor passed all 727 tests without skips
+(517 unit, 210 integration), plus the module/no-skip guard. Final packaged HTTP
+and stdio each passed all 46 tools, including exact upload bytes and events.
+Wheel/sdist installation checks passed on Python 3.10 and 3.14. Native Windows
+validation for the refactor remains pending in CI. The prior released tree's
+successful Windows results do not validate these new source changes.
 
 Source-installation smoke checks run separately from pytest on Python 3.10 and
 3.14. Keep their embedded tool arguments in `.github/workflows/ci.yml` aligned
