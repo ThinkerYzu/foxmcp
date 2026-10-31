@@ -50,8 +50,11 @@ NEVER add Claude Code attribution or "Generated with Claude Code" footer in git 
 
 Increase the checked protocol ID whenever an existing API between the Firefox
 extension and MCP server is modified or removed. This includes changes to
-parameters, responses, errors and observable behavior. Keep protocol docs and
-compatibility tests aligned. See `docs/protocol.md#protocol-id-compatibility-policy`
+parameters, responses, errors and observable behavior. Increase at most once
+per release relative to the previous released tag: retain its ID for compatible
+changes, or use its ID plus one for all incompatible changes accumulated since
+that release. Do not increment again per PR or intermediate candidate.
+Keep protocol docs and compatibility tests aligned. See `docs/protocol.md#protocol-id-compatibility-policy`
 for the authoritative policy and current ID location.
 
 Before every release, compare API changes with the previous released tag and

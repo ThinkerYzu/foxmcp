@@ -22,10 +22,10 @@ first.onopen();
 check(JSON.parse(first.sent[0]).data.version === EXTENSION_VERSION, 'hello is first message');
 check(!Object.hasOwn(JSON.parse(first.sent[0]).data, 'profile_id'), 'no routing identity announced');
 check(!isConnected, 'not connected until ready');
-await first.onmessage({data: JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION, protocol_version:4}})});
+await first.onmessage({data: JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION, protocol_version:3}})});
 await first.onmessage({data: JSON.stringify({type:'ready', data:{}})});
 check(serverVersion === EXTENSION_VERSION, 'matching version');
-await first.onmessage({data: JSON.stringify({type:'hello', data:{version:'0.0.1', protocol_version:4}})});
+await first.onmessage({data: JSON.stringify({type:'hello', data:{version:'0.0.1', protocol_version:3}})});
 check(serverVersion === '0.0.1', 'mismatch retained');
 let status;
 listeners[0]({action:'getConnectionStatus'}, {}, value => status=value);
@@ -43,12 +43,12 @@ first.onopen();
 first.onclose({code:1000});
 check(serverVersion === null && isConnected, 'stale callbacks ignored');
 for (const data of [null, [], {}, {version:3}, {version:'bad\nversion'}, {version:EXTENSION_VERSION+'\n'}, {version:'1.'+'0'.repeat(70)}]) {
-  await second.onmessage({data:JSON.stringify({type:'hello', data:{...data, protocol_version:4}})});
+  await second.onmessage({data:JSON.stringify({type:'hello', data:{...data, protocol_version:3}})});
   check(serverVersion === null, 'malformed version ignored');
 }
 await second.onmessage({data:JSON.stringify({type:'request', action:'ping', id:'legacy'})});
 check(JSON.parse(second.sent.at(-1)).id === 'legacy', 'missing release version does not block tools');
-await second.onmessage({data:JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION, protocol_version:4}})});
+await second.onmessage({data:JSON.stringify({type:'hello', data:{version:EXTENSION_VERSION, protocol_version:3}})});
 second.onclose({code:1000});
 check(serverVersion === null && !isConnected, 'close clears version');
 connectToMCPServer();
@@ -127,7 +127,7 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
       let loaded, refresh;
       let connection = {connected:true, extensionVersion:'1.4.0', serverVersion:'0.0.1', retryAttempts:0};
       const defaultStatus = {
-        protocolVersion:4,
+        protocolVersion:3,
         config:{hostname:'localhost',port:8765,retryInterval:5000},
         configuredConfig:{hostname:'localhost',port:8765,retryInterval:5000},
         settings:{groups:{endpoint:{revision:0,state:'pending'},retryInterval:{revision:0,state:'saved'}}}

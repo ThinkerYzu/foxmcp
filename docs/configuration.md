@@ -228,7 +228,7 @@ stored site data and refuses open tabs. See [API reference](api-reference.md#fir
 One FoxMCP server can serve several Firefox profiles at the same time. Each
 profile runs its own extension and connects to the same WebSocket endpoint.
 Use compatible server and extension builds in every profile; the current source
-requires protocol 4. An older published build may need updating to support this
+requires protocol 3. An older published build may need updating to support this
 setup.
 
 1. **Start one server.** For example, from a configured source checkout:
@@ -295,7 +295,7 @@ Metadata is read-only and refreshed on discovery. Profiles without a resolvable 
 `name=null` and `name_error`. This requires Firefox metadata on the server's
 machine; a separate native helper is not installed.
 
-Protocol ID 4 requires updating both server and extension. The server assigns a
+Protocol ID 3 requires updating both server and extension. The server assigns a
 new integer ID on every connection, including extension reconnects. Rediscover
 before using previously returned profile/window/tab IDs. Commands
 never fall back to another connected profile.
@@ -455,7 +455,7 @@ Popup and Options share light/dark styling and a segmented **MCP Server URL**
 field containing `ws://`, Host and Port. Configuration fields stay visible.
 Routine save feedback is hidden; validation and storage errors remain visible.
 Both footers show extension/server release diagnostics and the extension's
-locally supported protocol ID. Protocol 4 is enforced during registration;
+locally supported protocol ID. Protocol 3 is enforced during registration;
 Connected means the server acknowledged this profile, not just that the socket
 opened. An incompatible-peer error is shown in both views and stops retries.
 Update both components and reload the extension to register again, or correct
@@ -751,7 +751,7 @@ foreground is the quickest way to watch the socket come and go.
 
 Popup and Options display the extension release, connected server release and
 supported protocol ID. A release-version mismatch warns without blocking tools
-when both peers support protocol 4. Missing or invalid release versions are
+when both peers support protocol 3. Missing or invalid release versions are
 reported as unavailable; they do not bypass the mandatory profile handshake.
 
 A protocol mismatch is different: registration is refused, both views display

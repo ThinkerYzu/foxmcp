@@ -96,7 +96,7 @@ Selected test modules:
 
 | File | Tests | Covers |
 |---|---|---|
-| `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: protocol-4 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
+| `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: protocol-3 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
 | `test_extension_settings.py` | 1 | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers, profile registration/errors and live status |
 | `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
@@ -401,7 +401,7 @@ async with connect_as_extension(f"ws://localhost:{port}") as websocket:
     ...
 ```
 
-The helper sends an extension Origin and completes the protocol-4 profile
+The helper sends an extension Origin and completes the protocol-3 profile
 registration. `websocket.profile_id` exposes the server-assigned identity,
 discovered through the local proxy; callers cannot choose it. Its first `recv()`
 returns the buffered server greeting. A plain connection without the Origin is

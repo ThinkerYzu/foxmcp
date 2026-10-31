@@ -187,8 +187,8 @@ class FoxMCPServer:
             if (not isinstance(data, dict) or hello.get("type") != "hello"
                     or type(data.get("protocol_version")) is not int
                     or data["protocol_version"] != PROTOCOL_VERSION):
-                logger.warning("Rejected extension: protocol 4 required; update extension")
-                await websocket.close(code=1008, reason="FoxMCP protocol 4 required; update extension")
+                logger.warning("Rejected extension: protocol %s required; update extension", PROTOCOL_VERSION)
+                await websocket.close(code=1008, reason=f"FoxMCP protocol {PROTOCOL_VERSION} required; update extension")
                 return
             profile_id = self._next_profile_id
             self._next_profile_id += 1

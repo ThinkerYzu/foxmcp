@@ -38,7 +38,7 @@ Names are labels, may repeat, and cannot substitute for a routing ID.
 There is no active-profile setting, `profiles_select` tool or implicit fallback.
 A missing/disconnected target fails. Rediscover after any connection loss or
 server restart before reusing native object IDs. Both halves must support
-protocol 4. IDs are scoped to the server lifetime, so do not persist them as
+protocol 3. IDs are scoped to the server lifetime, so do not persist them as
 permanent Firefox profile identifiers.
 
 Names are read from Firefox's local metadata on the server machine. Registered

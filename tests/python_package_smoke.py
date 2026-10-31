@@ -51,7 +51,7 @@ async def answer_extension(port: int, ready: asyncio.Event, scripts: list) -> No
             await asyncio.sleep(0.1)
     try:
         await connection.send(json.dumps({
-            "type": "hello", "data": {"version": distribution("foxmcp").version, "protocol_version": 4}
+            "type": "hello", "data": {"version": distribution("foxmcp").version, "protocol_version": 3}
         }))
         async for raw in connection:
             request = json.loads(raw)

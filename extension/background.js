@@ -10,7 +10,7 @@ let isConnected = false;
 const EXTENSION_VERSION = browser.runtime.getManifest().version;
 let serverVersion = null;
 // Supported and enforced contract; pairing tests keep it aligned with the server.
-const PROTOCOL_VERSION = 4;
+const PROTOCOL_VERSION = 3;
 let connectionError = null;
 const requestSockets = new Map();
 

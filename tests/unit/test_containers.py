@@ -94,7 +94,7 @@ async def test_disabled_discovery_does_not_disable_tab_selection(server):
 def test_permissions_and_protocol_bump():
     manifest = json.loads((Path(__file__).resolve().parents[2] / "extension/manifest.json").read_text())
     assert {"cookies", "contextualIdentities"} <= set(manifest["permissions"])
-    assert PROTOCOL_VERSION == 4
+    assert PROTOCOL_VERSION == 3
 
 
 @pytest.mark.asyncio
@@ -136,7 +136,7 @@ async def test_in_use_error_retains_tab_ids(call, server):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('local_id,remote_id', [(1,2),(2,1)])
+@pytest.mark.parametrize('local_id,remote_id', [(2,3),(3,2)])
 async def test_old_and_new_forwarders_reject_each_other(monkeypatch, local_id, remote_id):
     import httpx
     from unittest.mock import Mock

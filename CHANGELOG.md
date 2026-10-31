@@ -5,7 +5,7 @@ All notable changes to FoxMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-10-30
 
 ### Added
 
@@ -14,18 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking: protocol ID 4 and explicit browser targets.** Every browser tool requires `profile_id`, including with one connected profile. Update extension and server together. The mandatory profile handshake replaces legacy connections; release-version matching remains advisory. The server assigns increasing integer profile IDs from 1, never reusing IDs during its lifetime. Every reconnect gets a new ID. Extensions never generate, store or receive profile IDs. Rediscover targets after connection loss or server restart.
+- **Breaking: protocol ID 3 and explicit browser targets.** Every browser tool requires `profile_id`, including with one connected profile. Update extension and server together. The mandatory profile handshake replaces legacy connections; release-version matching remains advisory. The server assigns increasing integer profile IDs from 1, never reusing IDs during its lifetime. Every reconnect gets a new ID. Extensions never generate, store or receive profile IDs. Rediscover targets after connection loss or server restart.
 - **Consistent settings design.** Popup and Options share a minimal light/dark theme, neutral focus styling and a segmented **MCP Server URL** field containing `ws://`, Host and Port. Configuration is always visible. Removed popup boilerplate, the Firefox badge, routine save feedback and the footer divider; validation errors remain visible. Both footers show extension/server release diagnostics and the locally supported protocol ID. Reconnect Interval defaults to 1000ms and accepts 100–30000ms; previously saved longer intervals are capped at 30000ms.
 - **Extension settings apply automatically.** Popup and Options use separate Host/Port fields and a Reconnect Interval, saving valid edits after a 500ms pause. Reset immediately persists and applies defaults. Removed Save, Reconnect, Max Retry Attempts and the unused Ping Timeout setting. Retries continue indefinitely at the configured interval; old limits are ignored. The built-in server uses unencrypted WebSocket and does not support TLS configuration.
 
 ### Fixed
 
 - Windows predefined Python scripts use the server interpreter; shell scripts locate Git Bash or the explicit FOXMCP_BASH path. Background workers avoid allocating visible consoles. The HTTP helper reports the direct Python command for MCP stdio clients.
-- Profile names prefer registered launch names over group labels such as Original profile. Linux discovery uses held profile locks to distinguish running profiles from stale copies sharing an extension UUID; uncertain matches remain ambiguous. Metadata is read-only and protocol ID stays 4.
+- Profile names prefer registered launch names over group labels such as Original profile. Linux discovery uses held profile locks to distinguish running profiles from stale copies sharing an extension UUID; uncertain matches remain ambiguous. Metadata is read-only and protocol ID stays 3.
 - Firefox profiles no longer replace each other's connections (#20). Requests, responses and monitor ownership are isolated by connection across HTTP and shared stdio clients. No request falls back to another profile or replays after disconnection.
 - Restored test-profile caches rebase the installed extension path and discard stale addon startup metadata, preventing browser tests from silently starting without the extension.
 - **Reset works in toolbar popups.** Both views reset immediately without a native confirmation dialog, which could block the Firefox popup.
 - **Connection status and settings agree.** Both pages display live connection state, the actual endpoint including test overrides, and the real pending retry delay while preserving unfinished input. Strict validation rejects empty, fractional and out-of-range numeric values. Obsolete reconnect timers and stale socket callbacks cannot close a new connection or clear its request monitors. Background-owned pending saves survive popup closure, and storage failures are reported without claiming success.
+
+### Upgrade notes
+
+- This release changes existing tool calls despite the 1.6.0 version number. Update the server and extension together, restart shared workers, and refresh cached MCP tool schemas. Protocol ID increases from the released 2 to 3; older peers are refused.
+- Call `profiles_list` first and pass a returned integer `profile_id` to every browser tool, including with one connected profile. Reconnects assign new IDs, so rediscover targets instead of caching IDs across connections or server restarts.
+- On Windows, download both `install-from-github.ps1` and `install-xpi.ps1` from the same release. Use the generated PowerShell helper for HTTP; MCP stdio clients must launch the installed Python interpreter directly. Shell examples require Git Bash or an explicit `FOXMCP_BASH` path.
 
 ## [1.5.0] - 2026-10-25
 
@@ -300,7 +306,8 @@ error. See **Removed** below.
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
-[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/ThinkerYzu/foxmcp/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.3.0

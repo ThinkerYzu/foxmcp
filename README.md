@@ -20,15 +20,20 @@ client talks to the server, which sends commands to the extension.
 scripts. Use trusted clients and consider a dedicated Firefox profile.
 See [SECURITY.md](SECURITY.md) for the threat model.
 
-This README describes current source. The profile-routing and settings changes
-are [Unreleased](CHANGELOG.md#unreleased); published v1.5.0 artifacts use the
-previous API. To try current source, use the
+This README describes v1.6.0, currently being prepared for release. Its download
+URLs become available when publication completes. The latest published release
+is [v1.5.0](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0), which uses
+the previous API. To try the candidate now, use the
 [source installation](#install-from-source) with a matching source-built extension.
+
+**Upgrading:** Update the server and extension together, restart shared workers,
+and refresh your client's tool schemas. Call `profiles_list` and pass its integer
+`profile_id` to every browser tool, even with one profile connected. Rediscover
+targets after reconnection. See [release notes](RELEASES.md#v160---multiple-profiles-and-windows-installation-prepared-2026-10-30).
 
 ## Quick start
 
-v1.5.0 is available on [PyPI](https://pypi.org/project/foxmcp/1.5.0/) and
-GitHub. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 to run the server with `uvx`, which manages its Python environment for you.
 The GitHub installer is also available below.
 
@@ -48,7 +53,7 @@ FoxMCP installed:
 
 ```bash
 mkdir foxmcp && cd foxmcp
-curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.5.0/install-from-github.sh | bash
+curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.6.0/install-from-github.sh | bash
 ```
 
 The installer verifies the release archive checksums, creates `venv/`, installs
@@ -67,7 +72,7 @@ Use separate commands below: PowerShell 5.1 cannot parse `&&`, which was added i
 
 ```powershell
 New-Item -ItemType Directory foxmcp-installer
-$installerBase = 'https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/scripts'
+$installerBase = 'https://github.com/ThinkerYzu/foxmcp/releases/download/v1.6.0'
 Invoke-WebRequest -UseBasicParsing "$installerBase/install-from-github.ps1" -OutFile foxmcp-installer/install-from-github.ps1
 Invoke-WebRequest -UseBasicParsing "$installerBase/install-xpi.ps1" -OutFile foxmcp-installer/install-xpi.ps1
 New-Item -ItemType Directory foxmcp
@@ -95,9 +100,10 @@ and click **Add to Firefox**.
 
 Use matching server and extension versions. Click the FoxMCP toolbar icon to see
 a mismatch warning with both versions inside the popup. No automatic dialog or
-notification opens. The server also logs a warning; older peers may show a version
-as unavailable. Tools remain available while you update both together. Mozilla review can delay the Add-ons
-version after a GitHub release; to try a version awaiting approval, use the
+notification opens. The server also logs a warning. Release-version differences
+are advisory when protocol IDs match; incompatible protocol IDs prevent the
+browser connection. Mozilla review can delay the Add-ons version after a GitHub
+release; to try a version awaiting approval, use the
 [temporary add-on instructions](docs/development.md#loading-in-firefox).
 
 ### 3. Start the server
@@ -105,7 +111,7 @@ version after a GitHub release; to try a version awaiting approval, use the
 With uvx, run:
 
 ```bash
-uvx --from foxmcp==1.5.0 foxmcp
+uvx --from foxmcp==1.6.0 foxmcp
 ```
 
 With the GitHub archive installation, run from your installation directory:
@@ -273,7 +279,7 @@ names, windows and tabs. Every browser command requires the chosen `profile_id`
 alongside its window/tab IDs. Profiles can share the same server port without
 replacing each other. The server assigns positive integer IDs from 1. IDs change on every reconnect;
 rediscover after a disconnect or server restart. Update both extension and server for
-protocol 4. Follow the [multiple-profile setup](docs/configuration.md#connecting-multiple-firefox-profiles-to-one-server)
+protocol 3. Follow the [multiple-profile setup](docs/configuration.md#connecting-multiple-firefox-profiles-to-one-server)
 to connect each Firefox instance, then use
 [profile discovery](docs/api-reference.md#firefox-profiles) to choose a target.
 

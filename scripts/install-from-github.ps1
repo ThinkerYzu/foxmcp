@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$script:VERSION = "v1.5.0"
+$script:VERSION = "v1.6.0"
 $script:GITHUB_REPO = "ThinkerYzu/foxmcp"
 $script:GITHUB_API_URL = "https://api.github.com/repos/$($script:GITHUB_REPO)/releases/tags/$($script:VERSION)"
 if ($env:FOXMCP_RELEASE_URL) {

@@ -6,6 +6,97 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
+## v1.6.0 - Multiple profiles and Windows installation (prepared 2026-10-30)
+
+### Publication status
+
+Prepared locally; not tagged or published. The latest published release is
+v1.5.0. Release download URLs for v1.6.0 become available after publication.
+
+### Highlights
+
+- Concurrent Firefox profiles, `profiles_list`, and explicit routing for all
+  browser tools. Profile names are resolved automatically from local metadata;
+  unavailable or ambiguous names stay unknown.
+- Shared popup/Options settings with automatic saving, endpoint validation and
+  reliable reconnects. Configuration stays visible and errors remain actionable.
+- Windows PowerShell installation, Git Bash/Python script execution and hidden
+  background workers. Both PowerShell installers ship as GitHub release assets.
+- Windows CI covers Python 3.10/3.14 and PowerShell 5.1/7, including clean
+  installation, argument handling, HTTP and direct-Python stdio.
+
+### Upgrade from v1.5.0
+
+**Existing tool calls must change.** Version 1.6.0 was selected for this release;
+its profile-target requirement is a breaking API change. Update the Python
+server and Firefox extension together, restart shared workers, and refresh MCP
+clients' cached tool schemas. Python 3.10+ remains required; tab groups require
+Firefox 139+. No new extension permissions are added by this release.
+
+Call `profiles_list` and pass the selected integer `profile_id` to every browser
+tool, even with a single connected profile. IDs belong to connections: reconnects
+get fresh IDs and server restarts reset the sequence. Rediscover targets after
+either event. Names are labels, never routing keys. See
+[profile selection](docs/configuration.md#selecting-a-firefox-profile).
+
+On Windows, download `install-from-github.ps1` and `install-xpi.ps1` from the same
+release and keep them together outside the empty installation directory.
+The generated `start-foxmcp.ps1` helper starts HTTP. For MCP stdio, configure the
+client to launch `venv\Scripts\python.exe` with the absolute installed
+`server\server.py` path and `--stdio`. Set `FOXMCP_EXT_SCRIPTS` to the installed
+`predefined-scripts` directory for those examples. Shell scripts require Git Bash
+or an absolute `FOXMCP_BASH` override. See [Windows setup](README.md#quick-start).
+
+### Protocol compatibility review
+
+Baseline: released `v1.5.0` at
+`a749922d912a91d16790a316b372a2b598dee207`. Reviewed through `f6a1a6e` plus
+this release's metadata, documentation and protocol-number correction. Released protocol ID is **2**;
+the candidate uses one release-level increase to **3**:
+
+- Extension `hello` is now mandatory, validates protocol compatibility, and
+  completes with server `ready`. Legacy, malformed or incompatible handshakes
+  close with code 1008 instead of continuing with advisory diagnostics.
+- Existing browser requests through MCP and `/proxy` require explicit positive
+  integer `profile_id` routing. The server assigns IDs, strips them before
+  forwarding to Firefox, and adds connection/routing metadata to results.
+  The extension never generates, stores or receives these IDs.
+- Connections, pending responses and request monitors are isolated per profile.
+  Disconnect errors and cleanup affect only the owning connection; stale replies
+  cannot satisfy new requests, and commands never fall back to another profile.
+- Connection status and diagnostics describe multiple profiles. `profiles_list`
+  and `proxy.profiles` add discovery; profile-scoped native IDs can collide
+  without crossing profile boundaries.
+- Settings/reconnect behavior changes preserve browser action payloads. Legacy
+  test storage projection is retained. No existing browser action is removed.
+
+These changed existing contracts require exactly one increase from released
+ID 2 to 3. All incompatible changes accumulated since v1.5.0 share that single
+increment. The temporary development ID 4 was never released and is superseded
+by 3; restart development workers and update both development peers as well.
+Name lookup, Windows process fixes and release metadata introduce no further
+extension/server contract change. Both implementations and pairing tests enforce
+3. See [protocol policy](docs/protocol.md#protocol-id-compatibility-policy).
+
+### Preparation gates
+
+The pre-correction source baseline's [post-landing CI](https://github.com/ThinkerYzu/foxmcp/actions/runs/41153037451)
+passed, including native Windows, the full suite and packaged HTTP/stdio checks.
+Local candidate checks pass: all eight version fields, 506 unit tests with no
+skips and full unit-module collection, fatal Python lint, 183 local documentation
+links/anchors, archive checksums and XPI/server version metadata. Wheel and sdist
+builds pass metadata validation and `twine check`. All four package types carry
+protocol ID 3. Ten focused integration tests pass without skips, including real
+Firefox handshakes, settings/reconnects, multiple profiles and proxy routing.
+Forwarder compatibility tests reject released ID 2 and candidate ID 3 in both
+directions.
+
+The release candidate still requires its own successful non-publishing workflow
+rehearsal before tagging. Publication must verify GitHub assets/checksums and
+provenance, both Windows script download URLs, PyPI distributions and AMO status
+separately. Signed-extension testing in standard Firefox remains a post-signing
+check; Windows CI does not validate a signed extension in real Windows Firefox.
+
 ## v1.5.0 - Containers, shared connections and Python packaging (2026-10-25)
 
 ### Publication status

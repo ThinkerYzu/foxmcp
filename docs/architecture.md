@@ -72,7 +72,7 @@ and the [file map](files.md#extension-directory).
 
 `server.py` keeps a registry of `BrowserProfile` objects keyed by `profile_id`.
 Each object in `browser_profile.py` owns one socket, pending reply futures,
-release diagnostics and monitor ownership. Registration validates protocol 4
+release diagnostics and monitor ownership. Registration validates protocol 3
 and assigns a new integer ID. The extension never handles this ID; it is stripped
 from commands before forwarding. Unrelated profiles stay connected when one
 disconnects.
@@ -81,7 +81,7 @@ disconnects.
 modifying it. Registered INI names take precedence over group labels; on Linux,
 held profile locks can distinguish running profiles from stale UUID copies.
 Names may be missing, ambiguous or duplicated and are never
-routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-4).
+routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-3).
 
 #### MCP Tools (`mcp_tools.py`)
 
@@ -139,9 +139,9 @@ is closed with the WebSocket and MCP services.
 
 The browser envelope above is sent only to the selected extension. MCP calls
 and `/proxy` requests also carry `profile_id` as routing metadata. Both peers
-must complete the protocol-4 `hello`/`ready` handshake before browser requests
+must complete the protocol-3 `hello`/`ready` handshake before browser requests
 are accepted. Release-version warnings are advisory; protocol-ID mismatch is
-refused. See [protocol](protocol.md#profile-connections-protocol-id-4).
+refused. See [protocol](protocol.md#profile-connections-protocol-id-3).
 
 Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.create`, `requests.start_monitoring`. The prefix selects the handler in the extension. See [protocol.md](protocol.md) for the full specification.
 

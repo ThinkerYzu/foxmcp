@@ -97,7 +97,7 @@ async def test_peer_cannot_choose_its_id(server):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("hello", [None, [], {}, {"type": "hello", "data": {"version": VERSION}},
     {"type": "hello", "data": {"profile_id": str(uuid.uuid4()), "protocol_version": 2}},
-    {"type": "hello", "data": {"protocol_version": 3}}])
+    {"type": "hello", "data": {"protocol_version": PROTOCOL_VERSION + 1}}])
 async def test_invalid_or_legacy_handshake_is_rejected(server, hello):
     peer = Peer()
     peer.recv.return_value = json.dumps(hello)

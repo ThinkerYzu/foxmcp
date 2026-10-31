@@ -1,6 +1,6 @@
 # WebSocket Message Protocol
 
-## Profile connections (protocol ID 4)
+## Profile connections (protocol ID 3)
 
 Multiple Firefox profiles connect concurrently at `/`. A new profile never closes
 another profile's connection. Every browser request names an explicit `profile_id`;
@@ -16,14 +16,14 @@ The server sends `hello` with `data.version` and `data.protocol_version`. Within
 five seconds the extension sends:
 
 ```json
-{"type":"hello","data":{"version":"1.5.0","protocol_version":4}}
+{"type":"hello","data":{"version":"1.6.0","protocol_version":3}}
 ```
 
 After registration the server sends `{"type":"ready","data":{}}`.
 The extension never generates, stores or receives `profile_id`. The server strips
 this routing field from commands before sending them to Firefox. Malformed,
 missing or incompatible handshakes close with code 1008 and an update instruction.
-Both extension and server must support ID 4.
+Both extension and server must support ID 3.
 
 Each socket owns its pending replies and monitors. Disconnecting one profile
 fails only that profile's requests and removes only its monitor records. Replies
@@ -51,7 +51,7 @@ or replace the current extension. Local callers are trusted, as on the ordinary 
 ```json
 {
   "server": "FoxMCP",
-  "protocol_version": 4,
+  "protocol_version": 3,
   "proxy_path": "/proxy",
   "pid": 1234,
   "lifetime": "automatic"
@@ -86,7 +86,7 @@ after the caller has gone. Only that proxy's monitors are stopped.
 
 ### Profile name lookup correction (2026-10-30)
 
-Protocol ID remains 4: preferring registered INI names and using Linux held
+Protocol ID remains 3: preferring registered INI names and using Linux held
 profile locks to disambiguate stale metadata changes only server-local label
 lookup. No extension/server handshake, action, parameter, response or error
 contract changes. The MCP name/name_error fields keep their existing meaning;
@@ -112,6 +112,12 @@ requiredness, response formats, error meanings and observable API behavior.
 Update the implementation, protocol documentation and compatibility tests in
 the same change. Adding a new API without changing existing contracts, or fixing
 an implementation while preserving its contract, does not alone require a bump.
+
+Increase at most once per release, using the previous released tag as the
+baseline. Retain that released ID when existing contracts remain compatible;
+otherwise use exactly the previous released ID plus one. Multiple incompatible
+changes during unreleased development share this single increment. Do not
+increment again for each PR, implementation step or intermediate candidate.
 
 Before every release, review API changes since the previous released tag and
 explicitly decide whether the protocol ID must increase. Record the baseline
@@ -167,7 +173,7 @@ from 1 to 2 for the
 existing tab-list response and filter contract. New lifecycle actions alone do
 not require a further bump. Extension/server release matching remains advisory;
 only forwarding peers enforced ID 2 in that release. Current source requires
-the protocol-4 profile handshake described above. The complete v1.5.0 review is recorded in
+the protocol-3 profile handshake described above. The complete v1.5.0 review is recorded in
 [release preparation](../RELEASES.md#protocol-compatibility-review), including
 other changes since the baseline. Reassess if the final diff changes before
 publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
@@ -177,7 +183,7 @@ publishing. See the [compatibility policy](#protocol-id-compatibility-policy).
 The mandatory profile handshake above also carries each peer's release version.
 The extension reads its manifest; the Python server uses `server/version.py`.
 Release-version equality remains advisory, independently of the checked protocol ID:
-compatible protocol-4 peers keep serving tools even when release versions differ.
+compatible protocol-3 peers keep serving tools even when release versions differ.
 The server logs a mismatch and both settings views display it, preserving unsaved settings
 while refreshing. Numeric versions contain one to four dot-separated components
 and at most 64 characters. Invalid or absent release versions remain unavailable;

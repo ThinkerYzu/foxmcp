@@ -402,11 +402,11 @@ consistency, not API compatibility.
 1. Complete and record the protocol ID compatibility review described above.
 2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh`, `scripts/install-from-github.ps1` and the
-   install URL in `README.md`
-3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.5.0] - <date>` and add
+   install URLs in `README.md`
+3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.6.0] - <date>` and add
    the link reference at the bottom
-4. `scripts/check-version.sh 1.5.0` — fails unless all eight files agree
-5. Commit, then tag: `git tag -a v1.5.0 -m "..."` and push the tag
+4. `scripts/check-version.sh 1.6.0` — fails unless all eight files agree
+5. Commit, then tag: `git tag -a v1.6.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,
