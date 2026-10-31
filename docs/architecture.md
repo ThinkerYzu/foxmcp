@@ -8,19 +8,38 @@ One browser-owning process listens on the configured extension port (8765 by
 default). It can serve MCP clients directly and accept browser commands from
 separate MCP stdio processes at the same time.
 
-```text
-MCP HTTP clients <-- MCP HTTP :3000 --> Browser-owning process
-                                      | FastMCP tools (HTTP mode)
-MCP client A <-- stdin/stdout -->       | BrowserProxyHub
-  MCP process A (FastMCP tools)         | Profile registry
-    RemoteBrowser <-- /proxy WS ------>|   BrowserProfile 1 <-- / WS --> Firefox profile 1
-                                      |   BrowserProfile 2 <-- / WS --> Firefox profile 2
-MCP client B <-- stdin/stdout -->       |                             WebExtensions APIs
-  MCP process B (FastMCP tools)         |
-    RemoteBrowser <-- /proxy WS ------>|
-                                      +-- /discovery HTTP
-                                          All three routes share :8765
+```mermaid
+flowchart LR
+    clientA["MCP client A"]
+    clientB["MCP client B"]
+    httpClients["MCP HTTP clients"]
+
+    processA["MCP process A<br/>FastMCP tools + RemoteBrowser"]
+    processB["MCP process B<br/>FastMCP tools + RemoteBrowser"]
+
+    subgraph owner["Browser-owning process"]
+        httpTools["FastMCP tools<br/>(HTTP mode only)"]
+        hub["BrowserProxyHub"]
+        registry["Profile registry<br/>BrowserProfile per connection"]
+        httpTools <--> registry
+        hub <--> registry
+    end
+
+    firefox1["Firefox profile 1<br/>Extension + WebExtensions APIs"]
+    firefox2["Firefox profile 2<br/>Extension + WebExtensions APIs"]
+
+    clientA <-->|"stdin / stdout"| processA
+    clientB <-->|"stdin / stdout"| processB
+    processA <-->|"/proxy WebSocket :8765"| hub
+    processB <-->|"/proxy WebSocket :8765"| hub
+    httpClients <-->|"MCP HTTP :3000"| httpTools
+    registry <-->|"/ WebSocket :8765"| firefox1
+    registry <-->|"/ WebSocket :8765"| firefox2
 ```
+
+The browser owner's `/discovery` HTTP route shares port 8765 with `/proxy` and
+the extension WebSockets. Each stdio process uses it before opening its proxy
+connection. Port numbers shown are defaults.
 
 Each `--stdio --single-instance` client launches its own MCP process. That
 process discovers the browser owner and forwards browser commands to it. If no
