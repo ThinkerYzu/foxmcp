@@ -4,33 +4,36 @@ Overview of the FoxMCP system architecture, components, and data flow.
 
 ## System Overview
 
-```
-┌─────────────────┐    WebSocket     ┌──────────────────┐    MCP Protocol    ┌─────────────┐
-│                 │   (Port 8765)    │                  │                    │             │
-│  Firefox        │◄────────────────►│  Python Server   │◄──────────────────►│ MCP Client  │
-│  Extension      │                  │  (FastMCP)       │                    │             │
-│                 │                  │                  │                    │             │
-└─────────────────┘                  └──────────────────┘                    └─────────────┘
-        │
-        ▼
-┌─────────────────┐
-│                 │
-│ WebExtensions   │
-│ APIs            │
-│  - Tabs         │
-│  - Windows      │
-│  - History      │
-│  - Bookmarks    │
-│  - Navigation   │
-│  - Content      │
-│  - webRequest   │
-└─────────────────┘
+One browser-owning process listens on the configured extension port (8765 by
+default). It can serve MCP clients directly and accept browser commands from
+separate MCP stdio processes at the same time.
+
+```text
+MCP HTTP clients <-- MCP HTTP :3000 --> Browser-owning process
+                                      | FastMCP tools (HTTP mode)
+MCP client A <-- stdin/stdout -->       | BrowserProxyHub
+  MCP process A (FastMCP tools)         | Profile registry
+    RemoteBrowser <-- /proxy WS ------>|   BrowserProfile 1 <-- / WS --> Firefox profile 1
+                                      |   BrowserProfile 2 <-- / WS --> Firefox profile 2
+MCP client B <-- stdin/stdout -->       |                             WebExtensions APIs
+  MCP process B (FastMCP tools)         |
+    RemoteBrowser <-- /proxy WS ------>|
+                                      +-- /discovery HTTP
+                                          All three routes share :8765
 ```
 
-Each running Firefox profile has its own extension connection to the same
-server port. The diagram shows one such connection. MCP clients discover all
-connected profiles, then address every browser call with a `profile_id`; there
-is no active-profile default. See [profile discovery](api-reference.md#firefox-profiles).
+Each `--stdio --single-instance` client launches its own MCP process. That
+process discovers the browser owner and forwards browser commands to it. If no
+owner exists, it starts a detached worker with no MCP transport. An existing
+manual HTTP or plain stdio server can also be the owner. The diagram's HTTP
+listener exists only when the owner runs in HTTP mode.
+
+Plain `--stdio` combines FastMCP and browser ownership in one client process;
+`--no-mcp` serves the browser listener without a direct MCP transport. Only the
+owner binds the extension port. Firefox profiles each open their own extension
+WebSocket to `/` on that port. MCP clients discover connected profiles and
+address every browser call with a `profile_id`; there is no active-profile
+default. See [profile discovery](api-reference.md#firefox-profiles).
 
 ## Component Architecture
 
@@ -86,11 +89,19 @@ routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-3)
 #### MCP Tools (`mcp_tools.py`)
 
 FastMCP exposes 46 tools by default. `profiles_list` and
-`debug_websocket_status` are untargeted; every browser tool requires a nonempty
-`profile_id`. `_send(profile_id, request)` adds routing metadata before forwarding
+`debug_websocket_status` are untargeted; every browser tool requires a positive
+integer `profile_id`. `_send(profile_id, request)` adds routing metadata before forwarding
 to the registry. Native tab/window/group/container/monitor IDs are meaningful
 only within the chosen profile. Unknown or disconnected targets return errors
 without selecting another profile.
+
+In an owning process, tools call `FoxMCPServer` directly. In a shared stdio
+process, `single_instance.run_proxy` supplies a `RemoteBrowser` instead. The
+same tools run locally in either case: tool filtering, predefined-script
+selection/execution, file grants and MCP result formatting belong to the
+process serving that MCP client. Only browser commands, profile discovery and
+connection-status queries cross `/proxy`. The owner's tool configuration does
+not limit the browser actions available to forwarding clients.
 
 ### Firefox containers
 
@@ -124,7 +135,11 @@ The HTTP service uses standard-library threads and 64 KiB read/write blocks,
 without an extra dependency or a fixed port. It runs independently of the MCP
 transport, including stdio. Host/Origin checks and opaque one-use grants keep
 the endpoint from acting as a directory server. It grants no CORS access and
-is closed with the WebSocket and MCP services.
+is closed when its owning MCP process shuts down. In shared stdio mode, that
+process supplies its own `FileTransferServer` to `RemoteBrowser`: only the grant
+URL and metadata pass through `/proxy` and the selected extension fetches the
+file directly from the originating process. File bytes do not pass through the
+browser owner's proxy.
 
 #### WebSocket Protocol
 ```json
@@ -154,27 +169,48 @@ Actions are namespaced with a dot — `windows.get`, `tabs.list`, `bookmarks.cre
   own. `--stdio` serves the same tools on the process's stdin and stdout instead,
   for clients that launch their servers; there the MCP server is an asyncio task
   beside the WebSocket server rather than a thread, since the stdio transport is
-  asyncio throughout. The WebSocket half is identical either way
+  asyncio throughout. These describe direct browser-owning modes; shared stdio
+  runs FastMCP locally and connects to the owner's browser listener instead of
+  binding another one
+
+HTTP tool calls cross from uvicorn's event loop to the browser listener's loop
+using `asyncio.run_coroutine_threadsafe`. Registry access, extension sockets and
+pending reply futures stay on that browser loop, shared by direct HTTP calls
+and incoming proxy calls.
 
 #### Shared stdio server
 
-Each `--stdio --single-instance` process serves its own FastMCP tools and runs
-its own predefined scripts. `RemoteBrowser` forwards only browser requests to
-the extension port. `/discovery` identifies the server and forwarding protocol;
-`/proxy` carries requests and replies; `/` remains the extension connection.
-These routes are available on manual HTTP and plain stdio servers as well.
+`single_instance.py` probes `/discovery` on the configured extension port and
+checks the server identity, protocol ID and proxy path. It then opens `/proxy`
+and validates its greeting before serving MCP over stdio. Incompatible owners
+are refused. `/` remains the extension connection; manual HTTP, plain stdio and
+browser-only servers expose the same discovery and proxy routes. See the
+[route and envelope contracts](protocol.md#discovery-and-proxy-routes).
 
-The target `profile_id` passes unchanged through the proxy. Each browser profile
-keeps its own replies and monitors. `BrowserProxyHub` assigns fresh upstream IDs and restores each client's original
-ID in its reply. Proxy connections are tracked separately from the extension
-and MCP HTTP sessions. Monitor ownership follows the proxy socket, with cleanup
-after outstanding requests have finished so a late monitor-creation reply cannot
-leave an abandoned capture running.
+`BrowserProxyHub` in `browser_proxy.py` handles each proxy independently. It
+validates requests and starts a task per request so replies may arrive out of
+order. `proxy.profiles` and `proxy.status` are handled by the owner; other
+requests go through its profile registry. Each forwarded command gets a fresh
+upstream request ID, and its reply restores the original client's ID. Thus two
+clients may use the same ID without mixing replies. A client cannot reuse an
+ID already in flight on its own proxy connection.
+
+The target `profile_id` reaches the registry unchanged, then `BrowserProfile`
+strips it before sending to Firefox. The response is annotated with that
+profile's ID and connection identity for ownership tracking. Each profile keeps
+its own pending replies and monitors. Monitor ownership follows the proxy
+socket, separately from direct MCP HTTP sessions. On proxy disconnect,
+outstanding requests finish before cleanup so a late monitor-creation reply
+cannot leave an abandoned capture running.
 
 When discovery finds no owner, a detached worker tries to bind the configured
-extension port. Losing that bind retries discovery. There is no discovery file,
-file lock or separate internal listener. Automatic workers exit after 60 seconds
-without proxies; manual servers keep their existing lifetime.
+extension port. The listening socket elects the owner; a losing contender exits
+and its client retries discovery. There is no discovery file, file lock or
+separate internal listener. Automatic workers exit after 60 seconds without
+proxies by default, configurable with `--single-instance-idle-timeout`. Firefox
+connections alone do not keep them alive. Manual owners retain their existing
+lifetime. A worker failure requires existing MCP clients to reconnect; the next
+client launch can start a replacement. Browser commands are never replayed.
 
 On Windows, the local WMI provider starts the worker outside the client's Job
 Object. A hidden PowerShell broker passes the environment over stdin and waits
@@ -185,47 +221,47 @@ the shared worker. See [configuration](configuration.md#sharing-one-server-acros
 
 ### 1. MCP Client → Browser
 
+```text
+Direct HTTP or plain stdio:
+  MCP client -> FastMCP tool -> FoxMCPTools._send(profile_id, request)
+             -> FoxMCPServer registry -> selected BrowserProfile
+             -> extension WebSocket -> WebExtensions API
+
+Shared stdio:
+  MCP client -> local FastMCP tool -> FoxMCPTools._send(profile_id, request)
+             -> RemoteBrowser -> /proxy WebSocket -> BrowserProxyHub
+             -> fresh upstream request ID -> FoxMCPServer registry
+             -> selected BrowserProfile -> extension WebSocket -> WebExtensions API
 ```
-MCP Client
-    ↓ (MCP tool call)
-FastMCP Server
-    ↓ (WebSocket message)
-Python Server
-    ↓ (WebSocket)
-Firefox Extension
-    ↓ (WebExtensions API)
-Browser Function
-    ↓ (Result)
-Firefox Extension
-    ↓ (WebSocket response)
-Python Server
-    ↓ (MCP tool result)
-FastMCP Server
-    ↓ (MCP response)
-MCP Client
-```
+
+For both paths, the selected `BrowserProfile` matches the extension reply to its
+pending future. Direct calls return to the local tool. Proxy replies restore
+the client's request ID, then `RemoteBrowser` resolves the local tool's future.
+The tool formats the MCP result for its client. Routing metadata never becomes
+an extension action parameter. Missing or disconnected profiles fail without
+sending the command to another profile.
+
+`profiles_list` takes the same direct or remote path to the owner's registry;
+the remote path uses `proxy.profiles`. Discovery can query each connected
+profile for its windows and tabs without choosing a default profile.
 
 ### 2. Predefined Scripts Flow
 
+```text
+MCP client -> content_execute_predefined in its MCP-serving process
+           -> validate and run local external script
+           -> script stdout supplies JavaScript
+           -> content.execute_script with explicit profile_id and tabId
+           -> direct registry call OR RemoteBrowser /proxy forwarding
+           -> selected Firefox extension -> isolated content-script context
+           -> execution result returns along the request path
+           -> local tool formats the MCP response
 ```
-MCP Client
-    ↓ (content_execute_predefined tool)
-Python Server
-    ↓ (Execute external script)
-External Script
-    ↓ (JavaScript code output)
-Python Server
-    ↓ (WebSocket: content.execute_script)
-Firefox Extension
-    ↓ (Inject into content script)
-Page JavaScript Context
-    ↓ (Execution result)
-Firefox Extension
-    ↓ (WebSocket response)
-Python Server
-    ↓ (MCP tool result)
-MCP Client
-```
+
+Each shared stdio process uses its own `FOXMCP_EXT_SCRIPTS` directory and runs
+its own script subprocesses. The browser owner receives the generated browser
+command, while executable lookup and execution stay with the originating MCP
+process. See [scripts.md](scripts.md).
 
 ## Security Architecture
 
@@ -268,7 +304,7 @@ EXTENSION_ORIGIN_PATTERN = re.compile(r'moz-extension://.+')
 ```
 
 - **Scheme, not identity**: Firefox generates a per-install UUID, so the extension's origin differs on every profile — `moz-extension://8690897d-…` on one machine, something else on the next. Matching the scheme lets any legitimate install pass
-- **Rejected before registration**: Origin validation runs before the extension handler. Protocol validation and duplicate-ID checks then reject incompatible registrations without replacing an existing profile.
+- **Rejected before registration**: Origin validation runs before the extension handler. The protocol handshake then rejects incompatible registrations. The server assigns a fresh integer profile ID to each accepted connection without replacing existing profiles.
 - **Matched with `fullmatch()`**: The trailing `.+` is required; a bare prefix pattern rejects everything, including the extension
 - **Rejections are logged** at warning level with the offending origin. The library logs them only in debug mode, which would make a legitimate extension that stopped connecting look identical to a server that was never reached
 
@@ -311,7 +347,9 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 
 - Commands are not queued, replayed or redirected after a target disconnects.
 - Results are not cached; every browser call makes a fresh round trip.
-- The WebSocket library's default message-size limit applies.
+- The browser owner's listener uses the WebSocket library's default incoming
+  message-size limit. `RemoteBrowser` connects with `max_size=None` for incoming
+  proxy replies; this does not remove the owner's incoming limits.
 
 ## Extension Points
 
@@ -425,7 +463,8 @@ Or from the command line:
 ```bash
 python server/server.py --host localhost --port 8765 --mcp-port 3000
 python server/server.py --no-mcp          # WebSocket only
-python server/server.py --stdio           # MCP on stdin/stdout, no MCP HTTP listener
+python server/server.py --stdio           # MCP on stdin/stdout, owns browser listener
+python server/server.py --stdio --single-instance  # Local MCP, join/start browser owner
 ```
 
 ### 2. Extension Configuration
@@ -463,7 +502,13 @@ make run-server         # Start server
 
 ### 3. Observability
 
-Python `logging` at INFO level, in the default text format, to stderr. `claudebugzilla/start.sh` redirects this to a log file. There are no health endpoints, no metrics collection, and no structured log format.
+Python `logging` at INFO level uses the default text format on stderr, keeping
+stdio stdout available for MCP messages. Detached workers append stderr to
+`instance-PORT.log` in the per-user runtime directory; see
+[worker log locations](configuration.md#sharing-one-server-across-chats).
+`/discovery` reports the owner's identity, protocol ID, PID and lifetime for
+startup discovery. There is no dedicated health endpoint, metrics collection or
+structured log format.
 
 ## Future Architecture Considerations
 
