@@ -136,7 +136,7 @@ async def test_in_use_error_retains_tab_ids(call, server):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('local_id,remote_id', [(2,3),(3,2)])
+@pytest.mark.parametrize('local_id,remote_id', [(2,3),(3,2),(3,4),(4,3)])
 async def test_old_and_new_forwarders_reject_each_other(monkeypatch, local_id, remote_id):
     import httpx
     from unittest.mock import Mock

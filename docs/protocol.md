@@ -84,10 +84,35 @@ Request monitors are owned by the proxy that starts them. On disconnect, pending
 requests finish before cleanup, including monitor-creation replies that arrive
 after the caller has gone. Only that proxy's monitors are stopped.
 
+### Script consent (unreleased, 2026-10-31)
+
+The optional per-tab/origin gate retains protocol ID **3**. Script requests,
+results and error envelopes are unchanged; no progress or cancellation message
+is added. The only server behavior change is a **300-second** response timeout
+for raw and predefined script tool calls, covering queue wait, approval and
+execution. Other tools retain their existing timeouts. The proxy already
+supports this timeout, so forwarding needs no changes.
+
+The extension owns the approval queue and the independent **60-second** deadline
+for each active prompt. Agents wait for approval or an ordinary response/error.
+A long queue can exceed the five-minute overall server timeout. Client-side
+call deadlines are independent, and existing caller-disconnect behavior is
+unchanged. Earlier ID-3 servers can use the extension but retain shorter script
+call timeouts; matching IDs do not imply the longer timeout is available.
+
+Consent errors use the existing `type: error` envelope with `data.code`:
+`SCRIPT_DENIED`, `SCRIPT_CONSENT_TIMEOUT`, `SCRIPT_CONSENT_CANCELLED` and
+`SCRIPT_TARGET_CHANGED`. The cancellation code describes extension-local
+invalidation, such as connection loss; it adds no transport cancellation API.
+Timeout rejects pending injections without remembering Deny. Explicit decisions
+are remembered only for that tab/current origin.
+See [configuration](configuration.md#script-injection-consent) for user behavior.
+
 ### Server composition refactor (2026-10-31)
 
-Protocol ID remains 3. Compared with released v1.6.0, extracting `BrowserServer`
-and `MCPFrontend`, injecting local/remote browser access and moving file-transfer
+The refactor alone retained protocol ID 3. Compared with released v1.6.0,
+extracting `BrowserServer` and `MCPFrontend`, injecting local/remote browser
+access and moving file-transfer
 ownership change Python structure only. Extension and proxy handshakes, action
 parameters, response/error envelopes, profile/request IDs, access checks and
 monitor/worker lifetimes retain their contracts. This review does not authorize
@@ -1612,6 +1637,16 @@ overrides. UI regression tests execute the actual scripts and HTML instead.
   "timestamp": "2025-09-04T12:00:00.500Z"
 }
 ```
+
+For consent debugging, pass `{"includeConsentDiagnostics": true}` in `data`.
+The response adds `consentDiagnostics`: implementation identifier, gate enabled
+state, pending flag, target tab ID, remaining milliseconds, target visibility,
+visibility-wait/opening/decision flags, last popup error and popup-view count.
+These fields are read-only and include no script contents or target URLs.
+Omitting the option preserves the legacy response. Current source identifies
+itself as `visibility-recovery-2026-10-31`; this lets a diagnostic caller verify
+which consent code is actually loaded. This compatible opt-in addition retains
+protocol ID 3 and requires no server transport changes.
 
 ### Get Options Page State
 

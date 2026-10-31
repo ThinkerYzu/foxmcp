@@ -417,3 +417,17 @@ What Firefox does on its own:
 - A group whose last tab leaves it is deleted.
 
 For WebSocket protocol details, see [protocol.md](protocol.md).
+
+
+## Script consent
+
+`content_execute_script` and the generated JavaScript from
+`content_execute_predefined` obey the optional extension
+[script consent setting](configuration.md#script-injection-consent), off by
+default. Each target tab/origin requires its own approval. Requests queue one
+tab at a time with a 60-second decision deadline per active prompt; queue wait
+is separate. The server allows 300 seconds total for queue wait, approval and
+execution. Rejection, prompt expiry and origin changes return a script error
+without executing. Timeout does not remember a Deny. Raw/predefined script tool
+parameters remain unchanged. Built-in content-reading and file-loading tools
+are outside this gate; predefined local generators run before consent.

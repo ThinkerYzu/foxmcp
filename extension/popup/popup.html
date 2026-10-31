@@ -14,40 +14,57 @@
     </div>
   </header>
 
-  <section class="connection" aria-label="Connection status">
-    <p id="status" class="status disconnected" role="status" aria-live="polite">Loading…</p>
-    <p id="serverInfo" class="server-info"></p>
+  <section id="scriptApproval" hidden aria-labelledby="approvalTitle">
+    <h2 id="approvalTitle">Allow agent scripts in this tab?</h2>
+    <p id="approvalTab"></p>
+    <p id="approvalOrigin"></p>
+    <p id="approvalTime" role="status"></p>
+    <p id="approvalError" role="alert"></p>
+    <button type="button" id="allowScripts">Allow</button>
+    <button type="button" id="denyScripts">Deny</button>
   </section>
 
-  <section class="configuration" aria-labelledby="configurationTitle">
-    <h2 id="configurationTitle">Configuration</h2>
-    <fieldset class="endpoint-field">
-      <legend>MCP Server URL</legend>
-      <div class="input-shell server-url">
-        <span class="scheme" aria-hidden="true">ws://</span>
-        <input type="text" id="hostname" aria-label="Host" placeholder="localhost" autocomplete="off" spellcheck="false" required>
-        <input type="number" id="port" aria-label="Port" min="1" max="65535" step="1" placeholder="8765" required>
-      </div>
-    </fieldset>
-    <div class="field retry-field">
-      <div class="field-heading">
-        <label for="retryInterval">Reconnect interval</label>
-        <span id="retryHint" class="hint">100–30,000 ms</span>
-      </div>
-      <div class="input-shell">
-        <input type="number" id="retryInterval" min="100" max="30000" step="1" aria-describedby="retryHint" required>
-        <span class="unit" aria-hidden="true">ms</span>
-      </div>
-    </div>
-    <div class="configuration-actions">
-      <button type="button" id="resetDefaults">Reset to defaults</button>
-    </div>
-  </section>
+  <div id="settingsPanel" hidden>
+    <section class="connection" aria-label="Connection status">
+      <p id="status" class="status disconnected" role="status" aria-live="polite">Loading…</p>
+      <p id="serverInfo" class="server-info"></p>
+    </section>
 
-  <footer class="footer">
-    <p id="saveStatus" role="status" aria-live="polite">Loading settings…</p>
-    <p id="versionInfo" class="version-info"></p>
-  </footer>
+    <section class="configuration" aria-labelledby="configurationTitle">
+      <h2 id="configurationTitle">Configuration</h2>
+      <fieldset class="endpoint-field">
+        <legend>MCP Server URL</legend>
+        <div class="input-shell server-url">
+          <span class="scheme" aria-hidden="true">ws://</span>
+          <input type="text" id="hostname" aria-label="Host" placeholder="localhost" autocomplete="off" spellcheck="false" required>
+          <input type="number" id="port" aria-label="Port" min="1" max="65535" step="1" placeholder="8765" required>
+        </div>
+      </fieldset>
+      <div class="field retry-field">
+        <div class="field-heading">
+          <label for="retryInterval">Reconnect interval</label>
+          <span id="retryHint" class="hint">100–30,000 ms</span>
+        </div>
+        <div class="input-shell">
+          <input type="number" id="retryInterval" min="100" max="30000" step="1" aria-describedby="retryHint" required>
+          <span class="unit" aria-hidden="true">ms</span>
+        </div>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="scriptConsent"> Ask before agents run scripts in a tab</label>
+        <p class="hint">Remember Allow or Deny until the tab changes site or closes.</p>
+        <p id="consentStatus" class="hint" role="status"></p>
+      </div>
+      <div class="configuration-actions">
+        <button type="button" id="resetDefaults">Reset to defaults</button>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p id="saveStatus" role="status" aria-live="polite">Loading settings…</p>
+      <p id="versionInfo" class="version-info"></p>
+    </footer>
+  </div>
 
   <script src="../config.js"></script>
   <script src="../settings.js"></script>

@@ -579,3 +579,38 @@ Reports and installation/startup logs are retained as workflow artifacts.
 
 Both PowerShell installers ship as release assets. Keep their helper acquisition
 instructions aligned with the release download URLs when publishing a version.
+
+## Native script consent check
+
+Use matching protocol-3 server and extension test builds in a disposable Firefox
+profile. Enable **Ask before agents run scripts in a tab**. Send raw/predefined
+script attempts to several background tabs, including one in another window.
+Confirm that each prompt activates its target and focuses that window, with no
+later request interrupting the current prompt. Check Allow and Deny, then leave
+a prompt unanswered for 60 seconds and confirm rejection without execution.
+A fresh attempt after timeout should ask again. After Allow, confirm that the
+popup disappears and focus returns to the page before the script runs. Also
+confirm that the approval popup hides connection/configuration controls, and
+Deny closes it without running the script. Check Deny followed by a queued
+target: the old popup must close before the next prompt opens. Popup-opening
+failures are logged in the extension console. While a request
+is pending, use Back and Forward between pages on the same origin and confirm
+that the popup reappears after navigation without renewing the deadline. An
+origin change must reject the old pending request instead. Also check delayed
+focus in another Firefox window: pending approval must resume when that window
+actually gains focus, without another navigation or a renewed deadline. Read-only
+`test.get_popup_state` with `includeConsentDiagnostics: true` reports the loaded
+implementation and pending visibility/error state; see
+[protocol diagnostics](protocol.md#get-popup-display-state).
+
+Inspect the native toolbar popup on Firefox Desktop 149+ and test the **!**
+badge/manual toolbar-click path on older Firefox. Closing/reopening must retain
+the original deadline. Switching away must disable approval until the target is
+visible again. Check the tab title, origin, countdown, keyboard focus and both
+buttons. Automated controlled-API checks do not replace this visual check.
+
+Also check same-origin reload versus origin change, independent tabs on the same
+origin, and a toggle change while several approvals are pending. New arrivals
+must wait for that transition. Restart Firefox to verify that the toggle persists
+but tab decisions are forgotten. See [configuration](configuration.md#script-injection-consent)
+and [test coverage](../tests/README.md#script-consent-coverage).

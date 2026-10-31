@@ -10,6 +10,7 @@ chain itself, which had none.
 import logging
 import os
 import stat
+import subprocess
 
 import pytest
 
@@ -32,9 +33,11 @@ class StubWebSocketServer:
 
     def __init__(self):
         self.sent_request = None
+        self.sent_timeout = None
 
     async def send_request_and_wait(self, request, timeout=30.0):
         self.sent_request = request
+        self.sent_timeout = timeout
         return {
             "type": "response",
             "data": {"result": "ok", "url": "https://example.org/"}
@@ -211,3 +214,28 @@ class TestSuccessfulRunIsLogged:
 
         assert 'completed in tab 7' in caplog.text
         assert 'https://example.org/' in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["content_execute_script", "content_execute_predefined"])
+async def test_script_calls_allow_time_for_consent(tool_name, scripts_dir, monkeypatch):
+    """Both script entry points allow queue wait and a full approval minute."""
+    browser = StubWebSocketServer()
+    tools = FoxMCPTools(browser)
+    kwargs = {"profile_id": 1, "tab_id": 2}
+    if tool_name == "content_execute_predefined":
+        write_script(scripts_dir, "consent.sh", "40+2")
+        monkeypatch.setattr("server.mcp_tools.predefined_script_command", lambda path: [path])
+        monkeypatch.setattr(
+            "server.mcp_tools.run_predefined_script",
+            lambda command, args: subprocess.CompletedProcess(command, 0, "40+2", ""),
+        )
+        kwargs["script_name"] = "consent.sh"
+    else:
+        kwargs["code"] = "40+2"
+    tool = await tools.mcp.get_tool(tool_name)
+    result = await tool.fn(**kwargs)
+    assert "ok" in result
+    assert browser.sent_request["action"] == "content.execute_script"
+    assert browser.sent_request["data"]["script"] == "40+2"
+    assert browser.sent_timeout == 300.0

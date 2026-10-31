@@ -184,6 +184,7 @@ function connectToMCPServer() {
       serverVersion = null;
       connectionState = 'disconnected';
       clearAllMonitors('the connection to the server dropped');
+      scriptConsent.disconnected();
       requestSockets.clear();
       if (event.code === 1008) {
         connectionError = event.reason || 'Incompatible FoxMCP connection; update extension and server.';
@@ -218,8 +219,337 @@ function scheduleReconnect() {
   }, CONFIG.retryInterval);
 }
 
+// Consent belongs to this extension instance, never to the page or MCP client.
+class ScriptConsentGate {
+  constructor() {
+    this.enabled = false;
+    this.requested = false;
+    this.transition = null;
+    this.decisions = new Map();
+    this.jobs = new Map();
+    this.current = null;
+    this.pumping = false;
+    this.sequence = 0;
+    browser.tabs?.onRemoved?.addListener(tabId => this.invalidate(tabId));
+    browser.tabs?.onUpdated?.addListener((tabId, change, tab) => {
+      if (change.url) {
+        const origin = this.origin(change.url);
+        const decision = this.decisions.get(tabId);
+        if (decision && decision.origin !== origin) this.decisions.delete(tabId);
+        for (const job of [...this.jobs.values()]) {
+          if (job.tabId === tabId && job.origin !== undefined && job.origin !== origin) {
+            this.cancel(job.id, 'Target origin changed', 'SCRIPT_TARGET_CHANGED');
+          }
+        }
+      }
+      const item = this.current;
+      if (item?.tabId === tabId && (change.status === 'complete' ||
+          (change.url && tab?.status === 'complete'))) {
+        this.present(item);
+      }
+    });
+    browser.windows?.onFocusChanged?.addListener(() => {
+      if (this.current?.waitingForVisibility) this.present(this.current);
+    });
+    browser.tabs?.onActivated?.addListener(({tabId}) => {
+      if (this.current?.tabId === tabId && this.current.waitingForVisibility) this.present(this.current);
+    });
+  }
+
+  origin(url) {
+    try {
+      const value = new URL(url).origin;
+      return value === 'null' ? null : value;
+    } catch (_) { return null; }
+  }
+
+  error(message, code = 'SCRIPT_CONSENT_CANCELLED') {
+    return Object.assign(new Error(message), {code});
+  }
+
+  configure(enabled) {
+    this.requested = enabled;
+    if (enabled === this.enabled) {
+      this.transition = null;
+      for (const job of this.jobs.values()) job.deferred = false;
+    } else if ([...this.jobs.values()].some(job => !job.deferred)) {
+      this.transition = enabled;
+    } else {
+      this.apply(enabled);
+    }
+    this.pump();
+  }
+
+  apply(enabled) {
+    this.enabled = enabled;
+    this.transition = null;
+    this.decisions.clear();
+    for (const job of this.jobs.values()) job.deferred = false;
+  }
+
+  advance() {
+    if (this.transition !== null && ![...this.jobs.values()].some(job => !job.deferred)) {
+      this.apply(this.transition);
+    }
+    this.pump();
+  }
+
+  hasStrictDirective(script) {
+    const trivia = /^(?:\s+|\/\/[^\r\n]*(?:[\r\n]|$)|\/\*[\s\S]*?\*\/)*/;
+    let rest = script;
+    while (true) {
+      rest = rest.slice(rest.match(trivia)[0].length);
+      const literal = rest.match(/^(?:"(?:[^"\\\r\n]|\\[\s\S])*"|'(?:[^'\\\r\n]|\\[\s\S])*')/);
+      if (!literal) return false;
+      const tail = rest.slice(literal[0].length);
+      const space = tail.match(trivia)[0];
+      const next = tail.slice(space.length);
+      const terminated = !next || next[0] === ';' ||
+        (/[\r\n]/.test(space) && !/^(?:[\[.(+`\-/*%<>=&|?:,]|in\b|instanceof\b)/.test(next));
+      if (!terminated) return false;
+      if (literal[0] === '"use strict"' || literal[0] === "'use strict'") return true;
+      rest = next[0] === ';' ? next.slice(1) : next;
+    }
+  }
+
+  async run(id, tabId, script) {
+    const job = {id, tabId, state: 'preparing', deferred: this.transition !== null};
+    this.jobs.set(id, job);
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (job.cancelled) throw job.cancelled;
+      job.origin = this.origin(tab.url);
+      job.title = tab.title || tab.url || `Tab ${tabId}`;
+      await new Promise((resolve, reject) => {
+        job.resolve = resolve;
+        job.reject = reject;
+        job.state = 'waiting';
+        this.pump();
+      });
+      if (job.cancelled || !requestSockets.has(id)) throw job.cancelled || this.error('Request cancelled');
+      job.state = 'executing';
+      const live = await browser.tabs.get(tabId);
+      if (job.gated && (this.origin(live.url) !== job.origin || job.cancelled)) {
+        throw this.error('Target origin changed', 'SCRIPT_TARGET_CHANGED');
+      }
+      if (job.cancelled || !requestSockets.has(id)) throw job.cancelled || this.error('Request cancelled');
+      // Check inside the actual destination document too, closing the navigation
+      // race between tabs.get and executeScript. Preserve the script's last value.
+      const code = job.gated
+        ? `${this.hasStrictDirective(script) ? '"use strict";\n' : ''}if (this.location.origin !== ${JSON.stringify(job.origin)}) { throw new Error('FoxMCP target origin changed'); }\n${script}`
+        : script;
+      return await browser.tabs.executeScript(tabId, {code});
+    } finally {
+      this.jobs.delete(id);
+      this.advance();
+    }
+  }
+
+  release(job, allowed) {
+    job.state = 'executing';
+    if (allowed) job.resolve();
+    else job.reject(this.error('Script injection denied for this tab and origin', 'SCRIPT_DENIED'));
+  }
+
+  async pump() {
+    if (this.pumping) return;
+    this.pumping = true;
+    try {
+      for (const job of this.jobs.values()) {
+        if (job.state !== 'waiting' || job.deferred) continue;
+        job.gated = this.enabled;
+        if (!this.enabled) { this.release(job, true); continue; }
+        if (!job.origin) {
+          job.state = 'rejected';
+          job.reject(this.error('Script consent requires a non-opaque origin', 'SCRIPT_TARGET_CHANGED'));
+          continue;
+        }
+        const decision = this.decisions.get(job.tabId);
+        if (decision?.origin === job.origin) { this.release(job, decision.allowed); continue; }
+        if (this.current) {
+          if (this.current.tabId === job.tabId && this.current.origin === job.origin) {
+            job.state = 'approval';
+            this.current.jobs.add(job);
+          }
+          continue;
+        }
+        const item = {token: String(++this.sequence), tabId: job.tabId, origin: job.origin,
+          title: job.title, jobs: new Set([job]), deadline: null};
+        this.current = item;
+        job.state = 'approval';
+        try {
+          const tab = await browser.tabs.get(item.tabId);
+          if (this.current !== item) continue;
+          if (this.origin(tab.url) !== item.origin) throw this.error('Target origin changed', 'SCRIPT_TARGET_CHANGED');
+          await browser.tabs.update(item.tabId, {active: true});
+          if (this.current !== item) continue;
+          await browser.windows.update(tab.windowId, {focused: true});
+          if (this.current !== item) continue;
+          item.deadline = Date.now() + 60000;
+          item.timer = setTimeout(() => this.settle(item, this.error(
+            'Script approval timed out after 60 seconds', 'SCRIPT_CONSENT_TIMEOUT')), 60000);
+          this.badge('!');
+          await this.present(item);
+        } catch (error) { this.settle(item, error); }
+      }
+    } finally {
+      this.pumping = false;
+      // A cancellation may finish the current item during an awaited browser API.
+      if (!this.current && [...this.jobs.values()].some(job => job.state === 'waiting' && !job.deferred)) {
+        this.pump();
+      }
+    }
+  }
+
+  async present(item, retries = 5) {
+    if (this.current !== item || !item.deadline || item.deciding || Date.now() >= item.deadline) return;
+    if (item.opening) { item.openAgain = true; return; }
+    clearTimeout(item.popupTimer);
+    item.opening = true;
+    let retry = false, restricted = false;
+    try {
+      const view = await this.view();
+      if (!view || this.current !== item || item.deciding) return;
+      if (!view.visible) {
+        item.waitingForVisibility = true;
+        item.lastPopupError = 'Target tab or window is not yet active';
+        retry = true;
+        return;
+      }
+      const tab = await browser.tabs.get(item.tabId);
+      if (this.current !== item || item.deciding) return;
+      item.title = tab.title || tab.url || item.title;
+      await browser.browserAction.openPopup({windowId: tab.windowId});
+      item.waitingForVisibility = false;
+      item.lastPopupError = null;
+    } catch (error) {
+      item.lastPopupError = error.message || String(error);
+      console.warn('FoxMCP could not open script approval popup; click the ! badge:', error);
+      restricted = /user (?:gesture|input)|userinput/i.test(error.message || String(error));
+      retry = !restricted;
+      item.waitingForVisibility = !restricted;
+    } finally {
+      item.opening = false;
+      retry = !restricted && (retry || item.openAgain);
+      item.openAgain = false;
+      if (retry && retries > 0 && this.current === item && !item.deciding && Date.now() < item.deadline) {
+        item.popupTimer = setTimeout(() => this.present(item, retries - 1), 200);
+      }
+    }
+  }
+
+  badge(text) {
+    const result = browser.browserAction?.setBadgeText({text});
+    result?.catch(() => {});
+  }
+
+  settle(item, error, allowed) {
+    if (this.current !== item) return;
+    clearTimeout(item.timer);
+    clearTimeout(item.popupTimer);
+    this.current = null;
+    this.badge('');
+    if (!error) this.decisions.set(item.tabId, {origin: item.origin, allowed});
+    for (const job of item.jobs) {
+      if (!this.jobs.has(job.id) || job.cancelled) continue;
+      if (error) { job.state = 'rejected'; job.reject(error); }
+      else this.release(job, allowed);
+    }
+    this.pump();
+  }
+
+  async view() {
+    const item = this.current;
+    if (!item || !item.deadline) return null;
+    try {
+      const tab = await browser.tabs.get(item.tabId);
+      const window = await browser.windows.get(tab.windowId);
+      if (this.current !== item) return null;
+      return {token: item.token, tabId: item.tabId, origin: item.origin, title: item.title,
+        deadline: item.deadline, visible: tab.active && window.focused && this.origin(tab.url) === item.origin};
+    } catch (_) { return null; }
+  }
+
+  async diagnostics() {
+    const item = this.current;
+    const view = await this.view();
+    return {
+      implementation: 'visibility-recovery-2026-10-31', enabled: this.enabled,
+      pending: !!item, tabId: item?.tabId ?? null,
+      remainingMs: item?.deadline ? Math.max(0, item.deadline - Date.now()) : null,
+      visible: !!view?.visible, waitingForVisibility: !!item?.waitingForVisibility,
+      opening: !!item?.opening, deciding: !!item?.deciding,
+      lastPopupError: item?.lastPopupError ?? null,
+      popupViews: browser.extension?.getViews?.({type: 'popup'}).length ?? null
+    };
+  }
+
+  waitForPopupClose() {
+    return Promise.all(browser.extension.getViews({type: 'popup'}).map(view => {
+      if (view.closed) return;
+      return new Promise(resolve => view.addEventListener('unload', resolve, {once: true}));
+    }));
+  }
+
+  async decide(token, allowed) {
+    if (typeof allowed !== 'boolean') throw this.error('Invalid consent decision');
+    const validate = async () => {
+      const view = await this.view();
+      if (!view || view.token !== token || !view.visible || Date.now() >= view.deadline) {
+        throw this.error('Approval expired or the target tab is not visible');
+      }
+      return this.current;
+    };
+    const item = await validate();
+    item.deciding = true;
+    clearTimeout(item.popupTimer);
+    // Acknowledge first so the popup can close without an unanswered runtime
+    // message. Keep the item pending until its document actually unloads.
+    this.waitForPopupClose().then(async () => {
+      if (await validate() !== item) throw this.error('Approval changed while closing the popup');
+      this.settle(item, null, allowed);
+    }).catch(error => {
+      if (this.current === item) this.settle(item, error);
+    });
+    return true;
+  }
+
+  cancel(id, message = 'Request cancelled', code) {
+    const job = this.jobs.get(id);
+    if (!job) return;
+    job.cancelled = this.error(message, code);
+    if (job.reject) job.reject(job.cancelled);
+    const item = this.current;
+    if (item?.jobs.delete(job) && !item.jobs.size) {
+      clearTimeout(item.timer);
+      clearTimeout(item.popupTimer);
+      this.current = null;
+      this.badge('');
+    }
+    // Cancellation cannot stop JavaScript already dispatched to Firefox. Keep
+    // counting it until executeScript settles, so a toggle cannot overtake it.
+    if (job.state !== 'executing') this.jobs.delete(id);
+    this.advance();
+  }
+
+  invalidate(tabId) {
+    this.decisions.delete(tabId);
+    for (const job of [...this.jobs.values()]) {
+      if (job.tabId === tabId) this.cancel(job.id, 'Target tab closed', 'SCRIPT_TARGET_CHANGED');
+    }
+  }
+
+  disconnected() {
+    for (const id of [...this.jobs.keys()]) this.cancel(id, 'Browser connection closed');
+  }
+}
+const scriptConsent = new ScriptConsentGate();
+
 async function loadConfig() {
   const stored = await browser.storage.sync.get(FoxMCPConfig.storageDefaults);
+  // Content scripts can access storage.sync. Keep user consent policy in the
+  // extension page's own origin storage, which injected page scripts cannot edit.
+  stored.scriptConsent = window.localStorage?.getItem('foxmcp.scriptConsent') === 'true';
   // Upgrade previously valid intervals when the supported maximum is reduced.
   if (Number.isInteger(stored.retryInterval) && stored.retryInterval > 30000 && stored.retryInterval <= 60000) {
     await browser.storage.sync.set({retryInterval: 30000});
@@ -240,6 +570,7 @@ async function loadConfig() {
   const restart = !initialized || configError || next.hostname !== CONFIG.hostname || next.port !== CONFIG.port;
   const intervalChanged = next.retryInterval !== CONFIG.retryInterval;
   CONFIG = next;
+  scriptConsent.configure(next.scriptConsent);
   initialized = true;
   configError = null;
   if (restart) {
@@ -260,6 +591,7 @@ function disconnect() {
   serverVersion = null;
   connectionState = 'disconnected';
   connectionError = null;
+  scriptConsent.disconnected();
   requestSockets.clear();
   if (oldSocket) {
     oldSocket.close();
@@ -274,7 +606,8 @@ let settingsEpoch = 0;
 let settingsTimerRevision = 0;
 const settingsGroups = {
   endpoint: {revision: 0, state: 'saved'},
-  retryInterval: {revision: 0, state: 'saved'}
+  retryInterval: {revision: 0, state: 'saved'},
+  scriptConsent: {revision: 0, state: 'saved'}
 };
 
 function getConnectionStatus() {
@@ -282,6 +615,8 @@ function getConnectionStatus() {
     connected: isConnected, state: connectionState, configError,
     extensionVersion: EXTENSION_VERSION, protocolVersion: PROTOCOL_VERSION, serverVersion, retryAttempts,
     connectionError,
+    scriptConsent: {enabled: scriptConsent.enabled, requested: scriptConsent.requested,
+      pending: scriptConsent.transition !== null},
     config: {...CONFIG}, configuredConfig: {...configuredConfig}, hasTestOverrides,
     activeUrl: websocket ? websocket.url : null,
     retryDelayMs: reconnectTimer === null ? null : CONFIG.retryInterval, nextRetryAt,
@@ -321,7 +656,10 @@ async function saveSettingsUpdates(updates, epoch) {
     epoch === settingsEpoch && settingsGroups[group].revision === entry.revision);
   if (!current.length) return;
   try {
-    await browser.storage.sync.set(Object.assign({}, ...current.map(([, entry]) => entry.patch)));
+    const syncPatch = Object.assign({}, ...current.filter(([group]) => group !== 'scriptConsent').map(([, entry]) => entry.patch));
+    if (Object.keys(syncPatch).length) await browser.storage.sync.set(syncPatch);
+    const consentPatch = current.find(([group]) => group === 'scriptConsent');
+    if (consentPatch) window.localStorage.setItem('foxmcp.scriptConsent', String(consentPatch[1].patch.scriptConsent));
     if (epoch !== settingsEpoch) return; // A queued reset supersedes this in-flight write.
     await loadConfig();
     for (const [group, entry] of current) {
@@ -346,7 +684,8 @@ function resetConfig() {
   for (const group of Object.keys(settingsGroups)) settingsGroups[group] = {revision, state: 'pending'};
   const updates = new Map([
     ['endpoint', {revision, patch: FoxMCPConfig.group('endpoint', FoxMCPConfig.defaults)}],
-    ['retryInterval', {revision, patch: FoxMCPConfig.group('retryInterval', FoxMCPConfig.defaults)}]
+    ['retryInterval', {revision, patch: FoxMCPConfig.group('retryInterval', FoxMCPConfig.defaults)}],
+    ['scriptConsent', {revision, patch: FoxMCPConfig.group('scriptConsent', FoxMCPConfig.defaults)}]
   ]);
   const epoch = settingsEpoch;
   return serializeConfiguration(async () => {
@@ -531,6 +870,13 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse(getConnectionStatus());
     return false;
   }
+  const uiPage = typeof sender.url === 'string' && ['popup/popup.html', 'options.html'].some(
+    path => sender.url === browser.runtime.getURL(path));
+  if (['queueConfigUpdate', 'resetConfig', 'getScriptConsent', 'decideScriptConsent'].includes(request.action) && !uiPage) {
+    return Promise.reject(new Error('This operation is only available in the FoxMCP extension UI'));
+  }
+  if (request.action === 'getScriptConsent') return scriptConsent.view();
+  if (request.action === 'decideScriptConsent') return scriptConsent.decide(request.token, request.allowed);
   if (request.action === 'queueConfigUpdate') {
     try {
       return Promise.resolve(queueConfigUpdate(request.group, request.config));
@@ -1113,9 +1459,7 @@ async function handleContentAction(id, action, data) {
 
       case 'content.execute_script':
         try {
-          const executeResults = await browser.tabs.executeScript(data.tabId, {
-            code: data.script
-          });
+          const executeResults = await scriptConsent.run(id, data.tabId, data.script);
           // executeScript returns an array of results from each frame
           const result = executeResults && executeResults.length > 0 ? executeResults[0] : null;
           sendResponse(id, action, { 
@@ -1123,7 +1467,7 @@ async function handleContentAction(id, action, data) {
             url: await getCurrentTabUrl(data.tabId)
           });
         } catch (scriptError) {
-          sendError(id, 'SCRIPT_ERROR', `Script execution failed: ${scriptError.message}`);
+          sendError(id, scriptError.code || 'SCRIPT_ERROR', `Script execution failed: ${scriptError.message}`);
         }
         break;
 
@@ -2115,6 +2459,7 @@ async function handleGetPopupState(id, data) {
     const hasTestOverrides = storageConfig.testPort !== null || storageConfig.testHostname !== null;
     
     sendResponse(id, 'test.get_popup_state', {
+      ...(data?.includeConsentDiagnostics ? {consentDiagnostics: await scriptConsent.diagnostics()} : {}),
       serverUrl: serverUrl,
       retryInterval: storageConfig.retryInterval,
       maxRetries: storageConfig.maxRetries,

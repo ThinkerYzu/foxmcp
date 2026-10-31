@@ -24,12 +24,26 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**727 collected**: 517 unit and 210 integration tests. No skips are allowed.
-The 2026-10-31 diagram-aligned refactor passed all 727 tests in one local run
+**734 collected**: 522 unit and 212 integration tests. No skips are allowed.
+Current checks pass all **522 unit tests**, **72 consent-controller assertions**
+and the three focused Firefox consent/settings integrations, without skips.
+The user confirmed the corrected approval popup in their Mozilla profile after
+the history/focus fixes. Native Firefox fixtures also cover popup closure,
+minimal approval controls, Back/Forward and delayed-focus recovery. Native
+Windows CI, older-Firefox presentation and accessibility review remain pending.
+
+Earlier timeout-simplification validation passed ten focused integrations,
+all 46 archived tools over HTTP/stdio (including exact upload bytes/events) and
+wheel/sdist installations on Python 3.10/3.14. The historical 740-case full run
+predates transport simplification; the full 734-case suite was not rerun after
+the final UI fixes.
+
+The earlier diagram-aligned refactor passed all 727 tests in one local run
 (982 seconds), including the module/no-skip guard. Final ZIP/XPI installation
 checks exercised all 46 tools over HTTP and stdio and verified exact upload
 bytes/events. Wheel and source-distribution installs passed on Python 3.10 and
-3.14. Native Windows execution for this refactor still requires CI.
+3.14. Native Windows CI for that refactor subsequently passed all four
+combinations; the consent change needs its own Windows CI validation.
 
 The previous released v1.6.0 tree passed 716 tests without skips and four native
 Windows combinations. Earlier profile-ID integration passed 701 tests in the
@@ -80,8 +94,8 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 517 | no |
-| `integration/` | 210 | yes |
+| `unit/` | 522 | no |
+| `integration/` | 212 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
 ### Unit tests
@@ -96,11 +110,11 @@ Selected test modules, including local-file coverage:
 | `test_tab_move.py` | 27 | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
 | `test_protocol.py` | 14 | Message structure, JSON serialization, error codes |
 | `test_window_handlers.py` | 17 | Window action handlers |
-| `test_predefined_script_logging.py` | 14 | The audit log around `content_execute_predefined`, and the validation chain behind it |
+| `test_predefined_script_logging.py` | 16 | Predefined script audit/validation and raw/predefined script response timeouts |
 | `test_request_monitoring.py` | 11 | Web request capture logic |
 | `test_ping_pong.py` | 8 | Ping-pong protocol |
 | `test_connection_versions.py` | 10 | Version parsing and advisory diagnostics; per-profile connection tests are in `test_server.py` |
-| `test_server.py` | 28 | Server-assigned integer IDs, handshake validation, routing isolation, reconnect invalidation and monitor ownership |
+| `test_server.py` | 29 | Server-assigned integer IDs, handshake validation, routing isolation, reconnect invalidation and monitor ownership |
 | `test_server_composition.py` | 9 | Startup role isolation, direct/remote injection, file-service ownership, HTTP monitor liveness and tool-name validation |
 | `test_screenshot_filename.py` | 14 | Screenshot filename generation |
 | `test_profile_names.py` | 17 | Registered/group name precedence, real Linux profile locks, stale copies and unavailable/ambiguous metadata |
@@ -112,6 +126,7 @@ Selected test modules:
 | File | Tests | Covers |
 |---|---|---|
 | `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: protocol-3 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
+| `test_script_consent.py` | 2 | Actual consent-controller source, queue/deadline/target behavior and real-extension policy isolation |
 | `test_extension_settings.py` | 1 | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers, profile registration/errors and live status |
 | `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
@@ -506,7 +521,7 @@ a manual rehearsal nor ordinary CI publishes to PyPI.
 
 `unit/test_containers.py` verifies opaque-ID validation, request payloads,
 registration overrides, missing/mismatched store responses, no replay to older
-extensions and protocol ID 1/2 rejection.
+extensions and older and future protocol-ID rejection.
 
 `integration/test_containers_end_to_end.py` uses isolated Firefox profiles and a
 controlled local origin. It checks cookie/localStorage separation in two named
@@ -536,3 +551,23 @@ bundled scripts with explicit profile routing and the WMI worker. Run it with
 `python scripts/check-test-report.py windows.xml --kind windows`. Set
 `FOXMCP_TEST_POWERSHELL` to `powershell` or `pwsh`. Include the repository and
 its tests directory in PYTHONPATH, and build/download dist/packages first.
+
+
+### Script consent coverage
+
+`integration/test_script_consent.py` executes the actual ScriptConsentGate source
+in Firefox with controlled browser APIs and a fake clock. It checks sequential
+activation/window focus, coalescing, Allow/Deny reuse, origin invalidation,
+closure, full-minute expiry, late approval, popup-unload ordering (including
+navigation/expiry while closing), Back/Forward prompt re-presentation, bounded
+popup retries, delayed native focus and activation recovery, deferred toggle
+transitions and restart reset. A real-extension check verifies content scripts cannot change
+the consent policy via runtime messages or a storage.sync key.
+
+`extension_settings_checks.js` verifies the toggle through Popup and Options,
+approval-only presentation, Allow/Deny closure and expiry without revealing
+settings.
+`unit/test_predefined_script_logging.py` checks that both raw and predefined
+script tools request a 300-second response timeout. Existing proxy route tests
+cover the unchanged transport. Native popup positioning
+and older-Firefox presentation remain manual UI checks.

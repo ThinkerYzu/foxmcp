@@ -99,6 +99,28 @@ default. See [profile discovery](api-reference.md#firefox-profiles).
 - **Action Router**: Splits each incoming action on `.` and dispatches to the handler for that namespace
 - **Response Manager**: Formats and sends responses back to the server
 
+#### Script consent (`ScriptConsentGate` in `background.js`)
+
+The extension enforces optional agent-script consent before execution, using
+in-memory tab/origin decisions and one sequential approval queue. Toggle changes
+wait for the current batch, including executing scripts, before admitting later
+requests under the new policy. The popup owns no authorization state. Origin
+changes, closure and restart invalidate decisions; extension disconnect removes
+pending work. The injected code also checks the destination origin. Script tool
+calls use a 300-second server timeout with ordinary request/response messages;
+the extension gives each active prompt 60 seconds. Accepting a decision first
+arms popup-unload listeners and acknowledges the choice. The popup then closes;
+the background waits for unload and revalidates before releasing the job or
+presenting the next target. Same-origin navigation completion re-presents a
+current visible prompt without renewing its deadline. Presentation is serialized,
+transient opening failures retry briefly, and decisions/invalidation clear
+pending presentation timers. Focus/tab activation resumes presentation that was
+deferred for visibility, including after a native focus request resolves early.
+A successful opening clears recovery state so dismissal alone does not reopen
+the popup. See
+[configuration](configuration.md#script-injection-consent) and
+[protocol](protocol.md#script-consent-unreleased-2026-10-31).
+
 #### Content Script (`content.js`)
 - **Page Injection**: Injected into all pages (`<all_urls>`) for content access
 - **JavaScript Execution**: Executes custom scripts in page context
@@ -110,12 +132,15 @@ default. See [profile discovery](api-reference.md#firefox-profiles).
 `config.js` supplies defaults, validation, test overrides and URL construction.
 The persistent background owns serialized storage operations, the 500ms save
 debounce and connection state. `settings.js` is shared by Popup and Options;
-`popup/popup.js` and `options.js` only adapt their DOM elements. Both views poll
+`options.js` adapts its DOM elements; `popup/popup.js` also presents script
+consent prompts and submits decisions. Both views poll
 background status every second without overwriting unfinished edits. Shared
 styling lives in `settings.css`, with small page-specific CSS files.
 
-Settings are kept in `storage.sync`. Host/Port form one validation group and the
-interval forms another. Reset persists defaults without a modal and preserves
+Connection settings are kept in `storage.sync`; the script-consent toggle uses
+extension-origin localStorage to exclude content-script writes. Host/Port form
+one validation group, interval forms another, and consent is a boolean validation
+group. Reset persists defaults without a modal and preserves
 test overrides. See [configuration](configuration.md#configuring-extension)
 and the [file map](files.md#extension-directory).
 

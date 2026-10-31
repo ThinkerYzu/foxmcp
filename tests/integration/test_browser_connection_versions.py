@@ -100,7 +100,7 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
       const listeners = [];
       const event = {addListener() {}};
       const browser = {
-        runtime: {getManifest:()=>({version:'1.4.0'}), onMessage:{addListener:f=>listeners.push(f)}},
+        runtime: {getManifest:()=>({version:'1.4.0'}), getURL:path=>'moz-extension://test/'+path, onMessage:{addListener:f=>listeners.push(f)}},
         menus: {create(){}, onShown:event, onClicked:event},
         storage: {onChanged:event, sync:{get:()=>new Promise(()=>{})}}
       };
@@ -119,7 +119,7 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
       )(browser, {}, FakeSocket, ()=>0, ()=>{}, quiet, listeners);
       const elements = {};
       const doc = {
-        addEventListener:(_,f)=>loaded=f,
+        addEventListener:(_,f)=>{if (!loaded) loaded=f;},
         getElementById:id=>elements[id] ||= {style:{}, dataset:{}, value:'', textContent:'',
           addEventListener(type, f){this[type]=f;}, dispatchEvent(event){this[event.type]?.(event);}},
         createElement:()=>({style:{}})
@@ -130,7 +130,7 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
         protocolVersion:3,
         config:{hostname:'localhost',port:8765,retryInterval:5000},
         configuredConfig:{hostname:'localhost',port:8765,retryInterval:5000},
-        settings:{groups:{endpoint:{revision:0,state:'pending'},retryInterval:{revision:0,state:'saved'}}}
+        settings:{groups:{endpoint:{revision:0,state:'pending'},retryInterval:{revision:0,state:'saved'},scriptConsent:{revision:0,state:'saved'}}}
       };
       browser.runtime.sendMessage = async () => ({...defaultStatus, ...connection});
       browser.storage.sync.get = async defaults=>defaults;
@@ -139,7 +139,7 @@ async def test_browser_versions_and_popup(server_with_extension, upload_page):
       const popupResult = await new AsyncFunction(
         'browser','document','window','setInterval','clearInterval','console','setTimeout','getConnection',
         'runChecks', POPUP_SOURCE + '\nreturn runChecks();'
-      )(browser, doc, {addEventListener(){}}, f=>{refresh=f;return 0;}, ()=>{}, quiet, ()=>{},
+      )(browser, doc, {addEventListener(){}}, f=>{if (!refresh) refresh=f;return 0;}, ()=>{}, quiet, ()=>{},
         ()=>connection, async()=>{POPUP_TEST});
       return {background:backgroundResult, popup:popupResult};
     })()'''

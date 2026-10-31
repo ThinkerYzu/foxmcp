@@ -62,7 +62,8 @@ write `storage.sync` themselves. The background validates and debounces valid
 edits for 500ms, serializes persistence, then applies the effective configuration.
 See [extension configuration](configuration.md#configuring-extension).
 
-Both views offer Host, Port, Reconnect Interval and Reset to defaults. There are
+Both views offer Host, Port, Reconnect Interval, the script-consent toggle and
+Reset to defaults. The toolbar popup also presents sequential approval prompts. There are
 no Save, manual Reconnect, Max Retry Attempts or Ping Timeout controls. Reset
 persists immediately through the queue without a confirmation dialog. Endpoint
 changes replace the connection; interval-only changes preserve a healthy socket.

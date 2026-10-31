@@ -8,6 +8,7 @@
 
   async function background(initial = {}, options = {}) {
     const stored = {...initial};
+    const local = new Map();
     const timers = new Map();
     const sockets = [];
     const writes = [];
@@ -18,7 +19,7 @@
     let failConnection = false;
     const event = {addListener() {}, removeListener() {}};
     const browser = {
-      runtime: {getManifest: () => ({version: '1.5.0'}), onMessage: {addListener: f => listeners.push(f)}},
+      runtime: {getManifest: () => ({version: '1.5.0'}), getURL: path => 'moz-extension://test/' + path, onMessage: {addListener: f => listeners.push(f)}},
       menus: {create() {}, onShown: event, onClicked: event},
       storage: {
         onChanged: {addListener: f => storageListeners.push(f)},
@@ -69,7 +70,7 @@
         status: getConnectionStatus, queue: queueConfigUpdate, reset: resetConfig,
         idle: () => configurationQueue, monitors: activeMonitors,
         get socket() { return websocket; }
-      };`)(browser, {}, Socket, setTimeout, clearTimeout, FakeDate, quiet);
+      };`)(browser, {localStorage: {getItem: key => local.get(key), setItem: (key,value) => local.set(key,value)}}, Socket, setTimeout, clearTimeout, FakeDate, quiet);
     async function tick(ms) {
       const target = now + ms;
       while (true) {
@@ -79,10 +80,10 @@
       }
       now = target; await settle();
     }
-    async function message(request) {
+    async function message(request, sender = {url: 'moz-extension://test/popup/popup.html'}) {
       return new Promise((resolve, reject) => {
         try {
-          const result = listeners[0](request, {}, resolve);
+          const result = listeners[0](request, sender, resolve);
           if (result && result.then) result.then(resolve, reject);
         } catch (error) { reject(error); }
       });
@@ -111,6 +112,16 @@
     for (const value of [min, max, String(min)]) check(config.group(group, {hostname: 'localhost', [field]: value})[field] === Number(value), 'numeric boundary');
   }
   check(config.socketUrl(config.effective({hostname: '::1', port: 8765})) === 'ws://[::1]:8765', 'IPv6 socket address');
+
+  const diagnosticApp = await background();
+  diagnosticApp.api.socket.open();
+  await diagnosticApp.api.socket.onmessage({data:JSON.stringify({type:'request',id:'legacy-popup',action:'test.get_popup_state',data:{}})});
+  const legacyPopupState = diagnosticApp.api.socket.sent.find(message=>message.id==='legacy-popup');
+  check(!Object.hasOwn(legacyPopupState.data,'consentDiagnostics'), 'legacy popup projection keeps its default fields');
+  await diagnosticApp.api.socket.onmessage({data:JSON.stringify({type:'request',id:'diagnostic-popup',action:'test.get_popup_state',data:{includeConsentDiagnostics:true}})});
+  const popupDiagnostics = diagnosticApp.api.socket.sent.find(message=>message.id==='diagnostic-popup');
+  check(popupDiagnostics.data.consentDiagnostics.implementation === 'visibility-recovery-2026-10-31' &&
+    !popupDiagnostics.data.consentDiagnostics.pending, 'opt-in diagnostics identify running consent implementation without a pending prompt');
 
   const registration = await background();
   const registering = registration.api.socket;
@@ -228,8 +239,8 @@
 
   async function view(name, app) {
     const html = sources[name + 'Html'];
-    let loaded, refresh, unloaded;
-    let rejectMessages = false;
+    const loaded = [], refresh = [], unloaded = [];
+    let rejectMessages = false, closed = false;
     const elements = {};
     const realDoc = typeof document === 'undefined' ? null : document.implementation.createHTMLDocument('settings test');
     if (realDoc) realDoc.documentElement.innerHTML = html;
@@ -241,18 +252,19 @@
         dispatchEvent(event) { if (listeners[event.type]) listeners[event.type](event); }
       };
     }
-    const doc = {getElementById: id => elements[id] || null, addEventListener: (_, callback) => { loaded = callback; }};
-    const browser = {runtime: {getManifest: () => ({version: '1.5.0'}), sendMessage: request => rejectMessages ? Promise.reject(new Error('background unavailable')) : app.message(request)}};
+    const doc = {getElementById: id => elements[id] || null, addEventListener: (_, callback) => { loaded.push(callback); }};
+    const browser = {runtime: {getManifest: () => ({version: '1.5.0'}), sendMessage: request => rejectMessages ? Promise.reject(new Error('background unavailable')) : app.message(request, {url: 'moz-extension://test/' + (name === 'popup' ? 'popup/popup.html' : 'options.html'), ...(name === 'options' ? {tab:{id:8}} : {})})}};
     await new AsyncFunction('browser', 'document', 'window', 'setInterval', 'clearInterval', 'console',
       sources.config + '\n' + sources.settings + '\n' + sources[name])(
-        browser, doc, {confirm: () => { throw new Error('Native confirmation dialogs must not be used in extension settings'); }, addEventListener: (_, callback) => { unloaded = callback; }},
-        callback => { refresh = callback; return 1; }, () => {}, quiet);
-    await loaded();
+        browser, doc, {close: () => { closed = true; for (const callback of unloaded) callback(); }, confirm: () => { throw new Error('Native confirmation dialogs must not be used in extension settings'); }, addEventListener: (_, callback) => { unloaded.push(callback); }},
+        callback => { refresh.push(callback); return refresh.length; }, () => {}, quiet);
+    for (const callback of loaded) await callback();
+    await settle();
     async function input(id, value) {
       elements[id].value = value;
       elements[id].dispatchEvent(new Event('input')); await settle();
     }
-    return {elements, input, refresh: () => refresh(), close: () => unloaded(),
+    return {elements, input, get closed() { return closed; }, refresh: async () => { for (const callback of refresh) await callback(); }, close: () => { for (const callback of unloaded) callback(); },
       click: async id => { elements[id].dispatchEvent(new Event('click')); await settle(); },
       unavailable: () => { rejectMessages = true; }};
   }
@@ -262,6 +274,16 @@
     await app.api.socket.onmessage({data: JSON.stringify({type: 'hello', data: {version: '0.0.1', protocol_version: 3}})});
     const page = await view(name, app);
     check(page.elements.hostname.value === 'example.org' && Number(page.elements.port.value) === 9999, name + ' displays user configuration');
+    check(!page.elements.scriptConsent.checked, name + ' consent defaults off');
+    if (name === 'popup') check(!page.elements.settingsPanel.hidden, 'normal toolbar popup shows settings');
+    page.elements.scriptConsent.checked = true;
+    page.elements.scriptConsent.dispatchEvent(new Event('change'));
+    await settle(); await app.tick(500); await page.refresh();
+    check(page.elements.scriptConsent.checked && app.api.status().scriptConsent.enabled, name + ' consent toggle enables gate');
+    page.elements.scriptConsent.checked = false;
+    page.elements.scriptConsent.dispatchEvent(new Event('change'));
+    await settle(); await app.tick(500); await page.refresh();
+    check(!app.api.status().scriptConsent.enabled, name + ' consent toggle disables gate');
     check(page.elements.serverInfo.textContent.includes('localhost:31000') && page.elements.serverInfo.textContent.includes('overrides'), name + ' shows actual endpoint and overrides');
     check(!page.elements.serverUrl && !page.elements.maxRetries && !page.elements.pingTimeout && !page.elements.saveConfig && !page.elements.forceReconnect, name + ' removes obsolete controls');
     check(page.elements.versionInfo.textContent.includes('Version mismatch'), name + ' version warning retained');
@@ -306,6 +328,38 @@
     check(reopened.elements[name === 'popup' ? 'status' : 'connectionText'].textContent === 'Status unavailable', name + ' does not claim disconnected when background is unavailable');
     reopened.close();
   }
+  const approvalApp = await background();
+  let approval = {token: 'approval-token', tabId: 9, title: '<b>Example tab</b>',
+    origin: 'https://example.org', deadline: Date.now() + 60000, visible: true};
+  const decisions = [];
+  const originalMessage = approvalApp.message;
+  approvalApp.message = async request => {
+    if (request.action === 'getScriptConsent') return approval;
+    if (request.action === 'decideScriptConsent') { decisions.push(request); approval = null; return true; }
+    return originalMessage(request);
+  };
+  const approvalPage = await view('popup', approvalApp);
+  await approvalPage.refresh();
+  check(!approvalPage.elements.scriptApproval.hidden && approvalPage.elements.approvalTab.textContent === '<b>Example tab</b>', 'popup displays target title as text');
+  check(approvalPage.elements.settingsPanel.hidden, 'approval popup hides unrelated settings controls');
+  check(approvalPage.elements.approvalOrigin.textContent === 'https://example.org', 'popup identifies approval origin');
+  check(!approvalPage.elements.allowScripts.disabled, 'visible target enables approval');
+  approval.visible = false; await approvalPage.refresh();
+  check(approvalPage.elements.allowScripts.disabled && approvalPage.elements.denyScripts.disabled, 'hidden target disables both decision buttons');
+  approval.visible = true; await approvalPage.refresh();
+  await approvalPage.click('allowScripts');
+  check(decisions[0].token === 'approval-token' && decisions[0].allowed === true, 'Allow submits the displayed token');
+  check(approvalPage.closed, 'accepted approval closes the popup');
+  approval = {token: 'deny-token', tabId: 10, title: 'Another tab', origin: 'https://example.org', deadline: Date.now() + 60000, visible: true};
+  const denialPage = await view('popup', approvalApp);
+  await denialPage.refresh(); await denialPage.click('denyScripts');
+  check(decisions[1].token === 'deny-token' && decisions[1].allowed === false, 'Deny submits the next displayed token');
+  check(denialPage.closed, 'accepted denial closes its popup');
+  denialPage.close();
+  approval = {token: 'expired-token', tabId: 11, title: 'Expiring tab', origin: 'https://example.org', deadline: Date.now() + 60000, visible: true};
+  const expiringPage = await view('popup', approvalApp);
+  await expiringPage.refresh();approval = null;await expiringPage.refresh();
+  check(expiringPage.closed && expiringPage.elements.settingsPanel.hidden, 'expired approval closes without revealing settings');
   const broken = await background({port: 0});
   const brokenPage = await view('options', broken);
   check(brokenPage.elements.saveStatus.dataset.state === 'error', 'invalid stored settings never report saved');

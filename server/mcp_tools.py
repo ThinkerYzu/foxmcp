@@ -2328,6 +2328,9 @@ class FoxMCPTools:
         async def content_execute_script(profile_id: int, tab_id: int, code: str) -> str:
             """Execute JavaScript code in a tab
 
+            An optional extension setting requires user approval per tab/origin.
+            Each approval prompt expires after 60 seconds; queued tabs wait in turn.
+
             Args:
                 tab_id: ID of the tab to execute script in
                 code: JavaScript code to execute
@@ -2343,7 +2346,7 @@ class FoxMCPTools:
                 "timestamp": datetime.now().isoformat()
             }
 
-            response = await self._send(profile_id, request)
+            response = await self._send(profile_id, request, timeout=300.0)
 
             if "error" in response:
                 return f"Error executing script: {response['error']}"
@@ -2371,6 +2374,9 @@ class FoxMCPTools:
             script_args: str = ""
         ) -> str:
             """Execute a predefined external script and run its JavaScript output in a tab
+
+            Generated JavaScript obeys the extension's per-tab/origin script consent.
+            Each approval prompt expires after 60 seconds; queued tabs wait in turn.
 
             Args:
                 tab_id: ID of the tab to execute script in
@@ -2509,7 +2515,7 @@ class FoxMCPTools:
                     "timestamp": datetime.now().isoformat()
                 }
 
-                response = await self._send(profile_id, request)
+                response = await self._send(profile_id, request, timeout=300.0)
 
                 if "error" in response:
                     logger.warning(

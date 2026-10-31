@@ -7,13 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional per-tab/origin consent for raw and predefined agent scripts, controlled
+  by a default-off extension toggle. Sequential prompts activate each target tab
+  and focus its window, with a 60-second decision deadline. Firefox Desktop 149+
+  opens the toolbar popup automatically; older Firefox uses a toolbar-click
+  fallback. Decisions reset on origin changes, tab closure and browser/extension
+  restart. Toggle changes wait for pending injections to finish. Choosing Allow
+  or Deny closes the popup before approved injection or the next prompt starts.
+  Approval prompts hide connection and configuration controls. Pending prompt
+  presentation recovers after same-origin history navigation or delayed window
+  focus, retaining the original deadline.
+
+
 ### Changed
 
+- Allow 300 seconds for raw and predefined script tool responses, covering
+  consent queue wait, approval and execution. Retain protocol ID 3 and existing
+  request/response messages; no server transport changes are required.
 - Separate `MCPFrontend` from `BrowserServer`, with direct local access or
   `RemoteBrowser` forwarding chosen at construction. Architecture diagrams and
   source names now match. Browser-only workers construct no MCP frontend;
   shared-stdio frontends construct no browser listener or registry. CLI, tool
-  schemas and protocol ID 3 remain unchanged.
+  schemas remain unchanged. The refactor alone retained protocol ID 3.
 
 ## [1.6.0] - 2026-10-30
 

@@ -1,10 +1,10 @@
 // Shared UI controller. Debounce belongs to the background page, not this view.
 const FoxMCPSettingsUI = {
   async mount(renderConnection, renderUnavailable) {
-    const fields = Object.fromEntries(['hostname', 'port', 'retryInterval'].map(id => [id, document.getElementById(id)]));
+    const fields = Object.fromEntries(['hostname', 'port', 'retryInterval', 'scriptConsent'].map(id => [id, document.getElementById(id)]));
     const feedback = document.getElementById('saveStatus');
     const dirty = new Map();
-    const inputSequence = {endpoint: 0, retryInterval: 0};
+    const inputSequence = {endpoint: 0, retryInterval: 0, scriptConsent: 0};
     let alive = true;
     let refreshSequence = 0;
     let refreshTimer = null;
@@ -17,16 +17,22 @@ const FoxMCPSettingsUI = {
       if (!alive) return;
       const groups = status.settings.groups;
       const config = status.configuredConfig;
-      for (const [group, keys] of Object.entries({endpoint: ['hostname', 'port'], retryInterval: ['retryInterval']})) {
+      for (const [group, keys] of Object.entries({endpoint: ['hostname', 'port'], retryInterval: ['retryInterval'], scriptConsent: ['scriptConsent']})) {
         const revision = dirty.get(group);
         if (dirty.has(group) && revision !== null && groups[group].revision >= revision && groups[group].state === 'saved') dirty.delete(group);
-        if (!dirty.has(group)) for (const key of keys) fields[key].value = config[key] ?? '';
+        if (!dirty.has(group)) for (const key of keys) {
+          if (key === 'scriptConsent') fields[key].checked = config[key] === true;
+          else fields[key].value = config[key] ?? '';
+        }
       }
       const errors = Object.values(groups).filter(group => group.state === 'error');
       const pending = Object.values(groups).some(group => group.state === 'pending');
       feedback.textContent = errors.length ? errors.map(group => group.error).join('; ')
         : pending ? 'Waiting to save…' : status.configError || 'Saved';
       feedback.dataset.state = errors.length || (!pending && status.configError) ? 'error' : pending ? 'pending' : 'saved';
+      const consentStatus = document.getElementById('consentStatus');
+      if (consentStatus) consentStatus.textContent = status.scriptConsent?.pending
+        ? 'Change will apply after pending script requests finish.' : '';
       renderConnection(status);
     }
 
@@ -55,6 +61,7 @@ const FoxMCPSettingsUI = {
       feedback.dataset.state = 'pending';
       const config = group === 'endpoint'
         ? {hostname: fields.hostname.value, port: fields.port.value}
+        : group === 'scriptConsent' ? {scriptConsent: fields.scriptConsent.checked}
         : {retryInterval: fields.retryInterval.value};
       try {
         const status = await browser.runtime.sendMessage({action: 'queueConfigUpdate', group, config});
@@ -68,6 +75,7 @@ const FoxMCPSettingsUI = {
 
     for (const key of ['hostname', 'port']) fields[key].addEventListener('input', () => changed('endpoint'));
     fields.retryInterval.addEventListener('input', () => changed('retryInterval'));
+    fields.scriptConsent?.addEventListener('change', () => changed('scriptConsent'));
     const reset = document.getElementById('resetDefaults');
     if (reset) reset.addEventListener('click', async () => {
       // Native modal dialogs can block Firefox toolbar popups. Reset directly.

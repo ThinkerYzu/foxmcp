@@ -1,7 +1,8 @@
 // Shared by the persistent background page, popup and options page.
 const FoxMCPConfig = (() => {
-  const defaults = Object.freeze({hostname: 'localhost', port: 8765, retryInterval: 1000});
-  const storageDefaults = Object.freeze({...defaults, testHostname: null, testPort: null});
+  const defaults = Object.freeze({hostname: 'localhost', port: 8765, retryInterval: 1000, scriptConsent: false});
+  const {scriptConsent: _consent, ...syncDefaults} = defaults;
+  const storageDefaults = Object.freeze({...syncDefaults, testHostname: null, testPort: null});
 
   function integer(value, min, max, label) {
     if (typeof value === 'string' && /^\d+$/.test(value.trim())) value = Number(value.trim());
@@ -32,6 +33,10 @@ const FoxMCPConfig = (() => {
   }
 
   function group(name, values) {
+    if (name === 'scriptConsent') {
+      if (typeof values.scriptConsent !== 'boolean') throw new Error('Script consent must be enabled or disabled');
+      return {scriptConsent: values.scriptConsent};
+    }
     if (name === 'endpoint') return endpoint(values);
     if (name === 'retryInterval') {
       return {retryInterval: integer(values.retryInterval, 100, 30000, 'Reconnect interval (ms)')};
@@ -51,7 +56,8 @@ const FoxMCPConfig = (() => {
         hostname: stored.testHostname ?? userEndpoint.hostname,
         port: stored.testPort ?? userEndpoint.port
       }),
-      ...group('retryInterval', config)
+      ...group('retryInterval', config),
+      ...group('scriptConsent', config)
     };
   }
 

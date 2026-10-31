@@ -122,3 +122,28 @@ button { flex-shrink: 0; padding: 7px 11px; border: 1px solid var(--border); bor
 button:hover { border-color: var(--focus); }
 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 button:active { background: var(--background); }
+
+
+input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  margin: 12px 6px 0 0;
+  accent-color: var(--focus);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+#scriptApproval {
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 2px solid var(--focus);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+#scriptApproval p { margin: 8px 0; }
+#approvalOrigin { font-weight: 600; }
+#approvalError { color: var(--error); }
+#scriptApproval button:disabled { opacity: .5; cursor: default; }

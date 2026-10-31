@@ -778,3 +778,64 @@ an update message, and the extension stops retrying that incompatible peer.
 Update both components and reload the extension, or correct the endpoint.
 Restart the server after updating its files. See
 [version announcements](protocol.md#connection-version-announcement).
+
+
+## Script injection consent
+
+In the FoxMCP toolbar popup or Options, enable **Ask before agents run scripts
+in a tab**. It is off by default. This setting gates `content_execute_script`
+and JavaScript produced by `content_execute_predefined`; built-in content
+helpers, text/HTML reading and file loading continue without this prompt.
+Predefined generators still run locally before their output reaches the gate.
+
+When enabled, FoxMCP activates the target tab, focuses its window and asks Allow
+or Deny in the extension's toolbar popup. Multiple targets are presented one at
+a time. Concurrent attempts for the same tab/origin share one decision. On
+Firefox Desktop 149+, the popup opens automatically. On older Firefox, click
+the FoxMCP toolbar icon when its **!** badge appears. The target page stays
+visible. If you switch away, return to the target tab/window to approve.
+
+The current prompt expires after 60 seconds, including time waiting for a
+manual toolbar click. Queue wait does not consume the next tab's minute.
+While approval is pending, the popup shows only the target, origin, countdown
+and Allow/Deny controls. Connection and configuration controls remain in the
+normal toolbar view when no approval is pending, and in Options. Expiry or
+withdrawal closes an approval popup instead of revealing settings. If Back,
+Forward or another same-origin navigation dismisses a pending prompt, it opens
+again after the visible target finishes loading. The original deadline still
+applies. Transient popup-opening conflicts receive a short bounded retry;
+older-Firefox user-gesture restrictions still use the manual toolbar path.
+If the target is temporarily inactive, presentation waits and resumes when its
+window gains focus or the tab becomes active. This does not renew the deadline
+or repeatedly force focus. Successful opening clears that recovery state, so
+ordinary dismissal still uses the manual reopening path.
+Choosing Allow or Deny closes the popup before the injection or next approval
+prompt starts. The target and deadline are checked again after popup closure.
+Closing/reopening the popup does not reset the deadline. Timeout rejects pending
+injections without remembering Deny. Late clicks cannot execute expired requests.
+
+Allow and Deny apply only to that tab on its current origin (scheme, host and
+port). Reloads and same-origin navigation retain them. Origin changes, tab
+closure and extension/browser restart forget them; returning to a previous site
+requires a new decision. Other tabs on the same origin remain independent.
+Non-opaque origins are required when consent is enabled; normal Firefox
+restrictions on script execution still apply. Already approved tabs can execute
+in the background without switching.
+
+Changing the global toggle waits for pending injections, including running
+scripts, to finish. Later arrivals wait behind that change and use the new
+policy. The UI reports when the change is waiting. Effective toggle changes
+clear remembered decisions; re-enabling starts fresh. There is no per-tab
+permission-management UI in this increment.
+
+The toggle is stored in the extension page's origin-local storage rather than
+`storage.sync`, because content scripts can access the latter. The toggle
+persists across restart; tab decisions do not. Settings writes and approval
+responses accept only the extension's popup/Options pages. This is a user
+consent control for agent scripts; other browser tools keep their permissions.
+Raw and predefined script tool calls have a five-minute server response timeout
+for queue wait, approval and execution. Each active prompt expires after one
+minute. Earlier ID-3 servers retain their shorter script timeout. Client-side
+call deadlines are independent; long queues can exceed the server's total
+budget. Denial and prompt expiry return ordinary script errors. Calls are never
+retried automatically. Changing the toggle cannot undo scripts already started.
