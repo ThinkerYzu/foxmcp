@@ -22,9 +22,8 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 Version 1.6.0 is published on [PyPI](https://pypi.org/project/foxmcp/1.6.0/)
 and [GitHub](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.6.0).
-The matching extension has been submitted to Mozilla and awaits review; the
-public Add-ons listing still serves 1.5.0. Until approval, use the matching
-GitHub XPI with [temporary add-on loading](docs/development.md#loading-in-firefox).
+The matching extension is available from
+[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
 
 **Upgrading:** Update the server and extension together, restart shared workers,
 and refresh your client's tool schemas. Call `profiles_list` and pass its integer

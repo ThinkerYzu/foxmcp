@@ -18,9 +18,11 @@ generated from.
 - PyPI wheel/sdist hashes verify and bytes exactly match GitHub. Fresh isolated
   `uvx --from foxmcp==1.6.0 foxmcp --help` and stdio discovery/routing pass with
   all 46 tools. Full browser operations are covered by the final-package gate.
-- AMO submission succeeded, version `6645147` awaits Mozilla review. The public
-  listing still serves 1.5.0. Signed standard-Firefox validation remains pending
-  availability of the signed 1.6.0 extension.
+- AMO version `6645147` is public as 1.6.0, file `5189247`. The public API
+  confirms the matching version is available from
+  [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
+  Standard-Firefox upgrade and enterprise-policy validation remain pending;
+  publication alone does not establish those checks passed.
 
 ### Highlights
 
