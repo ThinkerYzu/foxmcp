@@ -2,7 +2,7 @@
 #
 # Fail unless every file that carries the version agrees with the one given.
 #
-# The version is written out by hand in seven places, so a tag can disagree with
+# The version is written out by hand in eight places, so a tag can disagree with
 # the manifest and nothing notices until a user installs the result. The release
 # workflow runs this first and refuses to build when it fails. Run it yourself
 # after bumping, before tagging.
@@ -65,6 +65,10 @@ check server/version.py \
 check scripts/install-from-github.sh \
       "VERSION=\"v$version\"" \
       "^VERSION=\"?v$escaped\"?"
+
+check scripts/install-from-github.ps1 \
+      "VERSION = v$version" \
+      '^\$script:VERSION[[:space:]]*=[[:space:]]*"v'"$escaped"'"'
 
 check README.md \
       "the download URL to point at v$version" \

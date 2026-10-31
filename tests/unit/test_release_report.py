@@ -57,3 +57,18 @@ def test_empty_suite_is_rejected(reports):
     report.write_text('<testsuite/>')
     with pytest.raises(ValueError, match="No tests ran"):
         guard.check_report(report, root)
+
+
+def test_windows_suite_has_its_own_completeness_gate(reports):
+    root, report = reports
+    (root / "windows").mkdir()
+    (root / "windows/test_native.py").touch()
+    report.write_text('<testsuite><testcase classname="windows.test_native"/></testsuite>')
+    guard.check_report(report, root, "windows")
+    (root / "windows/test_install.py").touch()
+    with pytest.raises(ValueError, match="Missing windows.*test_install"):
+        guard.check_report(report, root, "windows")
+    report.write_text('<testsuite><testcase classname="windows.test_native"><skipped/>'
+                      '</testcase></testsuite>')
+    with pytest.raises(ValueError, match="Unsuccessful"):
+        guard.check_report(report, root, "windows")

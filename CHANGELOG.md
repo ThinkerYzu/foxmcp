@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows PowerShell installation and generated startup scripts. CI tests packaged installation and native script/worker execution on Windows with Python 3.10/3.14 and PowerShell 5.1/7. Both PowerShell installers are tracked by release/version checks.
 - Concurrent Firefox profiles and `profiles_list`, exposing real Firefox profile names, windows and tabs to every MCP client. Local metadata lookup supports Windows, macOS and Linux, including XDG; unavailable or ambiguous names remain explicitly unknown.
 
 ### Changed
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows predefined Python scripts use the server interpreter; shell scripts locate Git Bash or the explicit FOXMCP_BASH path. Background workers avoid allocating visible consoles. The HTTP helper reports the direct Python command for MCP stdio clients.
 - Profile names prefer registered launch names over group labels such as Original profile. Linux discovery uses held profile locks to distinguish running profiles from stale copies sharing an extension UUID; uncertain matches remain ambiguous. Metadata is read-only and protocol ID stays 4.
 - Firefox profiles no longer replace each other's connections (#20). Requests, responses and monitor ownership are isolated by connection across HTTP and shared stdio clients. No request falls back to another profile or replays after disconnection.
 - Restored test-profile caches rebase the installed extension path and discard stale addon startup metadata, preventing browser tests from silently starting without the extension.

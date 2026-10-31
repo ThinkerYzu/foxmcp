@@ -63,7 +63,7 @@ def scripts_dir(tmp_path, monkeypatch):
 def write_script(directory, name, body):
     """Create an executable script and return its path"""
     path = directory / name
-    path.write_text(body)
+    path.write_text(body, newline='\n')
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
     return path
 
@@ -118,6 +118,7 @@ class TestRefusalsAreLogged:
         assert 'not found' in caplog.text
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(os.name == 'nt', reason='Windows has no POSIX executable permission bit')
     async def test_non_executable_script_is_logged(self, run_script, scripts_dir, caplog):
         path = scripts_dir / 'inert.sh'
         path.write_text('#!/bin/bash\necho hi\n')

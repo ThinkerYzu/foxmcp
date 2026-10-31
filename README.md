@@ -58,6 +58,36 @@ scripts and a `CLAUDE.md` template, and offers to connect Claude Code.
 For unattended setup, save the installer outside the target directory and run
 `bash /path/to/install-from-github.sh --non-interactive` from an empty directory.
 
+**Windows (PowerShell 5.1 or newer):**\
+Download both installer scripts into a separate folder, then run the installer from an empty installation folder.\
+An empty folder has no installer yet, and the installer needs `install-xpi.ps1` beside it.\
+Keeping both outside the target also satisfies the unattended installer's empty-folder check.
+
+Use separate commands below: PowerShell 5.1 cannot parse `&&`, which was added in PowerShell 7.
+
+```powershell
+New-Item -ItemType Directory foxmcp-installer
+$installerBase = 'https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/scripts'
+Invoke-WebRequest -UseBasicParsing "$installerBase/install-from-github.ps1" -OutFile foxmcp-installer/install-from-github.ps1
+Invoke-WebRequest -UseBasicParsing "$installerBase/install-xpi.ps1" -OutFile foxmcp-installer/install-xpi.ps1
+New-Item -ItemType Directory foxmcp
+Set-Location foxmcp
+& ..\foxmcp-installer\install-from-github.ps1 -NonInteractive
+```
+
+Keep the two scripts together and outside the installation folder. If you already
+have a source checkout, run its `scripts/install-from-github.ps1` by absolute path
+from an empty folder instead. Omit `-NonInteractive` to enable interactive prompts.
+The installer creates `venv/`, installs Python dependencies, creates
+`start-foxmcp.ps1`, installs example scripts, and creates a `CLAUDE.md` template.
+
+Use `start-foxmcp.ps1` for a manually started HTTP server. For MCP stdio,
+configure the client to launch the installed `venv\Scripts\python.exe` with
+`server\server.py --stdio` as arguments, using absolute paths. Set
+`FOXMCP_EXT_SCRIPTS` to the installed `predefined-scripts` directory in the
+client environment to enable the examples. The PowerShell helper reports the
+direct Python command if invoked with `--stdio`.
+
 ### 2. Install the Firefox extension
 
 Open [FoxMCP on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
@@ -80,8 +110,14 @@ uvx --from foxmcp==1.5.0 foxmcp
 
 With the GitHub archive installation, run from your installation directory:
 
+Linux/macOS:
 ```bash
 ./start-foxmcp.sh
+```
+
+Windows (PowerShell):
+```powershell
+.\start-foxmcp.ps1
 ```
 
 Leave it running. Click the FoxMCP toolbar icon in Firefox and check that it shows

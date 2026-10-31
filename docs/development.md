@@ -401,10 +401,11 @@ consistency, not API compatibility.
 
 1. Complete and record the protocol ID compatibility review described above.
 2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
-   `scripts/install-from-github.sh` and the install URL in `README.md`
+   `scripts/install-from-github.sh`, `scripts/install-from-github.ps1` and the
+   install URL in `README.md`
 3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.5.0] - <date>` and add
    the link reference at the bottom
-4. `scripts/check-version.sh 1.5.0` — fails unless all seven files agree
+4. `scripts/check-version.sh 1.5.0` — fails unless all eight files agree
 5. Commit, then tag: `git tag -a v1.5.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
@@ -551,3 +552,26 @@ unreleased forwarding introduced ID 1 and the candidate retains the required
 increase to ID 2. The review covers tab-list metadata/filtering, disconnect
 handling and listener validation. New container lifecycle actions alone do not
 require another bump. Recheck if the release diff changes before tagging.
+
+
+### Windows acceptance CI
+
+CI installs the same archives built by the Linux unit job on Windows, using
+Python 3.10/3.14 and Windows PowerShell 5.1/PowerShell 7. Each job runs
+`tests/windows` and requires all its modules without failures or skips via
+`scripts/check-test-report.py windows.xml --kind windows`. The standard Linux
+unit and browser suites retain their existing no-skip guards. Package validation
+waits for the Windows matrix too.
+
+The Windows suite serves the current archives and examples from loopback,
+installs into an empty path containing spaces, launches the generated wrapper
+from a different directory and verifies HTTP discovery. Stdio discovery uses
+the installed Python interpreter directly; the PowerShell HTTP helper rejects
+`--stdio` promptly with the supported command. It also
+checks Python/Git Bash argument preservation, bundled-script routing and WMI
+worker startup. Firefox helper installation uses a disposable directory; these
+checks do not establish signed installation behavior in a real Firefox browser.
+Reports and installation/startup logs are retained as workflow artifacts.
+
+Both PowerShell installers ship as release assets. Keep their helper acquisition
+instructions aligned with the release download URLs when publishing a version.

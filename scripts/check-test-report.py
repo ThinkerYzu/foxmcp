@@ -31,7 +31,7 @@ def check_report(report, tests_root, kind="all"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path)
-    parser.add_argument("--kind", choices=("all", "unit"), default="all")
+    parser.add_argument("--kind", choices=("all", "unit", "windows"), default="all")
     args = parser.parse_args()
     try:
         check_report(args.report, Path(__file__).resolve().parents[1] / "tests", args.kind)

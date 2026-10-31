@@ -147,6 +147,8 @@ jobs:
             dist/packages/foxmcp-server.zip \
             dist/packages/SHA256SUMS \
             scripts/install-from-github.sh \
+            scripts/install-from-github.ps1 \
+            scripts/install-xpi.ps1 \
             dist/python/packages/* \
             dist/python/PYTHON-SHA256SUMS
 

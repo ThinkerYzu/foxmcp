@@ -24,7 +24,7 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**708 collected**: 498 unit and 210 integration tests. No skips are allowed. The
+**716 collected**: 506 unit and 210 integration tests. No skips are allowed. The
 [CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178)
 passed all 701 tests in one run on 2026-10-29, including the module/no-skip guard.
 Collection changes as tests are added; use the JUnit module guard rather than a
@@ -66,7 +66,7 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 498 | no |
+| `unit/` | 506 | no |
 | `integration/` | 210 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
@@ -507,3 +507,17 @@ Final archive smoke tests exercise all 46 tools over HTTP and stdio, using
 container tabs for navigation, groups, screenshots, request capture and actual
 file upload. Signed AMO upgrade prompts and enterprise policy effects remain a
 manual pre-release check; see [development](../docs/development.md#container-permission-upgrade-check).
+
+
+### Native Windows acceptance checks
+
+`tests/windows/` is collected explicitly by the Windows CI matrix, separately
+from the standard `unit/` and Firefox `integration/` suites. It requires native
+Windows and Git for Windows. Missing prerequisites fail instead of skipping.
+Each Python 3.10/3.14 and PowerShell 5.1/7 combination exercises the current
+packaged installation, HTTP helper and direct Python stdio startup, interpreter arguments,
+bundled scripts with explicit profile routing and the WMI worker. Run it with
+`python -m pytest tests/windows --junitxml=windows.xml`, then validate with
+`python scripts/check-test-report.py windows.xml --kind windows`. Set
+`FOXMCP_TEST_POWERSHELL` to `powershell` or `pwsh`. Include the repository and
+its tests directory in PYTHONPATH, and build/download dist/packages first.

@@ -98,7 +98,12 @@ def spawn_windows_worker(command, log_path):
 $settings = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{
     ShowWindow = [uint16]0
-    CreateFlags = [uint32]0x01000608
+    # CREATE_NO_WINDOW (0x08000000) keeps the virtualenv Python child hidden too.
+    # ShowWindow didn't prevent that child from opening a console.
+    # Replaces DETACHED_PROCESS (0x8): combining it with CREATE_NO_WINDOW disables the latter.
+    # Keep BREAKAWAY_FROM_JOB (0x01000000), NEW_PROCESS_GROUP (0x200), and UNICODE_ENVIRONMENT (0x400)
+    # so worker lifetime and environment stay intact.
+    CreateFlags = [uint32]0x09000600
     EnvironmentVariables = [string[]]$settings.environment
 }
 $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{

@@ -14,6 +14,9 @@ import uuid
 import os
 import re
 import subprocess
+import shutil
+import shlex
+import sys
 import time
 import json
 import base64
@@ -57,6 +60,65 @@ def format_script_args_for_log(args_list):
 
 # Names content_execute_predefined will run; anything else is refused.
 SCRIPT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
+
+
+def predefined_script_command(script_path):
+    """Choose a native Windows interpreter without evaluating a shell command.
+
+    This belongs here because content_execute_predefined launches the scripts.
+    Windows cannot launch .py/.sh files through their shebang like Linux/macOS,
+    so it needs an explicit interpreter. The guard leaves POSIX launches alone.
+    POSIX keeps its executable/shebang behaviour. On Windows, prefer Git's Bash
+    over a bare bash.exe lookup, which can select the WSL launcher instead.
+    """
+    if sys.platform != 'win32':
+        return [script_path]
+    extension = os.path.splitext(script_path)[1].lower()
+    if extension == '.py':
+        # Reuses the server's environment and dependencies
+        return [sys.executable, script_path]
+    if extension != '.sh':
+        return [script_path]
+
+    # Allow a custom Git installation without changing the machine's PATH.
+    override = os.environ.get('FOXMCP_BASH')
+    if override:
+        if not os.path.isabs(override) or not os.path.isfile(override):
+            raise ValueError('FOXMCP_BASH must be the absolute path to Git Bash bash.exe')
+        return [override, '--', script_path.replace('\\', '/')]
+
+    candidates = []
+    git = shutil.which('git')
+    if git:
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(git)), 'bin', 'bash.exe'))
+    for variable, relative in (
+        ('ProgramFiles', 'Git/bin/bash.exe'),
+        ('ProgramFiles(x86)', 'Git/bin/bash.exe'),
+        ('LOCALAPPDATA', 'Programs/Git/bin/bash.exe'),
+    ):
+        root = os.environ.get(variable)
+        if root:
+            candidates.append(os.path.join(root, relative))
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return [candidate, '--', script_path.replace('\\', '/')]
+    raise ValueError(
+        'Shell scripts on Windows require Git Bash. Install Git for Windows '
+        'or set FOXMCP_BASH to the absolute path to its bash.exe, then restart FoxMCP.'
+    )
+
+
+def run_predefined_script(command, args_list):
+    """Run argv with the quoting required by Git Bash's Windows runtime."""
+    argv = command + args_list
+    if sys.platform == 'win32' and len(command) == 3 and command[1] == '--':
+        # MSYS parses POSIX quotes, not Python's default MS C-runtime escaping.
+        # Without this, spaces, quotes, or empty arguments can arrive changed.
+        # Quote argv[0] for the Windows launcher, then each MSYS argument.
+        # shell=False: no command shell evaluates these user-supplied values.
+        argv = f'"{argv[0]}" ' + shlex.join(argv[1:])
+    # Keeps the existing output capture and 30-second timeout on every platform.
+    return subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=30)
 
 # How many lines from the top of a script read_script_header looks at.
 #
@@ -2367,18 +2429,22 @@ class FoxMCPTools:
                     logger.warning(f"Predefined script {script_name!r} refused: script_args is not valid JSON - {e}")
                     return f"Error: Invalid JSON in script_args: {e}"
 
-                # Execute the external script with arguments
+                # Chooses an interpreter only where Windows needs one, after the existing script-name, permission, and argument validation.
+                try:
+                    command = predefined_script_command(script_path)
+                except ValueError as e:
+                    # Gives the MCP caller a setup fix instead a launch error.
+                    logger.warning(f"Predefined script {script_name!r} refused: {e}")
+                    return f"Error: {e}"
+
+                # Executes the external script with arguments.
+                # The helper handles Windows quoting while keeping argument values literal (shell=False).
                 logger.info(
                     f"Running predefined script {script_name!r} in tab {tab_id} "
                     f"with {format_script_args_for_log(args_list)}"
                 )
                 started_at = time.monotonic()
-                result = subprocess.run(
-                    [script_path] + args_list,
-                    capture_output=True,
-                    text=True,
-                    timeout=30  # 30 second timeout
-                )
+                result = run_predefined_script(command, args_list)
                 elapsed = time.monotonic() - started_at
 
                 if result.returncode != 0:

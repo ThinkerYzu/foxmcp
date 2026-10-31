@@ -1,0 +1,3 @@
+# Git for Windows can check out CRLF when `core.autocrlf=true`
+# Extra carriage returns break Bash commands, so keep the bundled shell examples as LF
+/predefined-ex/*.sh text eol=lf

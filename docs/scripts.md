@@ -23,6 +23,21 @@ collection; set it to an empty string to disable scripts. Source startup still
 requires this variable, and the GitHub installer sets it in its startup script.
 Bash must be available to run the shell examples.
 
+On Windows, `.py` scripts run with the same Python interpreter as the FoxMCP server.\
+For `.sh` scripts, install [Git for Windows](https://gitforwindows.org/).
+
+FoxMCP looks for Git Bash beside `git.exe` and in the standard Git installation directories.\
+For a custom location, set the executable path before starting the server:
+
+```powershell
+$env:FOXMCP_BASH = 'C:\Program Files\Git\bin\bash.exe'
+```
+
+Restart FoxMCP after changing its environment.
+The WSL `bash.exe` alias is not used automatically.\
+Save shell scripts with LF line endings; this repository enforces LF for the bundled shell examples.\
+Windows does not need the `chmod` step below.
+
 Set the environment variable to point to your scripts directory:
 ```bash
 export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
