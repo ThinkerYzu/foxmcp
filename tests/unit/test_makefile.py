@@ -37,7 +37,9 @@ def run_make(root, *args, check=True):
         ["make", "--no-print-directory", *args], cwd=root,
         text=True, capture_output=True, timeout=20,
         env={key: value for key, value in os.environ.items()
-             if key not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL")},
+             if key not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES",
+                            "GNUMAKEFLAGS", "MAKEFILES", "VENV_BIN", "VENV_PIP",
+                            "VENV_PYTHON", "VENV_DIR", "PYTHON", "FIREFOX_PATH")},
     )
     if check:
         assert result.returncode == 0, result.stdout + result.stderr
@@ -85,7 +87,13 @@ record('end')
     ("test-unit", ["unit"]), ("test-integration", ["integration"]), ("run-tests", []),
 ])
 @pytest.mark.parametrize("custom", [False, True])
-def test_tests_use_selected_interpreter_and_preserve_firefox_path(checkout, target, mode, custom):
+@pytest.mark.parametrize("inherited", [False, True])
+def test_tests_use_selected_interpreter_and_preserve_firefox_path(
+        checkout, target, mode, custom, inherited, monkeypatch):
+    if inherited:
+        monkeypatch.setenv("VENV_BIN", "/nonexistent-parent-venv/bin")
+        monkeypatch.setenv("VENV_PYTHON", "/nonexistent-parent-venv/bin/python")
+        monkeypatch.setenv("FIREFOX_PATH", "/nonexistent-parent-firefox")
     bin_dir = checkout / ("custom/bin" if custom else "venv/bin")
     executable(bin_dir / "python", """
 import json, os, sys
