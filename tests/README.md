@@ -24,37 +24,33 @@ installs into the wrong interpreter and leaves `make test-unit` failing with
 
 ### Expected result
 
-**734 collected**: 522 unit and 212 integration tests. No skips are allowed.
-Current checks pass all **522 unit tests**, **72 consent-controller assertions**
-and the three focused Firefox consent/settings integrations, without skips.
-The user confirmed the corrected approval popup in their Mozilla profile after
-the history/focus fixes. Native Firefox fixtures also cover popup closure,
-minimal approval controls, Back/Forward and delayed-focus recovery. Native
-Windows CI, older-Firefox presentation and accessibility review remain pending.
+Every test in the selected suite must pass without skips. Test totals change as
+cases are added, removed or parametrized; a fixed count is not a completeness
+gate. CI validates the JUnit report with `scripts/check-test-report.py`, which
+rejects failed/skipped tests and missing required modules.
 
-Earlier timeout-simplification validation passed ten focused integrations,
-all 46 archived tools over HTTP/stdio (including exact upload bytes/events) and
-wheel/sdist installations on Python 3.10/3.14. The historical 740-case full run
-predates transport simplification; the full 734-case suite was not rerun after
-the final UI fixes.
+To inspect current collection without running test bodies, use the project venv
+from the repository root:
 
-The earlier diagram-aligned refactor passed all 727 tests in one local run
-(982 seconds), including the module/no-skip guard. Final ZIP/XPI installation
-checks exercised all 46 tools over HTTP and stdio and verified exact upload
-bytes/events. Wheel and source-distribution installs passed on Python 3.10 and
-3.14. Native Windows CI for that refactor subsequently passed all four
-combinations; the consent change needs its own Windows CI validation.
+```bash
+venv/bin/python -m pytest --collect-only -q tests/unit tests/integration
+```
 
-The previous released v1.6.0 tree passed 716 tests without skips and four native
-Windows combinations. Earlier profile-ID integration passed 701 tests in the
-[2026-10-29 CI full-suite job](https://github.com/ThinkerYzu/foxmcp/actions/runs/40831795503/job/123307464178).
-These are historical baselines, separate from the current local result.
-Collection changes as tests are added; use the JUnit module guard rather than a
-fixed count as the completeness gate.
+To apply the same completeness check locally, run from the repository root:
 
-A run that finishes in about seventy seconds instead of several minutes is a warning,
-not good news: it means the Firefox integration tests skipped themselves. Check
-that Firefox can be found (see [Finding Firefox](#finding-firefox)).
+```bash
+PYTEST_ADDOPTS="--junitxml=$PWD/tests/junit.xml" \
+  FIREFOX_PATH=/path/to/firefox make test
+venv/bin/python scripts/check-test-report.py tests/junit.xml
+```
+
+`make test` alone does not run the report guard. For a unit-only report, use
+`make test-unit` and pass `--kind unit` to the guard. A fast run or a successful
+pytest exit alone does not establish that browser tests ran; inspect skips and
+validate the report. See [Finding Firefox](#finding-firefox).
+
+Keep commit-specific counts, durations and validation results in CI reports or
+dated validation records. This guide describes how to test the current checkout.
 
 #### Startup composition coverage
 
@@ -79,22 +75,17 @@ forced broker-attachment delay with successful exit, explicit SystemExit(7),
 and an unhandled startup exception (exit 1), plus a real worker heartbeat after
 broker termination. Startup-exception checks also require its traceback in the
 worker log. Broker exit-code assertions include that log in failure output.
-Native Windows CI runs all ten Windows cases across Python 3.10/3.14 and
+Native Windows CI runs the Windows suite across Python 3.10/3.14 and
 PowerShell 5.1/7.
 
 ### Discovery shutdown regression
 
 `unit/test_single_instance_election.py` uses a real loopback HTTP server to
 reset an accepted discovery connection, then return valid metadata on the next
-probe. This covers the `httpx.ReadError` reported during shared-worker teardown
-in [CI run 41274592645](https://github.com/ThinkerYzu/foxmcp/actions/runs/41274592645).
+probe. This covers network resets during shared-worker teardown.
 The probe treats network transport failures as temporary unavailability while
 continuing to reject completed incompatible responses. Existing shared-instance
 and container lifecycle integration tests cover normal worker shutdown/restart.
-The repair passed all 523 unit tests and all 12 tests in those two integration
-modules locally (535 total, no skips, Firefox Developer Edition 159.0b1).
-This focused result is separate from the full CI run, whose 734 test bodies
-passed before teardown failed; corrected-source CI has not yet run.
 
 ## Source-installation smoke checks
 
@@ -107,10 +98,12 @@ schemas when changing the API; they are outside the pytest module guard.
 
 ### Firefox path
 
-Tests find Firefox on `PATH` automatically. Override it when you want a specific build:
+Use Firefox Developer Edition for the unsigned test extension. Release and Beta
+enforce signing and cannot load it. Tests find Firefox on `PATH` automatically;
+set `FIREFOX_PATH` when Developer Edition is installed elsewhere:
 
 ```bash
-FIREFOX_PATH=/home/you/tools/firefox make test-integration
+FIREFOX_PATH=/path/to/firefox-developer-edition/firefox make test-integration
 ```
 
 ## What Gets Run
@@ -119,79 +112,79 @@ FIREFOX_PATH=/home/you/tools/firefox make test-integration
 directly in `tests/` are standalone scripts — helpers and manual end-to-end drivers —
 and are **not** part of the normal suite. Run them by hand if you need them.
 
-| Directory | Tests | Needs Firefox |
+| Directory | Collection | Needs Firefox |
 |---|---|---|
-| `unit/` | 528 | no |
-| `integration/` | 212 | yes |
-| `tests/*.py` (root) | not collected | varies |
+| `unit/` | Normal suite | no |
+| `integration/` | Normal suite | Some modules |
+| `windows/` | Separate native Windows suite | no |
+| `tests/*.py` (root) | Standalone drivers, not collected by the runner | varies |
 
 ### Unit tests
 
 Selected test modules, including local-file coverage:
 
-| File | Tests | Covers |
-|---|---|---|
-| `test_github_installer.py` | 9 | Real HTTP download failures, checksums, corrupt archives and installed upload example |
-| `test_release_report.py` | 6 | Missing integration modules, multiple JUnit suites, skipped/failed tests and empty reports |
-| `test_file_transfer.py` | 18 | Streaming integrity, MIME, regular-file validation, single-use grants, expiry, revocation, capacity, shutdown and content-group registration |
-| `test_tab_move.py` | 27 | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
-| `test_protocol.py` | 14 | Message structure, JSON serialization, error codes |
-| `test_window_handlers.py` | 17 | Window action handlers |
-| `test_predefined_script_logging.py` | 16 | Predefined script audit/validation and raw/predefined script response timeouts |
-| `test_request_monitoring.py` | 11 | Web request capture logic |
-| `test_ping_pong.py` | 8 | Ping-pong protocol |
-| `test_connection_versions.py` | 10 | Version parsing and advisory diagnostics; per-profile connection tests are in `test_server.py` |
-| `test_server.py` | 29 | Server-assigned integer IDs, handshake validation, routing isolation, reconnect invalidation and monitor ownership |
-| `test_server_composition.py` | 9 | Startup role isolation, direct/remote injection, file-service ownership, HTTP monitor liveness and tool-name validation |
-| `test_screenshot_filename.py` | 14 | Screenshot filename generation |
-| `test_profile_names.py` | 17 | Registered/group name precedence, real Linux profile locks, stale copies and unavailable/ambiguous metadata |
+| File | Covers |
+|---|---|
+| `test_github_installer.py` | Real HTTP download failures, checksums, corrupt archives and installed upload example |
+| `test_release_report.py` | Missing integration modules, multiple JUnit suites, skipped/failed tests and empty reports |
+| `test_file_transfer.py` | Streaming integrity, MIME, regular-file validation, single-use grants, expiry, revocation, capacity, shutdown and content-group registration |
+| `test_tab_move.py` | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
+| `test_protocol.py` | Message structure, JSON serialization, error codes |
+| `test_window_handlers.py` | Window action handlers |
+| `test_predefined_script_logging.py` | Predefined script audit/validation and raw/predefined script response timeouts |
+| `test_request_monitoring.py` | Web request capture logic |
+| `test_ping_pong.py` | Ping-pong protocol |
+| `test_connection_versions.py` | Version parsing and advisory diagnostics; per-profile connection tests are in `test_server.py` |
+| `test_server.py` | Server-assigned integer IDs, handshake validation, routing isolation, reconnect invalidation and monitor ownership |
+| `test_server_composition.py` | Startup role isolation, direct/remote injection, file-service ownership, HTTP monitor liveness and tool-name validation |
+| `test_screenshot_filename.py` | Screenshot filename generation |
+| `test_profile_names.py` | Registered/group name precedence, real Linux profile locks, stale copies and unavailable/ambiguous metadata |
 
 ### Integration tests
 
 Selected test modules:
 
-| File | Tests | Covers |
-|---|---|---|
-| `test_browser_connection_versions.py` | 1 | Real Firefox hello plus actual background/popup scripts: protocol-3 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
-| `test_script_consent.py` | 2 | Actual consent-controller source, queue/deadline/target behavior and real-extension policy isolation |
-| `test_extension_settings.py` | 1 | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers, profile registration/errors and live status |
-| `test_file_loading.py` | 3 | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
-| `test_window_management.py` | 12 | Window creation, focus switching, cross-window tabs |
-| `test_history_management.py` | 10 | History query, recent, time ranges, concurrency |
-| `test_mcp_integration.py` | 10 | FastMCP tool init and call handling |
-| `test_mcp_protocol_compliance.py` | 10 | Tool schemas, parameter formats, HTTP endpoint |
-| `test_ping_pong_integration.py` | 10 | Bidirectional ping-pong over a live socket |
-| `test_bookmark_management.py` | 10 | Bookmark CRUD and folders |
-| `test_real_websocket_communication.py` | 8 | Protocol formats, timeouts, multi-client |
-| `test_test_helper_protocol.py` | 8 | The `test.*` action namespace |
-| `test_live_server_communication.py` | 7 | Real server startup, shutdown, recovery |
-| `test_websocket_communication.py` | 7 | Connection state and message routing |
-| `test_firefox_extension_communication.py` | 8 | Real Firefox with the extension installed |
-| `test_history_with_content.py` | 6 | History entries alongside page content |
-| `test_mcp_server_integration.py` | 6 | Dual-port startup, MCP client connections |
-| `test_request_monitoring_integration.py` | 10 | Request capture through the MCP layer |
-| `test_ui_storage_sync.py` | 6 | Legacy storage/effective-config projections retained for protocol compatibility |
-| `test_browser_functionality.py` | 6 | Tabs, script execution, reload, content, screenshots |
-| `test_connection_origin.py` | 5 | The origin allowlist on the extension WebSocket |
-| `test_mcp_port_not_web_reachable.py` | 5 | That no web page can reach the MCP port — see [Dependency-held guarantees](#dependency-held-guarantees) |
-| `test_real_firefox_communication.py` | 5 | Extension-server message exchange in a real browser |
-| `test_request_monitoring_end_to_end.py` | 8 | Capture and read response bodies, including ten tiny local JSON responses that expose header/filter ordering races |
-| `test_tab_move_end_to_end.py` | 4 | Gathering tabs into a new window, and reordering within one |
-| `test_history_mcp_integration.py` | 4 | History through the MCP tool surface |
-| `test_multiple_profiles.py` | 2 | Explicit routing, profile isolation, reconnect/restart and concurrent HTTP/stdio clients |
+| File | Covers |
+|---|---|
+| `test_browser_connection_versions.py` | Real Firefox hello plus actual background/popup scripts: protocol-3 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
+| `test_script_consent.py` | Actual consent-controller source, queue/deadline/target behavior and real-extension policy isolation |
+| `test_extension_settings.py` | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers, profile registration/errors and live status |
+| `test_file_loading.py` | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
+| `test_window_management.py` | Window creation, focus switching, cross-window tabs |
+| `test_history_management.py` | History query, recent, time ranges, concurrency |
+| `test_mcp_integration.py` | FastMCP tool init and call handling |
+| `test_mcp_protocol_compliance.py` | Tool schemas, parameter formats, HTTP endpoint |
+| `test_ping_pong_integration.py` | Bidirectional ping-pong over a live socket |
+| `test_bookmark_management.py` | Bookmark CRUD and folders |
+| `test_real_websocket_communication.py` | Protocol formats, timeouts, multi-client |
+| `test_test_helper_protocol.py` | The `test.*` action namespace |
+| `test_live_server_communication.py` | Real server startup, shutdown, recovery |
+| `test_websocket_communication.py` | Connection state and message routing |
+| `test_firefox_extension_communication.py` | Real Firefox with the extension installed |
+| `test_history_with_content.py` | History entries alongside page content |
+| `test_mcp_server_integration.py` | Dual-port startup, MCP client connections |
+| `test_request_monitoring_integration.py` | Request capture through the MCP layer |
+| `test_ui_storage_sync.py` | Legacy storage/effective-config projections retained for protocol compatibility |
+| `test_browser_functionality.py` | Tabs, script execution, reload, content, screenshots |
+| `test_connection_origin.py` | The origin allowlist on the extension WebSocket |
+| `test_mcp_port_not_web_reachable.py` | That no web page can reach the MCP port — see [Dependency-held guarantees](#dependency-held-guarantees) |
+| `test_real_firefox_communication.py` | Extension-server message exchange in a real browser |
+| `test_request_monitoring_end_to_end.py` | Capture and read response bodies, including ten tiny local JSON responses that expose header/filter ordering races |
+| `test_tab_move_end_to_end.py` | Gathering tabs into a new window, and reordering within one |
+| `test_history_mcp_integration.py` | History through the MCP tool surface |
+| `test_multiple_profiles.py` | Explicit routing, profile isolation, reconnect/restart and concurrent HTTP/stdio clients |
 
 ## Multiple-profile coverage
 
 [integration/test_multiple_profiles.py](integration/test_multiple_profiles.py)
-contains two complementary acceptance tests:
+covers complementary browser and transport scenarios:
 
 | Test | Browser side | Call path | Checks |
 |---|---|---|---|
 | `test_two_real_firefox_profiles_reconnect_and_restart_independently` | Two real Firefox processes with disposable profiles | Calls registered tool functions directly; MCP HTTP is disabled for this test | Profile discovery/name resolution, separate tab creation/listing, reconnect and independent restart each replacing identity and rejection of the old target. The other profile stays registered. |
 | `test_profiles_are_visible_and_routable_from_http_and_shared_stdio` | Two simulated extension responders on real WebSockets | Actual FastMCP HTTP and shared-stdio clients | Discovery, concurrent routing despite identical native IDs, upload delivery to the correct profile, pending-request failure on disconnect, surviving-profile access and client-owned monitor cleanup. |
 
-Both run in the normal integration suite and passed in the 701-test validation
-of server-owned profile IDs. This is not a single test combining two real
+Both run in the normal integration suite. Neither combines two real
 Firefox profiles with both MCP transports. The final-package smoke check below
 uses one disposable Firefox profile per transport to exercise every tool.
 
@@ -275,13 +268,6 @@ filename, inferred MIME type, an exact SHA-256 match and a page change event.
 Inspect the transcript for input assignment, handle release and the final page
 readout. It uses isolated test ports 31086/31087; run one evaluation at a time.
 
-On 2026-10-18, both agents completed the task with the shortened schema without
-coaching or failed tool calls: Codex used seven calls and Claude six. Each agent
-retrieved the File, assigned it using DataTransfer and cloneInto, dispatched
-input/change, released the handle, submitted and read the success message.
-These individual trials establish usability for the test task, not a general
-success rate.
-
 ## Test Import System
 
 Test files never manipulate `sys.path`. Importing `test_imports` first does it:
@@ -334,20 +320,35 @@ async def test_browser_feature(server_with_extension):
     assert response["type"] == "response"
 ```
 
-The dict also carries `firefox`, `test_port`, and `mcp_port`.
+The fixture is a `FixtureResult` object with keyed access to `server`, `firefox`,
+`test_port` and `mcp_port`. It is not a dictionary and cannot be unpacked with
+`**`.
 
 ### Adding an MCP client
 
-`server_with_extension` gives you the server, not an MCP client. Wrap it:
+`server_with_extension` gives you the server, not an MCP client. The direct
+harness calls registered tool functions without exercising MCP transport. For
+HTTP/stdio transport coverage, use real FastMCP clients as shown in
+[integration/test_multiple_profiles.py](integration/test_multiple_profiles.py).
+For direct tool checks, wrap the fixture explicitly:
 
 ```python
+import test_imports
+import pytest
+import pytest_asyncio
+
 @pytest_asyncio.fixture
 async def full_system(server_with_extension):
     from mcp_client_harness import DirectMCPTestClient
 
     mcp_client = DirectMCPTestClient(server_with_extension['server'].mcp_tools)
-    yield {**server_with_extension, 'mcp_client': mcp_client}
-    await mcp_client.disconnect()
+    try:
+        yield {
+            'server': server_with_extension['server'],
+            'mcp_client': mcp_client,
+        }
+    finally:
+        await mcp_client.disconnect()
 
 @pytest.mark.asyncio
 async def test_mcp_feature(full_system):
@@ -420,9 +421,8 @@ afterwards.
 `resolve_firefox_path()` in `firefox_test_utils.py` takes an explicit path, then
 `$FIREFOX_PATH`, then falls back to `shutil.which()`. That last step matters:
 `os.path.exists("firefox")` is false for a bare command name because it never
-consults `PATH`. Checking only `os.path.exists()` silently skipped 59 integration
-tests on a machine where Firefox was installed — and a skip reads as a pass on the
-summary line.
+consults `PATH`. A failed lookup can skip browser tests; use the report guard
+to reject incomplete runs.
 
 ### Waiting for the connection
 
@@ -495,7 +495,8 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
   tests must not depend on someone else's uptime.
 - **`ENABLE_DEBUG_LOGGING_TO_SERVER` goes back to `false`** in `extension/background.js`
   before committing.
-- **Run the suite before committing.** All 496 must pass.
+- **Run the suite before committing.** All selected tests must pass without
+  skips, and the report guard must confirm every required module ran.
 - **Open sockets with `connect_as_extension()`**, from `test_config.py` — never
   `websockets.connect()` directly. The server accepts only `moz-extension://` origins,
   so a plain connect is refused with a 403, and the failure reads like a server problem
@@ -503,19 +504,26 @@ visits.** The fix is a deliberate CORS policy, not a relaxed assertion.
 
 ## Coverage
 
+Run from the repository root using the normal suite and project interpreter:
+
 ```bash
-cd tests && pytest --cov=../server --cov-report=html --cov-report=term-missing
+FIREFOX_PATH=/path/to/firefox make test
 ```
 
-Reports land in `tests/htmlcov/`. The integrated tree merged as `01d7ecd`
-measured 78% source coverage; the existing above-80% target remains unmet.
+The runner selects `unit/` and `integration/` explicitly and produces terminal
+coverage details plus an HTML report in `tests/htmlcov/`. Default bare-pytest
+discovery also collects standalone drivers and native Windows tests, so it is
+not equivalent to the normal suite.
+
+Coverage above 80% is the project target. Inspect the report for the current
+checkout and add meaningful coverage for changed behavior.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `No module named pytest` | Installed into the wrong interpreter | `venv/bin/pip install -r tests/requirements.txt` |
-| Whole suite finishes in ~70 s | Integration tests skipped themselves | Check Firefox resolution; a full run is ~10 minutes |
+| Browser tests are skipped | Firefox unavailable or unusable | Check Developer Edition and `FIREFOX_PATH`; validate the JUnit report |
 | `SKIPPED ... Firefox not found` | Firefox not on `PATH` | `FIREFOX_PATH=/path/to/firefox make test` |
 | `AttributeError: ... 'get_tools'` | Removed in fastmcp 3.x | Use `list_tools()` / `get_tool()` |
 | `AttributeError: ... '_tool_manager'` | Private attribute, gone in 3.x | Use `get_tool()` |
@@ -533,7 +541,7 @@ Twine validates the metadata and README.
 The `python-install` matrix installs both artifacts in fresh environments on
 Python 3.10 and 3.14, copies `python_package_smoke.py` outside the checkout, and
 runs it there with the installed Python and expected version as its sole argument.
-It checks help, invalid options, occupied-port exit codes, all 46 tools over HTTP
+It checks help, invalid options, occupied-port exit codes, all advertised tools over HTTP
 and stdio, version announcements, request/response bridging, executable bundled examples, a custom script
 directory, and an explicit empty override. A simulated extension answers requests;
 this check covers packaging and startup. The Firefox suite and ZIP/XPI smoke test
@@ -559,7 +567,7 @@ restart. Complete background JavaScript is also executed with controlled browser
 APIs for absent/disabled containers, private-window refusal and post-creation
 store mismatch. Those failure simulations do not modify browser preferences.
 
-Final archive smoke tests exercise all 46 tools over HTTP and stdio, using
+Final archive smoke tests exercise all advertised tools over HTTP and stdio, using
 container tabs for navigation, groups, screenshots, request capture and actual
 file upload. Signed AMO upgrade prompts and enterprise policy effects remain a
 manual pre-release check; see [development](../docs/development.md#container-permission-upgrade-check).

@@ -115,9 +115,9 @@ twenty minutes. CI also checks that every required test module ran successfully
 and no tests were skipped; see the
 [test report requirements](docs/development.md#continuous-integration).
 
-Coverage above 80% is a project target, currently unmet in the
-[recorded baseline](tests/README.md#coverage). Add meaningful coverage for your
-change.
+Coverage above 80% is a project target. See the
+[coverage instructions](tests/README.md#coverage) to measure the current checkout
+and add meaningful coverage for your change.
 
 ## Protocol Compatibility
 
