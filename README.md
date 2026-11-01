@@ -30,6 +30,41 @@ and refresh your client's tool schemas. Call `profiles_list` and pass its intege
 `profile_id` to every browser tool, even with one profile connected. Rediscover
 targets after reconnection. See [release notes](RELEASES.md#v160---multiple-profiles-and-windows-installation-2026-10-30).
 
+## FoxMCP or firefox-devtools-mcp?
+
+Both let an AI agent use Firefox. They suit different jobs.
+
+**Use FoxMCP to work in your own browser.** It is an extension in the Firefox
+you already run, so the agent sees your open tabs, logged-in sites, bookmarks,
+history, and containers. Nothing needs a restart, and several agents can share
+the same Firefox.
+
+**Use [firefox-devtools-mcp](https://github.com/mozilla/firefox-devtools-mcp)
+to test or debug a web page.** It starts its own Firefox, so the browser is
+clean and disposable. It offers console, network, debugger, and profiler tools,
+and it works with Firefox for Android.
+
+| | FoxMCP | firefox-devtools-mcp |
+|---|---|---|
+| Browser | The Firefox you already use | Its own instance, started for the agent |
+| Logins and cookies | Yours | Only what its own profile holds |
+| Several agents at once | Yes, in one Firefox | One at a time per Firefox |
+| Setup | Add the extension, then `uvx foxmcp --stdio` | `npx @mozilla/firefox-devtools-mcp` |
+| Best at | Tabs, windows, bookmarks, history, containers, several profiles | Console, network, debugger, profiler, Android |
+
+firefox-devtools-mcp can also attach to a Firefox that is already running
+(`--connect-existing`), but only one started with special remote-control flags.
+Plain Firefox needs a restart, or a second profile, first.
+
+**Sharing Firefox between agents.** Start each client with
+`uvx foxmcp --stdio --single-instance` so they share one connection. FoxMCP
+does not lock tabs, so give each agent its own window to keep them from
+stepping on each other.
+
+**Mind the access.** In your real session, a connected AI client can reach
+whatever you can. Use a trusted client, consider a dedicated Firefox profile,
+and read [SECURITY.md](SECURITY.md).
+
 ## Quick start
 
 You need Firefox, an MCP client, and
