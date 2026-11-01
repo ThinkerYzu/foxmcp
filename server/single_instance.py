@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 
@@ -86,51 +87,90 @@ def spawn_windows_worker(command, log_path):
     A small PowerShell broker waits for its exit so discovery can still detect
     startup failures. Killing that broker does not kill the shared worker.
     """
-    bootstrap = (
-        "import os,runpy,sys; "
-        "sys.stdin=open(os.devnull); sys.stdout=open(os.devnull,'w'); "
-        "sys.stderr=open(sys.argv[1],'a',encoding='utf-8'); "
-        "sys.argv=sys.argv[2:]; sys.path.insert(0,os.path.dirname(sys.argv[0])); "
-        "runpy.run_path(sys.argv[0],run_name='__main__')"
-    )
+    # WMI can return after a short-lived worker has already exited. Record the
+    # result in the worker, rather than requiring its PID to remain queryable.
+    status_fd, status_path = tempfile.mkstemp(
+        prefix="foxmcp-worker-", suffix=".exit", dir=Path(log_path).parent)
+    os.close(status_fd)
+    bootstrap = """import ctypes, os, runpy, sys
+sys.stdin = open(os.devnull)
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(sys.argv[1], 'a', encoding='utf-8')
+status_path = sys.argv[2]
+sys.argv = sys.argv[3:]
+sys.path.insert(0, os.path.dirname(sys.argv[0]))
+exit_code = 0
+try:
+    runpy.run_path(sys.argv[0], run_name='__main__')
+except BaseException as error:
+    code = error.code if isinstance(error, SystemExit) else 1
+    exit_code = 0 if code is None else int(code) if isinstance(code, int) else 1
+    raise
+finally:
+    with open(status_path, 'w', encoding='ascii') as status:
+        status.write(str(ctypes.c_int32(exit_code).value))
+"""
     payload = {
         "command": subprocess.list2cmdline(
-            [command[0], "-c", bootstrap, str(log_path), *command[1:]]),
+            [command[0], "-c", bootstrap, str(log_path), status_path, *command[1:]]),
         "cwd": os.getcwd(),
         "environment": [f"{name}={value}" for name, value in os.environ.items()],
+        "exit_status_path": status_path,
     }
     # Data goes over stdin, never interpolated into PowerShell or exposed in its
     # command line. Preserve the caller's environment, including script settings.
     script = r"""$ErrorActionPreference = 'Stop'
 $settings = [Console]::In.ReadToEnd() | ConvertFrom-Json
-$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{
-    ShowWindow = [uint16]0
-    # CREATE_NO_WINDOW (0x08000000) keeps the virtualenv Python child hidden too.
-    # ShowWindow didn't prevent that child from opening a console.
-    # Replaces DETACHED_PROCESS (0x8): combining it with CREATE_NO_WINDOW disables the latter.
-    # Keep BREAKAWAY_FROM_JOB (0x01000000), NEW_PROCESS_GROUP (0x200), and UNICODE_ENVIRONMENT (0x400)
-    # so worker lifetime and environment stay intact.
-    CreateFlags = [uint32]0x09000600
-    EnvironmentVariables = [string[]]$settings.environment
+try {
+    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{
+        ShowWindow = [uint16]0
+        # CREATE_NO_WINDOW (0x08000000) keeps the virtualenv Python child hidden too.
+        # ShowWindow didn't prevent that child from opening a console.
+        # Replaces DETACHED_PROCESS (0x8): combining it with CREATE_NO_WINDOW disables the latter.
+        # Keep BREAKAWAY_FROM_JOB (0x01000000), NEW_PROCESS_GROUP (0x200), and
+        # UNICODE_ENVIRONMENT (0x400) so worker lifetime and environment stay intact.
+        CreateFlags = [uint32]0x09000600
+        EnvironmentVariables = [string[]]$settings.environment
+    }
+    $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+        CommandLine = [string]$settings.command
+        CurrentDirectory = [string]$settings.cwd
+        ProcessStartupInformation = $startup
+    }
+    if ($created.ReturnValue -ne 0) {
+        throw "Cannot start shared FoxMCP server: WMI error $($created.ReturnValue)"
+    }
+    if ((Get-Item -LiteralPath $settings.exit_status_path).Length -eq 0) {
+        try {
+            $worker = [Diagnostics.Process]::GetProcessById($created.ProcessId)
+            $worker.WaitForExit()
+        } catch {
+            # A worker can finish before WMI returns, or before WaitForExit opens
+            # its handle. Only accept that race if it recorded an actual result.
+            if ((Get-Item -LiteralPath $settings.exit_status_path).Length -eq 0) {
+                throw
+            }
+        }
+    }
+    $exitCode = [IO.File]::ReadAllText($settings.exit_status_path)
+    if ([string]::IsNullOrWhiteSpace($exitCode)) {
+        throw "Shared FoxMCP worker exited without recording its exit status"
+    }
+    exit ([int]::Parse($exitCode))
+} finally {
+    Remove-Item -LiteralPath $settings.exit_status_path -Force -ErrorAction SilentlyContinue
 }
-$created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine = [string]$settings.command
-    CurrentDirectory = [string]$settings.cwd
-    ProcessStartupInformation = $startup
-}
-if ($created.ReturnValue -ne 0) {
-    throw "Cannot start shared FoxMCP server: WMI error $($created.ReturnValue)"
-}
-$worker = [Diagnostics.Process]::GetProcessById($created.ProcessId)
-$worker.WaitForExit()
-exit $worker.ExitCode
 """
-    with open(log_path, "ab") as log:
-        broker = subprocess.Popen(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log,
-            creationflags=subprocess.CREATE_NO_WINDOW, close_fds=True,
-        )
+    try:
+        with open(log_path, "ab") as log:
+            broker = subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log,
+                creationflags=subprocess.CREATE_NO_WINDOW, close_fds=True,
+            )
+    except BaseException:
+        Path(status_path).unlink(missing_ok=True)
+        raise
     try:
         broker.stdin.write(json.dumps(payload).encode("ascii"))
     finally:

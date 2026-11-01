@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve Windows shared-worker exit codes when a short-lived process exits
+  before the PowerShell broker can query its PID. Successful exits no longer
+  become startup errors, and nonzero exits remain failures.
 - Treat interrupted shared-server discovery reads and other network failures as
   temporary unavailability, allowing startup to recover when an owner closes an
   accepted connection during shutdown. Keep rejecting incompatible discovery

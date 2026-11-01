@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -44,4 +45,35 @@ def test_worker_is_hidden_and_preserves_environment(tmp_path, monkeypatch):
     finally:
         stop.touch()
         broker.wait(timeout=20)
-    assert broker.returncode == 0
+    assert broker.returncode == 0, log.read_text()
+
+
+@pytest.mark.parametrize(('statement', 'exit_code'), [
+    ('pass', 0),
+    ('raise SystemExit(7)', 7),
+    ('raise RuntimeError("worker startup failed")', 1),
+])
+def test_worker_exit_before_pid_lookup(tmp_path, monkeypatch, statement, exit_code):
+    probe = tmp_path / 'short lived worker.py'
+    probe.write_text(statement + '\n', encoding='utf-8')
+    log = tmp_path / 'worker.log'
+    real_popen = subprocess.Popen
+
+    def wait_before_lookup(args, **kwargs):
+        args = list(args)
+        index = args.index('-Command') + 1
+        lookup = '$worker = [Diagnostics.Process]::GetProcessById($created.ProcessId)'
+        assert args[index].count(lookup) == 1
+        # Force the CI race: the real child has exited before the broker can
+        # obtain its Process object, without relying on a timing-sensitive sleep.
+        args[index] = args[index].replace(
+            lookup,
+            'Wait-Process -Id $created.ProcessId -ErrorAction SilentlyContinue\n' + lookup,
+        )
+        return real_popen(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, 'Popen', wait_before_lookup)
+    broker = spawn_windows_worker([sys.executable, str(probe)], log)
+    broker.wait(timeout=30)
+    assert broker.returncode == exit_code, log.read_text()
+    assert not list(tmp_path.glob('foxmcp-worker-*.exit'))

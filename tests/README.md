@@ -566,6 +566,10 @@ bundled scripts with explicit profile routing and the WMI worker. Run it with
 `FOXMCP_TEST_POWERSHELL` to `powershell` or `pwsh`. Include the repository and
 its tests directory in PYTHONPATH, and build/download dist/packages first.
 
+The worker regression forces the child to exit before the broker looks up its
+PID. It checks successful exit, a nonzero `SystemExit`, and an unhandled startup
+exception, including cleanup of the temporary exit-status file.
+
 
 ### Script consent coverage
 

@@ -322,7 +322,11 @@ client launch can start a replacement. Browser commands are never replayed.
 On Windows, the local WMI provider starts the worker outside the client's Job
 Object. A hidden PowerShell broker passes the environment over stdin and waits
 for the worker's exit. This prevents SDK process-tree cleanup from terminating
-the shared worker. See [configuration](configuration.md#sharing-one-server-across-chats).
+the shared worker. The worker records its exit status in a temporary file before
+terminating, so the broker can recover the result even if the process exits
+before its PID can be queried. The broker removes this file after collecting the
+result; it is not used for discovery or owner election. See
+[configuration](configuration.md#sharing-one-server-across-chats).
 
 ## Data Flow
 
