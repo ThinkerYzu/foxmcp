@@ -44,7 +44,7 @@ def test_worker_is_hidden_and_preserves_environment(tmp_path, monkeypatch):
     finally:
         stop.touch()
         broker.wait(timeout=20)
-    assert broker.returncode == 0
+    assert broker.returncode == 0, log.read_text()
 
 
 @pytest.fixture
@@ -64,17 +64,24 @@ def delayed_attachment(monkeypatch):
     monkeypatch.setattr(single_instance.subprocess, 'Popen', delayed)
 
 
-@pytest.mark.parametrize('exit_code', [0, 7])
-def test_delayed_broker_preserves_immediate_worker_exit(tmp_path, delayed_attachment, exit_code):
+@pytest.mark.parametrize(('statement', 'exit_code'), [
+    pytest.param('pass', 0, id='success'),
+    pytest.param('raise SystemExit(7)', 7, id='system-exit'),
+    pytest.param('raise RuntimeError("worker startup failed")', 1, id='startup-exception'),
+])
+def test_delayed_broker_preserves_immediate_worker_exit(
+        tmp_path, delayed_attachment, statement, exit_code):
     probe = tmp_path / 'quick worker.py'
     log = tmp_path / 'worker.log'
     probe.write_text(
         'import sys\nprint("quick worker ran", file=sys.stderr, flush=True)\n'
-        f'raise SystemExit({exit_code})\n', encoding='utf-8')
+        + statement + '\n', encoding='utf-8')
     broker = spawn_windows_worker([sys.executable, str(probe)], log)
     assert broker.wait(timeout=30) == exit_code, log.read_text()
     assert 'quick worker ran' in log.read_text()
     assert 'GetProcessById' not in log.read_text()
+    if exit_code == 1:
+        assert 'RuntimeError: worker startup failed' in log.read_text()
 
 
 def test_worker_survives_broker_termination(tmp_path):

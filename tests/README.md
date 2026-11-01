@@ -75,12 +75,12 @@ continue to verify routing, uploads and cleanup across process boundaries.
 Win32 API results to verify gating, timeout/failure cleanup, argument forwarding
 and nonzero script exits. These portable checks do not prove native WMI behavior.
 `windows/test_worker.py` retains the hidden-console/environment check and adds
-forced broker-attachment delay with immediate exits 0/7, plus a real worker
-heartbeat after broker termination. Native Windows CI runs these checks across
-Python 3.10/3.14 and PowerShell 5.1/7. Local validation passed all 528 unit tests and eight shared-server integration
-tests (536 total, zero skips); the exact broker script also parses with
-PowerShell 7.6.9 on Linux. Nine native Windows cases collect successfully, but
-native validation of this repair is pending.
+forced broker-attachment delay with successful exit, explicit SystemExit(7),
+and an unhandled startup exception (exit 1), plus a real worker heartbeat after
+broker termination. Startup-exception checks also require its traceback in the
+worker log. Broker exit-code assertions include that log in failure output.
+Native Windows CI runs all ten Windows cases across Python 3.10/3.14 and
+PowerShell 5.1/7.
 
 ### Discovery shutdown regression
 
