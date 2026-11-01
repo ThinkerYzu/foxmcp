@@ -24,7 +24,7 @@ unless you ask otherwise.
 | Version | Supported |
 |---|---|
 | `master` | Yes — this is where fixes land first |
-| v1.1.0 (current release) | Yes |
+| [Latest release](https://github.com/ThinkerYzu/foxmcp/releases/latest) | Yes |
 | Earlier releases | No |
 
 `master` is continuously deployed for the maintainer's own use, so it is generally the

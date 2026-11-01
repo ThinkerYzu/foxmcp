@@ -69,6 +69,19 @@ without constructing FastMCP, and accepts every registered tool name.
 The real-process proxy, shared-stdio, multiple-profile and final-package checks
 continue to verify routing, uploads and cleanup across process boundaries.
 
+### Windows broker attachment regression
+
+`unit/test_windows_worker_bootstrap.py` runs the actual bootstrap with controlled
+Win32 API results to verify gating, timeout/failure cleanup, argument forwarding
+and nonzero script exits. These portable checks do not prove native WMI behavior.
+`windows/test_worker.py` retains the hidden-console/environment check and adds
+forced broker-attachment delay with successful exit, explicit SystemExit(7),
+and an unhandled startup exception (exit 1), plus a real worker heartbeat after
+broker termination. Startup-exception checks also require its traceback in the
+worker log. Broker exit-code assertions include that log in failure output.
+Native Windows CI runs all ten Windows cases across Python 3.10/3.14 and
+PowerShell 5.1/7.
+
 ### Discovery shutdown regression
 
 `unit/test_single_instance_election.py` uses a real loopback HTTP server to
@@ -108,7 +121,7 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 523 | no |
+| `unit/` | 528 | no |
 | `integration/` | 212 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
@@ -565,10 +578,6 @@ bundled scripts with explicit profile routing and the WMI worker. Run it with
 `python scripts/check-test-report.py windows.xml --kind windows`. Set
 `FOXMCP_TEST_POWERSHELL` to `powershell` or `pwsh`. Include the repository and
 its tests directory in PYTHONPATH, and build/download dist/packages first.
-
-The worker regression forces the child to exit before the broker looks up its
-PID. It checks successful exit, a nonzero `SystemExit`, and an unhandled startup
-exception, including cleanup of the temporary exit-status file.
 
 
 ### Script consent coverage
