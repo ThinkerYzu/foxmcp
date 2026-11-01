@@ -44,7 +44,7 @@ Virtual environment setup instructions with package installation commands, verif
 - **API Reference**: See [api-reference.md](api-reference.md) for MCP tools and profile discovery
 - **Wire Protocol**: See [protocol.md](protocol.md) for WebSocket messages and handshake requirements
 - **Project Structure**: See [files.md](files.md) for complete file overview
-- **Project Status & Roadmap**: Tracked in the docforge at `~/progm/claudebugzilla/proj_docs/foxmcp/HANDOFF.md`, not in this directory
+- **Contributing & Proposed Changes**: See [CONTRIBUTING.md](../CONTRIBUTING.md); discuss scope and design in the relevant issue or pull request
 - **Environment Setup**: See [venv-setup.md](venv-setup.md) for detailed setup
 - **Testing**: See [../tests/README.md](../tests/README.md) for the suite layout and how to run it
 

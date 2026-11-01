@@ -15,12 +15,9 @@ Before making changes:
    [system diagram and source-symbol map](docs/architecture.md#system-overview),
    and the [component responsibilities](docs/files.md). Follow the existing
    design for every change.
-3. For maintainer work in this workspace, read the project workbench at
-   `~/progm/claudebugzilla/proj_docs/foxmcp/`: start with `AGENT-warm-up.md` and
-   `HANDOFF.md`, then check `SPEC.md`, `DESIGN.md` and `IMPLEMENTATION-GUIDE.md`
-   for the task's requirements and plan. If the workbench is unavailable, use
-   the repository references and agreed issue/PR requirements; disclose any
-   missing context that prevents completing the task.
+3. Check the task's agreed issue or PR requirements and any design documents
+   supplied by the maintainer. Do not assume access to documents outside this
+   checkout. Disclose missing context that prevents completing the task.
 
 Explicitly describe architecture violations or proposed design changes in the
 PR description and/or relevant commit-message body. Changes without a PR must
@@ -33,28 +30,19 @@ report what changed, validation performed and any remaining limitations.
 
 # Repository Paths
 
-## FM_ROOT Environment Variable
-
-`claude.sh` sets `FM_ROOT` to the checkout root. Other launch methods may leave
-it unset. If it is unset, initialize it from inside the intended FoxMCP checkout:
-
-```bash
-export FM_ROOT="$(git rev-parse --show-toplevel)"
-```
-
-Ensure each shell or tool command inherits this variable, or initialize it again.
-Always use `"$FM_ROOT"` in shell commands referring to repository paths and quote
-paths to support checkout directories containing spaces.
+Run the commands below from the repository root. When working from another
+directory, use the actual checkout path and quote paths containing spaces.
+No repository-root environment variable is required.
 
 ```bash
 # Read project files
-cat "$FM_ROOT/README.md"
+cat README.md
 
 # Run the existing unit-test target without Firefox
-make -C "$FM_ROOT" test-unit
+make test-unit
 
 # Find project files
-rg --files "$FM_ROOT/server"
+rg --files server
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup) for initial setup and
@@ -128,21 +116,17 @@ const ENABLE_DEBUG_LOGGING_TO_SERVER = false;  // Set to true for debugging
 **Usage:**
 - Enable (`true`) for debugging extension connection issues or test failures
 - Disable (`false`) for production and before committing
-- After changing, run `make -C "$FM_ROOT" package`; it rebuilds the extension
+- After changing, run `make package` from the repository root; it rebuilds the extension
   and clears the profile cache.
 
 **IMPORTANT: Always set back to `false` before committing.**
 
 # Documentation Files Reference
 
-## Project status and planning
-Tracked outside this repo, in the docforge at
-`~/progm/claudebugzilla/proj_docs/foxmcp/` — see its `HANDOFF.md` for current
-status and next actions, and `DESIGN.md` for the decisions behind the
-architecture. `docs/PLAN.md` used to hold this and was retired on 2026-08-11
-after drifting out of date.
+## Project requirements
 
-Reference documentation for how FoxMCP *works* stays here in `docs/`.
+Use the agreed issue or PR scope and maintainer-provided design documents for
+requirements and planning. Product reference documentation stays in `docs/`.
 
 ## docs/protocol.md
 - WebSocket message protocol specification

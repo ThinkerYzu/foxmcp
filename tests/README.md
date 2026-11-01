@@ -207,13 +207,13 @@ receiver verifies the filename, MIME override, SHA-256 and change event. The
 installed `set-file-input.py` helper must assign the file and release its handle
 before the form submits, and the page must display success.
 
-To repeat locally, use the project venv and Developer Edition:
+To repeat locally, run from the repository root using the project venv and
+Developer Edition:
 
 ```bash
-export FM_ROOT=/path/to/foxmcp
-make -C "$FM_ROOT" package
-FIREFOX_PATH=/path/to/firefox "$FM_ROOT/venv/bin/python" \
-  "$FM_ROOT/tests/package_smoke.py" --packages "$FM_ROOT/dist/packages"
+make package
+FIREFOX_PATH=/path/to/firefox venv/bin/python \
+  tests/package_smoke.py --packages dist/packages
 ```
 
 Each transport exercises every advertised tool, with read-back checks for:
@@ -257,16 +257,15 @@ is prohibited; Claude's built-in tools are disabled. No upload example or tool
 name is supplied in the task prompt.
 
 Use an authenticated CLI for the chosen agent and a packaged extension built
-from this checkout:
+from this checkout. Run from the repository root:
 
 ```bash
-export FM_ROOT=/path/to/foxmcp
-make -C "$FM_ROOT" package
-PYTHONPATH="$FM_ROOT:$FM_ROOT/tests" FIREFOX_PATH=/path/to/firefox \
-  "$FM_ROOT/venv/bin/python" "$FM_ROOT/tests/agent_file_upload_eval.py"
+make package
+PYTHONPATH=.:tests FIREFOX_PATH=/path/to/firefox \
+  venv/bin/python tests/agent_file_upload_eval.py
 # Repeat with Claude:
-PYTHONPATH="$FM_ROOT:$FM_ROOT/tests" FIREFOX_PATH=/path/to/firefox \
-  "$FM_ROOT/venv/bin/python" "$FM_ROOT/tests/agent_file_upload_eval.py" --agent-cli claude
+PYTHONPATH=.:tests FIREFOX_PATH=/path/to/firefox \
+  venv/bin/python tests/agent_file_upload_eval.py --agent-cli claude
 ```
 
 This invokes a model and is deliberately excluded from pytest. The printed

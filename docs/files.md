@@ -114,5 +114,6 @@ and [pyproject.toml](../pyproject.toml).
 
 [README](../README.md) gives installation and usage guidance.
 [docs/README.md](README.md) indexes the API, protocol, configuration and development
-references. Project decisions, pending work and session history live separately
-in the workbench at `~/progm/claudebugzilla/proj_docs/foxmcp/`.
+references. [CONTRIBUTING.md](../CONTRIBUTING.md) describes contribution and
+architecture-review requirements; [CLAUDE.md](../CLAUDE.md) is the coding-agent
+entry point.

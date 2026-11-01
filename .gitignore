@@ -71,3 +71,6 @@ logs/
 *.temp
 .tmp/firefox
 firefox
+
+# Personal development launcher
+/claude.local.sh
