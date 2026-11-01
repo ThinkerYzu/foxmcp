@@ -583,26 +583,12 @@ python server/server.py --port 8767 --no-mcp
 
 ## Docker Configuration
 
-```dockerfile
-FROM python:3.11
-
-WORKDIR /app
-COPY . .
-
-RUN pip install -r requirements.txt
-
-# Expose ports
-EXPOSE 8765 3000
-
-# Run server
-CMD ["python", "server/server.py"]
-```
-
-```bash
-# Build and run
-docker build -t foxmcp .
-docker run -p 8765:8765 -p 3000:3000 foxmcp
-```
+FoxMCP has no supported container image; one is listed as a
+[future consideration](architecture.md#2-production-hardening). The server
+binds only to localhost (`--host` values other than `localhost` and
+`127.0.0.1` are replaced), so ports published from a container's network
+namespace with `docker run -p` are not reachable. Run the server directly on
+the machine where Firefox runs; see [Starting the Server](#starting-the-server).
 
 ## Configuration Files
 
