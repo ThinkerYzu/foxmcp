@@ -32,20 +32,100 @@ targets after reconnection. See [release notes](RELEASES.md#v160---multiple-prof
 
 ## Quick start
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
-to run the server with `uvx`, which manages its Python environment for you.
-The GitHub installer is also available below.
+You need Firefox, an MCP client, and
+[uv](https://docs.astral.sh/uv/getting-started/installation/).
+Your client starts FoxMCP with `uvx foxmcp --stdio`; uv manages the Python
+environment and downloads the package automatically. FoxMCP requires Python
+**3.10+**.
 
-You need Firefox, an MCP client and Python **3.10+**. The GitHub installer also
-requires `venv`, `bash`, `curl`, `unzip` and `sha256sum`. The commands below use
-a Bash shell.
+### 1. Install the Firefox extension
+
+Open [FoxMCP on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
+and click **Add to Firefox**.
+
+Use matching server and extension versions. Click the FoxMCP toolbar icon to see
+a mismatch warning with both versions inside the popup. No automatic dialog or
+notification opens. The server also logs a warning. Release-version differences
+are advisory when protocol IDs match; incompatible protocol IDs prevent the
+browser connection. Mozilla review can delay the Add-ons version after a GitHub
+release; to try a version awaiting approval, use the
+[temporary add-on instructions](docs/development.md#loading-in-firefox).
+
+### 2. Connect your AI client
+
+For Claude Code:
+
+```bash
+claude mcp add foxmcp -- uvx foxmcp --stdio
+```
+
+For Codex:
+
+```bash
+codex mcp add foxmcp -- uvx foxmcp --stdio
+```
+
+For another MCP client, add a stdio server with command `uvx` and arguments
+`["foxmcp", "--stdio"]`.
+
+Open your AI client so it starts the server. Click the FoxMCP toolbar icon in
+Firefox and check that it shows a connected status. The extension connects on
+WebSocket port **8765**. If the first browser call arrives before Firefox
+reconnects, retry it.
+
+For multiple clients or chats, add `--single-instance` after `--stdio` to share
+one browser connection. See [stdio setup](docs/configuration.md#serving-mcp-over-stdio).
+
+The packaged command includes and enables the example scripts. An explicit
+`FOXMCP_EXT_SCRIPTS` overrides them; an empty value disables scripts. To match a
+particular extension release, use `uvx --from foxmcp==VERSION foxmcp --stdio`,
+replacing `VERSION` with that release's version.
+
+### 3. Try it
+
+Ask your assistant to discover profiles and choose the intended one before
+performing browser actions. For example:
+
+```text
+List the connected Firefox profiles and their windows/tabs.
+Use the profile named Personal for the following task. If the name is ambiguous,
+show me the candidates first.
+List all open Firefox tabs in that profile.
+Open https://example.org in a new tab.
+Get the text from the current page.
+Take a screenshot of the current tab.
+```
+
+To target a particular tab, right-click it in Firefox's tab bar and choose
+**Tab ID = … (click to copy)**. Paste the copied `tab_id = …` into your request.
+Tab IDs are local to their profile. The copied tab ID does not identify its
+profile; give the assistant that context too. Rediscover after Firefox restarts.
+
+## What you can do
+
+| Area | Capabilities |
+|---|---|
+| Profiles | Discover connected Firefox profiles and address browser calls explicitly |
+| Tabs and groups | List, open, close, switch, reorder, move between windows, group and ungroup; take screenshots |
+| Windows | Create, close, focus, resize, position, minimize and maximize |
+| Page content | Read text or HTML, execute JavaScript, run predefined scripts, load local files for uploads |
+| Navigation | Go to a URL, go back or forward, reload |
+| Bookmarks | List, search, create, update, move and delete bookmarks and folders |
+| History | Search, list recent visits and delete entries |
+| Network | Monitor requests by URL pattern; inspect headers and captured text response bodies |
+
+Native tab groups require Firefox **139+**. Local file uploads use files readable
+by the Python server; see [loading local files](docs/scripts.md#loading-local-files).
+See the [API reference](docs/api-reference.md) for tool names and parameters.
+
+## Other setup options
+
+### Install from GitHub release archives
+
+The GitHub installers create a local installation directory. On Linux/macOS,
+you need Python **3.10+**, `venv`, `bash`, `curl`, `unzip` and `sha256sum`.
 On Debian/Ubuntu, install missing prerequisites with
 `sudo apt install python3 python3-venv curl unzip coreutils`.
-
-### 1. Install the server
-
-With uv installed, `uvx` downloads FoxMCP when you start it in step 3. No separate
-installation directory is needed.
 
 For the GitHub archive installation, run this in a new directory where you want
 FoxMCP installed:
@@ -92,122 +172,37 @@ configure the client to launch the installed `venv\Scripts\python.exe` with
 client environment to enable the examples. The PowerShell helper reports the
 direct Python command if invoked with `--stdio`.
 
-### 2. Install the Firefox extension
+Start the installed server manually with `./start-foxmcp.sh` on Linux/macOS
+or `.\start-foxmcp.ps1` in PowerShell, then use the HTTP setup below.
 
-Open [FoxMCP on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
-and click **Add to Firefox**.
+### Run a shared HTTP server
 
-Use matching server and extension versions. Click the FoxMCP toolbar icon to see
-a mismatch warning with both versions inside the popup. No automatic dialog or
-notification opens. The server also logs a warning. Release-version differences
-are advisory when protocol IDs match; incompatible protocol IDs prevent the
-browser connection. Mozilla review can delay the Add-ons version after a GitHub
-release; to try a version awaiting approval, use the
-[temporary add-on instructions](docs/development.md#loading-in-firefox).
-
-### 3. Start the server
-
-With uvx, run:
+Start one server and leave it running:
 
 ```bash
-uvx --from foxmcp==1.6.0 foxmcp
+uvx foxmcp
 ```
 
-With the GitHub archive installation, run from your installation directory:
+With a GitHub archive installation, use its startup script instead.
+The default ports are **8765** for the extension's WebSocket connection and
+**3000** for the MCP HTTP endpoint. Check the connected status in the Firefox
+extension popup.
 
-Linux/macOS:
-```bash
-./start-foxmcp.sh
-```
-
-Windows (PowerShell):
-```powershell
-.\start-foxmcp.ps1
-```
-
-Leave it running. Click the FoxMCP toolbar icon in Firefox and check that it shows
-a connected status. The default ports are **8765** for the extension's WebSocket
-connection and **3000** for the MCP HTTP endpoint.
-
-### 4. Connect your AI client
-
-For Claude Code, run this in another terminal:
+Register the HTTP endpoint with Claude Code:
 
 ```bash
 claude mcp add --transport http foxmcp http://localhost:3000/mcp/
 ```
 
-If the installer already connected Claude Code, skip that command.
-
-For Codex, run:
+Or with Codex:
 
 ```bash
 codex mcp add foxmcp --url http://localhost:3000/mcp/
 ```
 
 For another MCP client, add an HTTP server with URL
-`http://localhost:3000/mcp/`.
-
-### 5. Try it
-
-Ask your assistant to discover profiles and choose the intended one before
-performing browser actions. For example:
-
-```text
-List the connected Firefox profiles and their windows/tabs.
-Use the profile named Personal for the following task. If the name is ambiguous,
-show me the candidates first.
-List all open Firefox tabs in that profile.
-Open https://example.org in a new tab.
-Get the text from the current page.
-Take a screenshot of the current tab.
-```
-
-To target a particular tab, right-click it in Firefox's tab bar and choose
-**Tab ID = … (click to copy)**. Paste the copied `tab_id = …` into your request.
-Tab IDs are local to their profile. The copied tab ID does not identify its
-profile; give the assistant that context too. Rediscover after Firefox restarts.
-
-## What you can do
-
-| Area | Capabilities |
-|---|---|
-| Profiles | Discover connected Firefox profiles and address browser calls explicitly |
-| Tabs and groups | List, open, close, switch, reorder, move between windows, group and ungroup; take screenshots |
-| Windows | Create, close, focus, resize, position, minimize and maximize |
-| Page content | Read text or HTML, execute JavaScript, run predefined scripts, load local files for uploads |
-| Navigation | Go to a URL, go back or forward, reload |
-| Bookmarks | List, search, create, update, move and delete bookmarks and folders |
-| History | Search, list recent visits and delete entries |
-| Network | Monitor requests by URL pattern; inspect headers and captured text response bodies |
-
-Native tab groups require Firefox **139+**. Local file uploads use files readable
-by the Python server; see [loading local files](docs/scripts.md#loading-local-files).
-See the [API reference](docs/api-reference.md) for tool names and parameters.
-
-## Other setup options
-
-### Run with uvx over stdio
-
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
-and the [Firefox extension](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
-For one Claude Code client, register a server it launches itself:
-
-```bash
-claude mcp add foxmcp -- uvx foxmcp --stdio
-```
-
-For several clients, start one shared HTTP server with `uvx foxmcp`, then use
-[the HTTP registration commands](#4-connect-your-ai-client). The extension
-connects to WebSocket port 8765 in either mode. Separate stdio clients still
-conflict on that port, and the first browser call may need a retry while the
-extension reconnects; see [stdio tradeoffs](docs/configuration.md#serving-mcp-over-stdio).
-
-The packaged command includes and enables the example scripts. An explicit
-`FOXMCP_EXT_SCRIPTS` overrides them; an empty value disables scripts. To match a
-particular extension release, use `uvx --from foxmcp==VERSION foxmcp --stdio`,
-replacing `VERSION` with that release's version. Python 3.10+ and Bash for the
-shell examples are required.
+`http://localhost:3000/mcp/`. If the GitHub installer already connected your
+client, skip registration.
 
 ### Install from source
 
@@ -223,7 +218,7 @@ make package
 
 [Load the built extension in Firefox](docs/development.md#loading-in-firefox),
 then start the server with `make run-server`. Continue with
-[Connect your AI client](#4-connect-your-ai-client) above.
+[HTTP setup](#run-a-shared-http-server) above.
 
 ### Let your client start the server
 
