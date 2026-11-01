@@ -602,13 +602,12 @@ settings in `browser.storage.sync`; see
 
 ### Basic Logging
 
+No setup is needed for the default: importing `server.server` sends `INFO`
+logs to stderr.
+
 ```python
-import logging
+from server.server import FoxMCPServer
 
-# Set log level
-logging.basicConfig(level=logging.INFO)
-
-# Start server with logging
 server = FoxMCPServer()
 ```
 
