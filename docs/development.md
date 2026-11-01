@@ -21,9 +21,18 @@ make setup-test-imports # recreate the test import symlinks
 make dev                # setup, then upgrade pip
 ```
 
-`setup` and `install` install into `venv/` explicitly, through `$(VENV_PIP)`. A bare
-`pip` targets whatever interpreter happens to be active, which is how the venv once
-ended up with the server dependencies but no pytest.
+`setup` and `install` use the project virtualenv, `venv/` by default. To select
+another environment, pass its bin directory consistently to subsequent commands:
+
+```bash
+make setup VENV_BIN=.venv/bin
+make test-unit VENV_BIN=.venv/bin
+```
+
+The environment is created in the parent of `VENV_BIN`; installs, test runners,
+server startup and development tools use that selection. `VENV_PIP` can override
+the pip executable separately. `PYTHON` chooses the interpreter used to create
+the environment. `clean-all` removes the selected environment and `.venv/`.
 
 ### Build
 
@@ -65,7 +74,7 @@ make check             # lint + test
 
 Allow about fifteen to twenty minutes for a full run. The maintained
 [test guide](../tests/README.md#expected-result) records the current collection,
-validation results, fixtures and troubleshooting.
+completeness checks, fixtures and troubleshooting.
 
 ### Other
 
@@ -75,8 +84,18 @@ make lint         # flake8 over server/ and tests/
 make format       # black + isort
 make status       # ports, dependencies, symlink state
 make clean        # build artifacts and symlinks
-make clean-all    # also removes venv/
+make clean-all    # also removes the selected virtualenv and .venv/
 ```
+
+`run-server` (also available as `make start`) runs in the foreground. Stop it
+with Ctrl+C in that terminal. The Makefile has no `stop` or `restart` target;
+manage separately launched services through the launcher that owns them.
+
+`make all`, `make ci`, `make check` and `make quick-test` sequence their stages,
+including under parallel make. `make ci` runs clean, setup, lint and test in
+order; the test target builds the packages. Local lint reports style issues
+without failing, while GitHub CI separately rejects syntax and undefined-name
+errors. These local targets do not replace all platform/package CI checks.
 
 ## Project Structure
 

@@ -11,15 +11,23 @@ FIREFOX_PATH ?= firefox
 # package was just installed into.
 VENV_BIN ?= venv/bin
 VENV_PIP ?= $(VENV_BIN)/pip
+VENV_PYTHON = $(abspath $(VENV_BIN)/python)
+VENV_DIR = $(abspath $(VENV_BIN)/..)
 
-# The interpreter used to build venv/ in the first place, not to run anything
+# The interpreter used to create the virtualenv, not to run anything
 # afterwards. Override it to build the venv against a different Python.
 PYTHON ?= python3
 
-.PHONY: help install build test clean run-server run-tests dev setup check lint package all setup-test-imports venv
+.PHONY: all help setup install setup-test-imports venv dev build build-extension \
+        package run-server test run-tests test-unit test-integration check lint \
+        clean clean-all start quick-test dev-tools format status ci
 
+# Aggregate stages run sequentially even when make inherits -j. Tests build
+# their own packages, so aggregate targets do not rebuild them afterward.
 # Default target
-all: setup build test
+all:
+	+$(MAKE) setup
+	+$(MAKE) test
 
 help:
 	@echo "FoxMCP Project - Available Commands:"
@@ -54,25 +62,22 @@ help:
 # Setup and Installation
 setup: install setup-test-imports
 	@echo "Installing test dependencies..."
-	$(VENV_PIP) install -r tests/requirements.txt
+	"$(VENV_PIP)" install -r tests/requirements.txt
 	@echo "✅ Setup complete!"
 
-# Create the virtual environment everything else in this file runs out of.
-#
-# The real target is venv/bin/python rather than venv/, so make skips the work
-# once the interpreter is there. Without this, `make setup` on a fresh clone
-# died on a missing venv/bin/pip and said nothing about what to do next.
+# Use the selected interpreter file as the target so setup creates the chosen
+# virtualenv only when needed.
 $(VENV_BIN)/python:
 	@echo "Creating the virtual environment..."
-	$(PYTHON) -m venv venv
-	@echo "✅ Virtual environment created at venv/"
+	"$(PYTHON)" -m venv "$(VENV_DIR)"
+	@echo "✅ Virtual environment created at $(VENV_DIR)/"
 
 venv: $(VENV_BIN)/python
-	@echo "✅ Virtual environment ready at venv/"
+	@echo "✅ Virtual environment ready at $(VENV_DIR)/"
 
 install: $(VENV_BIN)/python
 	@echo "Installing server dependencies..."
-	$(VENV_PIP) install -r server/requirements.txt
+	"$(VENV_PIP)" install -r server/requirements.txt
 	@echo "✅ Server dependencies installed!"
 
 setup-test-imports:
@@ -101,7 +106,7 @@ setup-test-imports:
 
 dev: setup
 	@echo "Setting up development environment..."
-	$(VENV_PIP) install --upgrade pip
+	"$(VENV_PIP)" install --upgrade pip
 	@echo "✅ Development environment ready!"
 
 # Building
@@ -161,35 +166,37 @@ package: build
 # on an import that has been installed all along.
 run-server:
 	@echo "Starting FoxMCP WebSocket server..."
-	$(VENV_BIN)/python server/server.py
+	"$(VENV_PYTHON)" server/server.py
 
 # Testing
 test: run-tests
 
 run-tests: setup-test-imports package
 	@echo "Running all tests with coverage..."
-	cd tests && FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py
+	FIREFOX_PATH="$(FIREFOX_PATH)" "$(VENV_PYTHON)" tests/run_tests.py
 
 test-unit: setup-test-imports
 	@echo "Running unit tests..."
-	cd tests && PYTHONPATH=.. FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py unit
+	FIREFOX_PATH="$(FIREFOX_PATH)" "$(VENV_PYTHON)" tests/run_tests.py unit
 
 test-integration: setup-test-imports package
 	@echo "Running integration tests..."
-	cd tests && PYTHONPATH=.. FIREFOX_PATH=$(FIREFOX_PATH) ../venv/bin/python run_tests.py integration
+	FIREFOX_PATH="$(FIREFOX_PATH)" "$(VENV_PYTHON)" tests/run_tests.py integration
 
 
 # Quality Checks
-check: lint test
+check:
+	+$(MAKE) lint
+	+$(MAKE) test
 	@echo "✅ All quality checks passed!"
 
 lint:
 	@echo "Running Python linting..."
-	@test -x $(VENV_BIN)/flake8 || { echo "Installing flake8..."; $(VENV_PIP) install flake8; }
+	@test -x "$(VENV_BIN)/flake8" || { echo "Installing flake8..."; "$(VENV_PIP)" install flake8; }
 	@echo "Linting server code..."
-	@$(VENV_BIN)/flake8 server/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in server/"
+	@"$(VENV_BIN)/flake8" server/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in server/"
 	@echo "Linting test code..."
-	@$(VENV_BIN)/flake8 tests/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in tests/"
+	@"$(VENV_BIN)/flake8" tests/ --max-line-length=100 --ignore=E203,W503 || echo "⚠️  Linting issues found in tests/"
 	@echo "✅ Linting complete!"
 
 
@@ -209,36 +216,32 @@ clean:
 
 clean-all: clean
 	@echo "Deep cleaning including virtual environments..."
-	@rm -rf venv/
+	@rm -rf "$(VENV_DIR)"
 	@rm -rf .venv/
 	@echo "✅ Deep clean complete!"
 
 # Development Workflow Helpers
 start: run-server
 
-stop:
-	@echo "Stopping any running servers..."
-	@pkill -f "python.*server.py" || echo "No servers running"
-
-restart: stop start
-
 # Quick development cycle
-quick-test: build test-unit
+quick-test:
+	+$(MAKE) build
+	+$(MAKE) test-unit
 	@echo "✅ Quick test cycle complete!"
 
 # Install development tools
 dev-tools:
 	@echo "Installing development tools..."
-	$(VENV_PIP) install flake8 black isort pytest-cov
+	"$(VENV_PIP)" install flake8 black isort pytest-cov
 	@echo "✅ Development tools installed!"
 
 # Format code
 format:
 	@echo "Formatting Python code..."
-	@test -x $(VENV_BIN)/black || { echo "Installing black..."; $(VENV_PIP) install black; }
-	@test -x $(VENV_BIN)/isort || { echo "Installing isort..."; $(VENV_PIP) install isort; }
-	$(VENV_BIN)/black server/ tests/ --line-length=100
-	$(VENV_BIN)/isort server/ tests/ --line-length=100
+	@test -x "$(VENV_BIN)/black" || { echo "Installing black..."; "$(VENV_PIP)" install black; }
+	@test -x "$(VENV_BIN)/isort" || { echo "Installing isort..."; "$(VENV_PIP)" install isort; }
+	"$(VENV_BIN)/black" server/ tests/ --line-length=100
+	"$(VENV_BIN)/isort" server/ tests/ --line-length=100
 	@echo "✅ Code formatting complete!"
 
 # Project status
@@ -250,8 +253,8 @@ status:
 	@find . -maxdepth 2 -type f -name "*.py" -o -name "*.js" -o -name "*.json" -o -name "*.md" | grep -v __pycache__ | sort
 	@echo ""
 	@echo "🐍 Python Dependencies:"
-	@echo "Server:" && ($(VENV_PIP) list --format=freeze | grep -E "(websockets|fastmcp)" || echo "  Not installed")
-	@echo "Tests:" && ($(VENV_PIP) list --format=freeze | grep -E "(pytest|coverage)" || echo "  Not installed")
+	@echo "Server:" && ("$(VENV_PIP)" list --format=freeze | grep -E "(websockets|fastmcp)" || echo "  Not installed")
+	@echo "Tests:" && ("$(VENV_PIP)" list --format=freeze | grep -E "(pytest|coverage)" || echo "  Not installed")
 	@echo ""
 	@echo "🔗 WebSocket Server:"
 	@netstat -ln 2>/dev/null | grep ":8765" >/dev/null && echo "  ✅ Port 8765 in use (server may be running)" || echo "  ❌ Port 8765 available (server not running)"
@@ -261,5 +264,9 @@ status:
 	@if [ -L tests/unit/test_imports.py ]; then echo "  ✅ tests/unit/test_imports.py symlink exists"; else echo "  ❌ tests/unit/test_imports.py symlink missing"; fi
 
 # Continuous Integration simulation
-ci: clean setup lint test package
-	@echo "🎉 CI pipeline complete - ready for deployment!"
+ci:
+	+$(MAKE) clean
+	+$(MAKE) setup
+	+$(MAKE) lint
+	+$(MAKE) test
+	@echo "🎉 Local CI sequence complete!"

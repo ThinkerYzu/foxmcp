@@ -125,6 +125,7 @@ Selected test modules, including local-file coverage:
 
 | File | Covers |
 |---|---|
+| `test_makefile.py` | Isolated developer commands: parallel stage ordering, virtualenv selection, spaced Firefox paths and removal of unmanaged stop/restart helpers |
 | `test_github_installer.py` | Real HTTP download failures, checksums, corrupt archives and installed upload example |
 | `test_release_report.py` | Missing integration modules, multiple JUnit suites, skipped/failed tests and empty reports |
 | `test_file_transfer.py` | Streaming integrity, MIME, regular-file validation, single-use grants, expiry, revocation, capacity, shutdown and content-group registration |
