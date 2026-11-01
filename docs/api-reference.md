@@ -14,6 +14,12 @@ tool out of a group you disabled. See
 [configuration.md](configuration.md#reducing-the-tool-surface) for the full list
 and what each group costs.
 
+Tool descriptions include the client-facing prose before the first structured
+docstring section (such as `Args:` or `Returns:`). This keeps usage, lifecycle
+and side-effect guidance visible to clients. Structured sections stay out of the
+description; parameter documentation is supplied separately in the input schema.
+Predefined-script listings are appended when that tool is registered.
+
 ### Firefox Profiles
 
 `profiles_list(populate=True)` returns an object with a `profiles` array. Each entry
@@ -117,7 +123,8 @@ subsequent user disabling is respected. History and bookmarks remain shared.
 ### History Operations
 - `history_query(profile_id, query, max_results=50)` - Search browser history
 - `history_get_recent(profile_id, count=10)` - Get recent history items
-- `history_delete_item(profile_id, url)` - Delete specific history item
+- `history_delete_item(profile_id, url)` - Delete all visits for one exact URL;
+  leaves tabs, bookmarks and cookies intact. FoxMCP has no history restore tool.
 
 ### Bookmark Management
 - `bookmarks_list(profile_id, folder_id=None)` - List bookmarks from all folders or a specific folder
@@ -140,6 +147,8 @@ subsequent user disabling is respected. History and bookmarks remain shared.
 - `navigation_forward(profile_id, params)` - Navigate forward in tab
   - For back/forward, `params` is an object such as `{"tab_id": 12}`.
 - `navigation_reload(profile_id, tab_id, bypass_cache=False)` - Reload tab
+  - Returns when the reload is issued, before page loading completes; may
+    discard unsaved page state. Start request monitoring before reloading.
 - `navigation_go_to_url(profile_id, tab_id, url)` - Navigate to URL
 
 ### Content Access
@@ -149,9 +158,13 @@ in its MCP description. See [Loading local files](scripts.md#loading-local-files
 for the complete input-assignment example and transfer details.
 
 - `content_load_file(profile_id, tab_id, path, mime_type=None)` - Load one regular local file into the tab's extension-isolated JavaScript scope. Returns JSON with `file_id`, `name` (basename only), `type`, `size`, `lastModified` and `expires_in_seconds` (300). Use `globalThis.foxmcpFiles.get(file_id)` from `content_execute_script` or a predefined script, and delete the entry after use. MIME is inferred from the filename unless overridden, with `application/octet-stream` as the fallback. Does not select an input or submit a form. Private tabs are refused. See [Loading local files](scripts.md#loading-local-files).
-- `content_get_text(profile_id, tab_id, max_length=None)` - Extract page text content
-  - `max_length`: Optional maximum length of text to return (default: unlimited)
-- `content_get_html(profile_id, tab_id)` - Get page HTML source
+- `content_get_text(profile_id, tab_id, max_length=None)` - Read the main
+  document's `document.body.innerText`, without waiting for lazy-loaded content
+  - `max_length`: Optional character limit on extracted text (default: unlimited);
+    truncated text is followed by an ellipsis
+- `content_get_html(profile_id, tab_id)` - Read the main document's current
+  `document.documentElement.outerHTML`, truncated to 2,000 characters plus an ellipsis
+  when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
 
@@ -225,7 +238,9 @@ from `webRequest` and is captured for every matching request.
     `focus_window` on the window that should have it
 
 ### Debugging Tools
-- `debug_websocket_status()` - Check browser extension connection status
+- `debug_websocket_status()` - Read connected Firefox profile IDs/names, or
+  report that none are connected. Does not reconnect extensions or change
+  browser state. Use `profiles_list` to discover windows/tabs and choose targets.
 
 ## Usage Examples
 

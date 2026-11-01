@@ -251,3 +251,45 @@ class TestUnknownToolNames:
         with pytest.raises(ValueError):
             FoxMCPTools(StubWebSocketServer(), disabled_groups=['tabs'],
                         enabled_tools=['tabs_capture_screenshot', 'nope'])
+
+
+@pytest.mark.asyncio
+async def test_client_discovery_keeps_guidance_but_not_internal_sections(monkeypatch):
+    """Agents need later prose paragraphs, not internal return documentation."""
+    from fastmcp import Client
+
+    monkeypatch.setenv('FOXMCP_EXT_SCRIPTS', '')
+    tools = FoxMCPTools(StubWebSocketServer())
+
+    @tools._tool(describe_more=lambda: 'Available helper: sample.sh')
+    async def description_probe(value: str) -> str:
+        """Read a sample value.
+
+        Use this before the sample writer.
+
+        Reading does not change the stored sample.
+
+        Args:
+            value: Sample identifier.
+
+        Returns:
+            Internal return formatting must not enter the description.
+        """
+        return value
+
+    async with Client(tools.mcp) as client:
+        catalog = {tool.name: tool for tool in await client.list_tools()}
+
+    probe = catalog['description_probe']
+    assert 'Use this before the sample writer.' in probe.description
+    assert 'Reading does not change the stored sample.' in probe.description
+    assert 'Available helper: sample.sh' in probe.description
+    assert 'Args:' not in probe.description
+    assert 'Returns:' not in probe.description
+    assert 'Internal return formatting' not in probe.description
+    assert probe.inputSchema['properties']['value']['description'] == 'Sample identifier.'
+    assert 'reconnect' in catalog['profiles_list'].description
+    assert 'monitor_id' in catalog['requests_start_monitoring'].description
+    assert 'approval' in catalog['content_execute_script'].description
+    assert 'approval' in catalog['content_execute_predefined'].description
+    assert all('Not exposed to clients' not in tool.description for tool in catalog.values())

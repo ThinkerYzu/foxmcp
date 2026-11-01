@@ -509,7 +509,12 @@ class FoxMCPTools:
             self.group_by_tool[fn.__name__] = group
             if group in self.disabled_groups and fn.__name__ not in self.enabled_tools:
                 return fn
-            summary = fn.__doc__.strip().split('\n\n')[0]
+            # Keep client guidance across paragraphs, but leave structured
+            # sections to FastMCP's schema parser and internal documentation.
+            summary = re.split(
+                r'^(?:Args|Arguments|Parameters|Returns|Raises|Yields|Notes|Examples|Attributes):\s*$',
+                inspect.getdoc(fn) or '', maxsplit=1, flags=re.MULTILINE,
+            )[0].strip()
             if 'profile_id' in inspect.signature(fn).parameters:
                 summary += ("\n\nprofile_id is required: obtain it from profiles_list. "
                             "All object IDs are local to that profile; never reuse them in another profile.")
@@ -555,13 +560,16 @@ class FoxMCPTools:
         """Profile discovery is independent of the other optional tool groups."""
         @self._tool()
         async def profiles_list(populate: bool = True) -> dict:
-            """List all connected Firefox profiles, their real names and windows.
+            """Discover connected Firefox profiles, their real names and windows.
 
-            Use profile_id explicitly in every browser command. Window, tab, group,
-            container and monitor IDs belong to that profile only. Inspect window
-            tabs (titles and URLs) to choose the correct target. A profile_id identifies one connection and changes on every reconnect.
-            Call profiles_list again after a disconnect or server restart.
-            Unavailable names and per-profile window errors are reported separately.
+            Use this first to choose a profile_id for browser commands, and again
+            after a disconnect or server restart: IDs change on every reconnect.
+            Window, tab, group, container and monitor IDs belong to that profile
+            only. With populate=True, inspect tab titles/URLs to choose a target;
+            False omits tabs. Use list_windows for windows in one known profile.
+
+            Read-only; does not switch profiles or focus windows. Names may repeat
+            or be unavailable; per-profile window errors are reported separately.
 
             Args:
                 populate: Include each window's tabs with titles and URLs.
@@ -661,7 +669,11 @@ class FoxMCPTools:
         # shipped until 1.2.0 and always returned the same window as this one.
         @self._tool()
         async def get_current_window(profile_id: int, populate: bool = True) -> str:
-            """Get the current active window, which is also the last focused window
+            """Read this profile's current (most recently focused) Firefox window.
+
+            Does not focus or change the window. Use get_window for a known
+            window_id, or list_windows to inspect all windows in this profile.
+            populate controls whether the result includes the window's tabs.
 
             Args:
                 populate: Whether to include tab information
@@ -1123,7 +1135,12 @@ class FoxMCPTools:
         # Tab Close Tool
         @self._tool()
         async def tabs_close(profile_id: int, tab_id: int) -> str:
-            """Close a browser tab
+            """Close one browser tab, removing its live page and possibly unsaved state.
+
+            Use tabs_list to identify the tab first. Use tabs_switch to select a
+            tab without closing it, or close_window to close an entire window.
+            Closing the last tab may close its window. There is no FoxMCP tool
+            to restore a closed tab; an invalid or already closed tab ID fails.
 
             Args:
                 tab_id: ID of the tab to close
@@ -1675,7 +1692,11 @@ class FoxMCPTools:
         # Delete History Item Tool
         @self._tool()
         async def history_delete_item(profile_id: int, url: str) -> str:
-            """Delete a specific history item
+            """Delete all history visits for one exact URL in this profile.
+
+            Use history_query to find the URL first. This removes history records,
+            not the open tab, bookmarks or cookies, and FoxMCP has no history
+            restore tool. Use tabs_close if the goal is to close a page instead.
 
             Args:
                 url: URL of the history item to delete
@@ -2045,10 +2066,12 @@ class FoxMCPTools:
 
         @self._tool()
         async def debug_websocket_status() -> str:
-            """Debug WebSocket connection status
+            """Read the server's connected Firefox profile IDs and names.
 
-            Says whether the browser extension is connected, and from where. Every
-            other tool fails with a timeout when it is not, so check here first.
+            Use this for a quick connection check, including when no extension is
+            connected. It reads server connection state without changing browser
+            state or reconnecting anything. Use profiles_list for windows/tabs
+            and target discovery before browser commands.
             """
             return await self.browser.get_extension_status()
 
@@ -2121,6 +2144,10 @@ class FoxMCPTools:
         @self._tool()
         async def navigation_reload(profile_id: int, tab_id: int, bypass_cache: bool = False) -> str:
             """Reload a page in a tab
+
+            Use this to refresh the tab's current URL; use navigation_go_to_url
+            to choose a different URL. Reloading may discard unsaved page state
+            and triggers new network requests. bypass_cache requests a fresh load.
 
             Returns as soon as the reload is issued, not when the page has
             finished loading. Code that watches for what the reload does - a
@@ -2244,7 +2271,15 @@ class FoxMCPTools:
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:
-            """Get text content from a tab's page
+            """Read the current page body's rendered text (document.body.innerText).
+
+            Use this for readable page content, or content_get_html for markup.
+            Reads the main document without changing it; does not include iframe
+            documents or wait for future lazy-loaded content. Restricted Firefox
+            pages that block content scripts cannot be read.
+
+            max_length slices the extracted text by character count and adds
+            an ellipsis when truncated; omission returns all extracted text.
 
             Args:
                 tab_id: ID of the tab to get content from
@@ -2288,7 +2323,11 @@ class FoxMCPTools:
         # Get Page HTML Tool
         @self._tool()
         async def content_get_html(profile_id: int, tab_id: int) -> str:
-            """Get HTML content from a tab's page
+            """Read the main document's current HTML, limited to 2,000 characters.
+
+            Use this for markup, or content_get_text for rendered text. Reads
+            document.documentElement.outerHTML without changing the page; adds
+            an ellipsis if truncated. Does not include iframe documents.
 
             Args:
                 tab_id: ID of the tab to get HTML content from
@@ -2592,11 +2631,17 @@ class FoxMCPTools:
             tab_id: Optional[int] = None
         ) -> str:
             """
-            Start monitoring web requests
+            Start capturing future web requests matching URL patterns in a profile.
 
-            Returns JSON containing a **monitor_id**. Keep it — requests_list_captured,
-            requests_get_content and requests_stop_monitoring all take it, so losing it
-            leaves the monitor running with no way to read or stop it.
+            Start before triggering navigation or other traffic. Each call starts
+            a monitor; use requests_list_captured to read an existing one instead.
+            Keep the returned monitor_id for requests_list_captured,
+            requests_get_content and requests_stop_monitoring; monitors cannot be
+            listed. Omit tab_id to capture matching traffic across this profile.
+
+            Capturing uses memory. Stop when finished; stored captures remain
+            readable until the profile disconnects. Client disconnection stops
+            its monitors; profile disconnection clears monitors and captured data.
 
             Args:
                 url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
@@ -2664,7 +2709,13 @@ class FoxMCPTools:
             drain_timeout: int = 5
         ) -> str:
             """
-            Stop monitoring web requests with graceful drainage
+            Stop one monitor immediately and return its capture totals.
+
+            Use the monitor_id returned by requests_start_monitoring when no more
+            traffic needs capturing. drain_timeout is ignored: this does not wait
+            for in-flight requests. Already captured records remain available to
+            requests_list_captured and requests_get_content until the profile
+            disconnects. An unknown monitor_id fails with MONITOR_NOT_FOUND.
 
             Args:
                 monitor_id: ID of the monitoring session to stop
@@ -2706,7 +2757,10 @@ class FoxMCPTools:
             List all captured request summaries from a monitoring session
 
             A request appears here once it has completed, so a page navigation
-            started a moment ago will not be in the list yet.
+            started a moment ago will not be in the list yet. Start with
+            requests_start_monitoring, then reuse its monitor_id here. This reads
+            stored summaries without starting or stopping capture. Use a returned
+            request_id with requests_get_content to inspect its stored body.
 
             Args:
                 monitor_id: ID of the monitoring session
@@ -2747,7 +2801,12 @@ class FoxMCPTools:
             save_response_body_to: Optional[str] = None
         ) -> str:
             """
-            Get full request/response content for a specific request
+            Read a captured request's stored metadata and text body.
+
+            Use monitor_id from requests_start_monitoring and request_id from
+            requests_list_captured. This reads captured data, without making a
+            new network request. Bodies can be truncated by the monitor's
+            max_body_size option.
 
             The response carries **response_body.included** and **note**: a body that
             was not text, or not one of the monitored content types, comes back with

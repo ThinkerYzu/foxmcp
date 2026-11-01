@@ -304,7 +304,7 @@ never fall back to another connected profile.
 
 Every tool's description sits in an MCP client's context for the whole session,
 whether or not the tool is ever called. With no predefined scripts listed, the
-full set of 46 tools costs roughly 8,096 tokens. `--disable-tools` leaves a group unregistered, so a client never
+full set of 46 tools costs roughly 10,312 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -318,20 +318,23 @@ token, so treat them as proportions rather than exact counts:
 
 | Group | Tools | ~Tokens |
 |---|---|---|
-| `profiles` | list | 77 |
-| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,188 |
-| `containers` | list, create, update, remove | 624 |
-| `bookmarks` | list, search, create, create_folder, update, move, delete | 1,131 |
-| `windows` | list, get, get_current, create, close, focus, update | 1,361 |
-| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 837 |
-| `navigation` | back, forward, reload, go_to_url | 564 |
-| `content` | get_text, get_html, execute_script, execute_predefined, load_file | 826 plus ~35 per listed script |
-| `history` | query, get_recent, delete_item | 446 |
-| `debug` | websocket_status | 42 |
+| `profiles` | list | 202 |
+| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,872 |
+| `containers` | list, create, update, remove | 625 |
+| `bookmarks` | list, search, create, create_folder, update, move, delete | 1,438 |
+| `windows` | list, get, get_current, create, close, focus, update | 1,413 |
+| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 1,270 |
+| `navigation` | back, forward, reload, go_to_url | 668 |
+| `content` | get_text, get_html, execute_script, execute_predefined, load_file | 1,203 plus listed scripts |
+| `history` | query, get_recent, delete_item | 506 |
+| `debug` | websocket_status | 113 |
 
-The `content` figure is with `FOXMCP_EXT_SCRIPTS` unset. `content_execute_predefined`
+The `content` figure is with `FOXMCP_EXT_SCRIPTS` empty. `content_execute_predefined`
 lists every script in that directory in its description; see
 [Telling AI Tools What a Script Does](scripts.md#telling-ai-tools-what-a-script-does).
+Descriptions retain usage and behavior guidance across paragraphs, while
+structured docstring sections remain excluded. These estimates omit output
+schemas and other MCP metadata; actual tokenizer/client costs vary.
 
 All groups are on by default. An unrecognized group name is an error rather than
 a warning, so a typo cannot silently leave the group enabled.

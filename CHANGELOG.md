@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve client-facing tool guidance across docstring paragraphs without
+  including internal structured sections. Clarify connection discovery, tab
+  closure, page reads, reloads and monitor lifecycle; correct the claim that
+  stopping a monitor waits for in-flight requests. Tool names, input/output
+  schemas and extension protocol remain unchanged.
+
 - Hold Windows worker execution until the WMI broker has a stable process
   handle, preventing a short-lived worker from disappearing before its exit
   status can be observed. Preserve hidden launch, environment and independent
