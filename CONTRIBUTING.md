@@ -1,230 +1,166 @@
 # Contributing to FoxMCP
 
-Thank you for your interest in contributing to FoxMCP! This document provides guidelines for contributing to the project.
+Bug reports, focused fixes, features, documentation and tests are welcome.
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by our code of conduct:
-- Be respectful and inclusive
-- Welcome newcomers and help them learn
-- Focus on constructive feedback
-- Respect different viewpoints and experiences
+Be respectful and inclusive, welcome newcomers, and keep feedback constructive.
+Respect different viewpoints and experiences.
 
 ## How to Contribute
 
 ### Reporting Issues
 
-1. **Search existing issues** first to avoid duplicates
-2. **Use clear, descriptive titles** for your issues
-3. **Provide detailed information** including:
-   - Steps to reproduce the issue
-   - Expected vs actual behavior
-   - Your environment (OS, Firefox version, Python version)
-   - Relevant logs or error messages
+Search existing issues first. For a new report, use a descriptive title and
+include reproduction steps, expected and actual behavior, your OS, Firefox and
+Python versions, and relevant logs. Report security vulnerabilities through the
+process in [SECURITY.md](SECURITY.md).
 
 ### Submitting Changes
 
-1. **Fork the repository** on GitHub
-2. **Create a feature branch** from `master`:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. **Make your changes** following our coding standards
-4. **Add tests** for new functionality
-5. **Run the test suite** to ensure everything passes:
-   ```bash
-   make test
-   ```
-6. **Commit your changes** with clear, descriptive messages
-7. **Push to your fork** and submit a pull request
+1. Fork the repository and create a feature branch from `master`.
+2. Keep the change focused on one feature or fix and follow the
+   [architecture requirements](#architecture-review).
+3. Add tests for new functionality and bug fixes, covering success and error
+   cases. Update affected product references in `docs/` and add notable changes
+   to the Unreleased section of `CHANGELOG.md`.
+4. Run the relevant checks described in [Testing](#testing).
+5. Commit with the [message format below](#commit-messages), push to your fork,
+   and open a PR.
 
 ### Pull Request Guidelines
 
-- **Keep PRs focused** - one feature or fix per PR
-- **Write clear descriptions** explaining what your PR does
-- **Include tests** for new features or bug fixes
-- **Update documentation** as needed
-- **Follow the existing code style**
-- **Ensure all tests pass** before submitting
+Explain the problem, resulting behavior and validation performed, including any
+checks you could not run. State the architecture-review result and disclose any
+violations or proposed design changes as described below. All required CI checks
+must pass before merge.
+
+### Architecture Review
+
+Every change must follow the existing design described in
+[architecture.md](docs/architecture.md), especially its
+[system diagram and source-symbol map](docs/architecture.md#system-overview).
+Compare the diff with the diagram and [component responsibilities](docs/files.md),
+including ownership, dependency directions, process boundaries, startup roles
+and data flow. Passing tests alone does not establish architecture alignment.
+
+State the architecture-review result explicitly, including when no mismatch is
+found. Explicitly describe any architecture violation or proposed design change
+in the PR description and/or the relevant commit-message body. For changes
+submitted without a PR, include this explanation in the commit-message body.
+For each violation or proposed architecture change, identify:
+
+- The affected diagram component, connection or process boundary.
+- What the current architecture requires and what the PR does instead, with
+  file/line references.
+- The impact and the correction needed, or the proposed design change and its
+  rationale.
+
+Call out intentional architecture changes as changes to the agreed design.
+Resolve them through the project's design discussion and update the diagram,
+source-symbol map and affected references before merge. Do not silently change
+the diagram to make a violation appear compliant.
 
 ## Development Setup
 
-See [docs/development.md](docs/development.md) for detailed development setup instructions.
-
-### Quick Start
+Install Python 3.10 or later and Firefox Developer Edition. The full test suite
+installs an unsigned extension, which Firefox Release and Beta refuse to load.
+Set `FIREFOX_PATH` to your Developer Edition executable, replacing the example
+path below.
 
 ```bash
-# Clone your fork
 git clone https://github.com/your-username/foxmcp.git
 cd foxmcp
-
-# Setup development environment
+git checkout -b feature/your-feature-name
 make dev
-
-# Run tests
-make test
-
-# Build extension
-make build
+FIREFOX_PATH=/path/to/firefox-developer-edition/firefox make test
 ```
+
+See the [development guide](docs/development.md) for prerequisites, build
+commands and loading the extension, and the
+[CI setup](docs/development.md#continuous-integration) for Firefox details.
+`make build` copies the extension into `dist/extension/`; `make package` creates
+the installable XPI and server ZIP. The full test command builds packages first.
 
 ## Coding Standards
 
-### Python Code
+Follow the surrounding code style. Keep functions focused, use descriptive names
+and explain complex logic.
 
-- Follow **PEP 8** style guidelines
-- Use **type hints** for function parameters and return values
-- Write **docstrings** for all public functions and classes
-- Use **meaningful variable names**
-- Keep functions **small and focused**
-
-```python
-def process_browser_request(message: dict) -> dict:
-    """Process incoming browser request message.
-
-    Args:
-        message: WebSocket message from browser extension
-
-    Returns:
-        Processed response dictionary
-    """
-    # Implementation here
-    pass
-```
-
-### JavaScript Code
-
-- Use **modern JavaScript** (ES6+)
-- Follow **consistent indentation** (2 spaces)
-- Use **meaningful variable names**
-- Add **comments** for complex logic
-- Use **async/await** for asynchronous operations
-
-```javascript
-/**
- * Send message to background script
- * @param {Object} message - Message to send
- * @returns {Promise<Object>} Response from background script
- */
-async function sendMessage(message) {
-  return browser.runtime.sendMessage(message);
-}
-```
+- **Python:** Follow PEP 8, use type hints for function parameters and return
+  values, and document public functions and classes. See the
+  [formatting and lint commands](docs/development.md#code-style) and existing
+  [browser-profile implementation](server/browser_profile.py).
+- **JavaScript:** Use modern JavaScript and async/await, with two-space
+  indentation. See the existing [settings controller](extension/settings.js).
+- **Documentation:** Use clear language and working examples. Update product
+  references when behavior changes; link to existing references rather than
+  repeating them.
 
 ### Testing
 
-- **Write tests** for all new features
-- **Maintain test coverage** above 80%
-- **Use descriptive test names** that explain what is being tested
-- **Test both success and error cases**
+Use descriptive test names and test the behavior affected by your change.
+Use `example.org` for test URLs. Follow the existing fixtures and Firefox setup
+in the [test guide](tests/README.md); its
+[fixture example](tests/README.md#using-server_with_extension) and
+[tab-move tests](tests/integration/test_tab_move_end_to_end.py) show real usage.
 
-```python
-@pytest.mark.asyncio
-async def test_tab_creation_with_valid_url(self, server_with_extension):
-    """Test that valid URLs create tabs successfully"""
-    # Test implementation
-    pass
+```bash
+make test-unit  # unit checks without Firefox
+FIREFOX_PATH=/path/to/firefox-developer-edition/firefox make test
 ```
 
-## Documentation
+Run the full suite before submitting code changes. It takes about fifteen to
+twenty minutes. CI also checks that every required test module ran successfully
+and no tests were skipped; see the
+[test report requirements](docs/development.md#continuous-integration).
 
-- **Update documentation** when adding new features
-- **Use clear, concise language**
-- **Include code examples** where helpful
-- **Keep documentation up to date** with code changes
+Coverage above 80% is a project target, currently unmet in the
+[recorded baseline](tests/README.md#coverage). Add meaningful coverage for your
+change.
 
 ## Protocol Compatibility
 
 Increase the checked protocol ID when modifying or removing an existing API
 between the extension and MCP server. Update the protocol documentation and
-compatibility tests with the change. The complete rule is in
+compatibility tests with the change.
+
+Increase at most once per release, using the previous released tag as the
+baseline. Retain its ID when existing contracts remain compatible; otherwise
+use exactly that ID plus one. All incompatible unreleased changes share this
+single increment. Do not increment again for each PR or intermediate candidate.
+The complete rule is in
 [Protocol ID compatibility policy](docs/protocol.md#protocol-id-compatibility-policy).
 
 ## Commit Messages
 
-Use clear, descriptive commit messages:
+Use a descriptive subject of 50 characters or less. Separate the body with a
+blank line and explain the problem and change when needed. Every line must be
+at most 80 characters; check line lengths before committing. These limits also
+apply to merge and squash messages.
 
-```
-Add tab screenshot functionality
-
-- Implement tabs_capture_screenshot tool
-- Support PNG and JPEG formats
-- Add quality parameter for JPEG
-- Include comprehensive tests
-```
-
-Format:
-- **First line**: Brief summary (50 characters or less)
-- **Blank line**
-- **Body**: Detailed explanation if needed
-- **Line wrapping**: Every commit-message line must be at most 80 characters;
-  wrap body paragraphs and bullet points accordingly
-- **Merge messages**: Apply the same format to merge and squash commits
-- **Validation**: Check line lengths before creating a commit
-- **Use bullet points** for multiple changes
+Explicitly describe architecture violations or design changes in the PR
+description and/or commit-message body, following
+[Architecture Review](#architecture-review). Changes without a PR must include
+that explanation in the commit-message body.
 
 ## Release Process
+
+Maintainers own release version selection, version bumps, tagging and publishing.
+Contributors should record notable changes under Unreleased in `CHANGELOG.md`
+and identify compatibility impacts in the PR; leave release version bumps to
+maintainers.
 
 Before tagging or publishing, maintainers must review changes since the previous
 released tag and record whether the protocol ID must increase, with a rationale
 for retaining it. Follow the [release checklist](docs/development.md#release-process).
 
-Releases are handled by maintainers, but contributors should:
-- **Update version numbers** in relevant files when making breaking changes
-- **Update CHANGELOG.md** with notable changes
-- **Ensure all tests pass** on supported platforms
-
 ## Getting Help
 
-- **Read the documentation** in the `docs/` directory
-- **Check existing issues** for similar problems
-- **Ask questions** by opening a new issue with the "question" label
-- **Join discussions** in existing issues and pull requests
-
-## Recognition
-
-Contributors are recognized in several ways:
-- **Listed in release notes** for significant contributions
-- **Mentioned in commit messages** when appropriate
-- **Added to contributor lists** in documentation
-
-## Types of Contributions
-
-We welcome many types of contributions:
-
-### Code Contributions
-- **Bug fixes**
-- **New browser functions**
-- **Performance improvements**
-- **Security enhancements**
-
-### Documentation
-- **API documentation**
-- **Tutorial improvements**
-- **Example scripts**
-- **Translation** (future consideration)
-
-### Testing
-- **Additional test cases**
-- **Integration tests**
-- **Performance tests**
-- **Security tests**
-
-### Community
-- **Helping other users**
-- **Reviewing pull requests**
-- **Reporting bugs**
-- **Feature suggestions**
+Start with the [development guide](docs/development.md) and
+[test guide](tests/README.md), then search existing issues and PR discussions.
+If your question remains unanswered, open an issue with the relevant context.
 
 ## License
 
-By contributing to FoxMCP, you agree that your contributions will be licensed under the same MIT License that covers the project. See [LICENSE](LICENSE) file for details.
-
-## Questions?
-
-If you have questions about contributing, please:
-1. Check this document first
-2. Look at existing issues and discussions
-3. Open a new issue with the "question" label
-
-Thank you for contributing to FoxMCP!
+Contributions are licensed under the project's [MIT License](LICENSE).

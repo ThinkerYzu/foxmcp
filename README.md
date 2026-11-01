@@ -377,7 +377,8 @@ For other errors, run the server in the foreground and inspect its output.
 - [Release notes](RELEASES.md) and [changelog](CHANGELOG.md) — updates and upgrade instructions
 - [Security](SECURITY.md) — trust boundaries and vulnerability reporting
 
-To contribute, fork the repository, run `make setup` and `make test`, and submit
-a pull request with tests for new behavior.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and test setup guidelines.
+
+**Coding agents:** Read [CLAUDE.md](CLAUDE.md) before making changes.
 
 Licensed under the [MIT License](LICENSE).

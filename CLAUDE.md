@@ -4,34 +4,61 @@ It will create an extension and a MCP server that talk to the extension.
 The MCP server will be implemented in Python with FastMCP.
 It is Websocket between the extension and the MCP server.
 
-# Claude Code Integration
+# Agent Entry Point
+
+This file is the shared entry point for coding agents working in this repository.
+Before making changes:
+
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow, coding
+   standards, testing requirements and commit-message format.
+2. Read [architecture.md](docs/architecture.md), especially the
+   [system diagram and source-symbol map](docs/architecture.md#system-overview),
+   and the [component responsibilities](docs/files.md). Follow the existing
+   design for every change.
+3. For maintainer work in this workspace, read the project workbench at
+   `~/progm/claudebugzilla/proj_docs/foxmcp/`: start with `AGENT-warm-up.md` and
+   `HANDOFF.md`, then check `SPEC.md`, `DESIGN.md` and `IMPLEMENTATION-GUIDE.md`
+   for the task's requirements and plan. If the workbench is unavailable, use
+   the repository references and agreed issue/PR requirements; disclose any
+   missing context that prevents completing the task.
+
+Explicitly describe architecture violations or proposed design changes in the
+PR description and/or relevant commit-message body. Changes without a PR must
+include that explanation in the commit-message body. Follow the
+[architecture-review requirements](CONTRIBUTING.md#architecture-review),
+including design discussion and diagram updates before merge.
+
+Before finishing, review the diff, run checks appropriate to the change, and
+report what changed, validation performed and any remaining limitations.
+
+# Repository Paths
 
 ## FM_ROOT Environment Variable
-The `FM_ROOT` environment variable is set to the project root directory. This enables Claude Code to reference project paths consistently when running bash commands.
 
-**IMPORTANT: Always use `$FM_ROOT` in bash commands to refer to project files and paths - this is much less error-prone than relative paths.**
+`claude.sh` sets `FM_ROOT` to the checkout root. Other launch methods may leave
+it unset. If it is unset, initialize it from inside the intended FoxMCP checkout:
 
-Examples of proper usage:
 ```bash
-# Read project files
-cat $FM_ROOT/README.md
-ls $FM_ROOT/tests/
-
-# Run tests with proper paths
-PYTHONPATH=$FM_ROOT/tests $FM_ROOT/venv/bin/python -m pytest $FM_ROOT/tests/test_example.py
-
-# Edit files with absolute paths
-vim $FM_ROOT/server/server.py
-
-# Find files in project
-find $FM_ROOT -name "*.py" -type f
+export FM_ROOT="$(git rev-parse --show-toplevel)"
 ```
 
-Benefits of using `$FM_ROOT`:
-- ✅ **Error-free paths** - No ambiguity about working directory
-- ✅ **Consistent execution** - Commands work from any directory
-- ✅ **Clear intent** - Obviously references project files
-- ✅ **Reliable automation** - No path resolution issues
+Ensure each shell or tool command inherits this variable, or initialize it again.
+Always use `"$FM_ROOT"` in shell commands referring to repository paths and quote
+paths to support checkout directories containing spaces.
+
+```bash
+# Read project files
+cat "$FM_ROOT/README.md"
+
+# Run the existing unit-test target without Firefox
+make -C "$FM_ROOT" test-unit
+
+# Find project files
+rg --files "$FM_ROOT/server"
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup) for initial setup and
+[the test guide](tests/README.md) for Firefox and full-suite checks.
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
@@ -45,6 +72,16 @@ CONTRIBUTING.md specifies. Separate the subject and body with a blank line.
 Apply these rules to merge and squash messages too, and check line lengths
 before committing.
 NEVER add Claude Code attribution or "Generated with Claude Code" footer in git commit messages.
+
+# PR Review Architecture Rules
+
+Every PR review must check the diff against `docs/architecture.md#system-overview`,
+its source-symbol map and `docs/files.md`. Follow
+[Architecture Review](CONTRIBUTING.md#architecture-review). Explicitly report
+architecture alignment. For each violation or proposed architecture change,
+name the affected diagram component/connection/boundary, cite the PR code,
+and explain what is violated or changed and its impact. Intentional changes
+must be discussed and reflected in the design and diagram before merge.
 
 # Protocol Compatibility Rules
 
@@ -81,7 +118,8 @@ ALWAYS use the consolidated method `setup_and_start_firefox()` for Firefox test 
 
 ## ENABLE_DEBUG_LOGGING_TO_SERVER Setting
 
-Controls whether the Firefox extension sends debug messages to the server. Located in `extension/background.js` line ~97.
+Controls whether the Firefox extension sends debug messages to the server.
+Find `ENABLE_DEBUG_LOGGING_TO_SERVER` in `extension/background.js`.
 
 ```javascript
 const ENABLE_DEBUG_LOGGING_TO_SERVER = false;  // Set to true for debugging
@@ -90,7 +128,8 @@ const ENABLE_DEBUG_LOGGING_TO_SERVER = false;  // Set to true for debugging
 **Usage:**
 - Enable (`true`) for debugging extension connection issues or test failures
 - Disable (`false`) for production and before committing
-- After changing, run `make clean && make package` and clear profile cache: `rm -rf dist/profile-cache/*`
+- After changing, run `make -C "$FM_ROOT" package`; it rebuilds the extension
+  and clears the profile cache.
 
 **IMPORTANT: Always set back to `false` before committing.**
 
@@ -117,7 +156,10 @@ Reference documentation for how FoxMCP *works* stays here in `docs/`.
 ## README.md
 - Main project documentation and quick start guide
 - Development commands and troubleshooting
-- Complete browser function reference
+- Links to product reference documentation
+
+## docs/api-reference.md
+- Complete MCP tool reference and parameters
 
 ## tests/README.md
 - Test suite documentation and running instructions
