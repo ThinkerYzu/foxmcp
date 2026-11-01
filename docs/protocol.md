@@ -294,7 +294,7 @@ Browser requests and their replies follow this JSON structure (the standalone
 {
   "id": "req_002", 
   "type": "request",
-  "action": "history.get_recent",
+  "action": "history.recent",
   "data": {
     "count": 10
   },
@@ -778,50 +778,23 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 ```
 
 #### Execute Predefined Script
-**Request:**
-```json
-{
-  "id": "req_010b",
-  "type": "request",
-  "action": "content.execute_predefined",
-  "data": {
-    "tabId": 123,
-    "scriptName": "get_page_info.sh",
-    "scriptArgs": ["title"]
-  },
-  "timestamp": "2025-09-03T12:00:00.000Z"
-}
-```
 
-**Response:**
-```json
-{
-  "id": "req_010b",
-  "type": "response", 
-  "action": "content.execute_predefined",
-  "data": {
-    "result": "My Page Title",
-    "url": "https://example.com",
-    "scriptName": "get_page_info.sh",
-    "scriptOutput": "document.title"
-  },
-  "timestamp": "2025-09-03T12:00:01.000Z"
-}
-```
+`content_execute_predefined` is an MCP tool implemented by
+[FoxMCPTools](../server/mcp_tools.py), not a separate WebSocket action. The server
+validates the script name and JSON arguments, executes the configured external
+program, then sends its JavaScript output through `content.execute_script` with
+`data.tabId` and `data.script`, as above. The extension replies with the same
+`result`/`url` fields and applies the same script-consent policy as raw scripts.
+Script names, generator arguments and generator stdout are not additional
+fields in the extension response.
 
-**Security Validation Response:**
-```json
-{
-  "id": "req_010c",
-  "type": "error",
-  "action": "content.execute_predefined",
-  "data": {
-    "code": "INVALID_SCRIPT_NAME",
-    "message": "Invalid script name '../../../etc/passwd'. Script names cannot contain path separators or '..' sequences"
-  },
-  "timestamp": "2025-09-03T12:00:01.000Z"
-}
-```
+Validation, missing-file, permission, argument and generator failures return
+MCP tool text from Python without sending a browser action. For example, an
+invalid name returns `Error: Invalid script name ...`; it is not a wire error
+code. Generator execution has a 30-second timeout; the subsequent browser call
+has a 300-second response timeout. See the [script guide](scripts.md) for the
+MCP invocation and external-program contract, and
+[Script consent](#script-consent-unreleased-2026-10-31) for approval errors.
 
 #### Load a local file
 
@@ -1547,18 +1520,23 @@ at birth or answer each removal with another.
 
 ## Error Messages
 
-**Error Response:**
+Extension action failures use the envelope emitted by `sendError` in
+[background.js](../extension/background.js). Match the original request by `id`;
+error replies set `action` to the empty string. `details` defaults to an empty
+object and may contain action-specific diagnostics. Browser error-message text
+can vary by Firefox version and locale.
+
+For example, a failed `tabs.close` call is wrapped as `API_ERROR`:
+
 ```json
 {
   "id": "req_001",
-  "type": "error", 
-  "action": "tabs.close",
+  "type": "error",
+  "action": "",
   "data": {
-    "code": "TAB_NOT_FOUND",
-    "message": "Tab with ID 999 not found",
-    "details": {
-      "tabId": 999
-    }
+    "code": "API_ERROR",
+    "message": "Tabs API error: Invalid tab ID: 999",
+    "details": {}
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
@@ -1566,29 +1544,67 @@ at birth or answer each removal with another.
 
 ## Error Codes
 
-- `PERMISSION_DENIED` - Extension lacks required permissions
-- `TAB_NOT_FOUND` - Specified tab ID doesn't exist
-- `WINDOW_NOT_FOUND` - Specified window ID doesn't exist
-- `BOOKMARK_NOT_FOUND` - Specified bookmark ID doesn't exist
-- `INVALID_URL` - Provided URL is malformed
-- `INVALID_WINDOW_STATE` - Invalid window state specified
-- `INVALID_WINDOW_TYPE` - Invalid window type specified
-- `WINDOW_CREATION_FAILED` - Failed to create new window
-- `SCRIPT_EXECUTION_FAILED` - JavaScript execution failed
-- `WEBSOCKET_ERROR` - Connection or communication error
-- `INVALID_REQUEST` - Malformed request message
-- `UNKNOWN_ACTION` - Unsupported action requested
-- `INVALID_SCRIPT_NAME` - Script name contains invalid characters or path traversal attempts
-- `SCRIPT_NOT_FOUND` - External script file not found in configured directory
-- `SCRIPT_NOT_EXECUTABLE` - External script file lacks execute permissions
-- `INVALID_JSON` - Script arguments contain malformed JSON
-- `INVALID_SCRIPT_ARGS` - Script arguments must be JSON array of strings or empty string
-- `CAPTURE_ERROR` - Failed to capture screenshot of the visible tab, or of the tab given to `tabs.captureTab`
-- `MONITOR_NOT_FOUND` - No monitoring session with the given `monitor_id`
-- `REQUEST_NOT_FOUND` - No captured request with the given `request_id`
-- `API_ERROR` - A `browser.*` call raised while handling the action; `message` carries its error
-- `INVALID_PARAMETER` - A request field is missing or has the wrong type or value
-- `UNSUPPORTED_API` - This Firefox lacks the API the action needs, such as `tabs.group` before Firefox 138
+These are the codes explicitly produced by the current extension action
+handlers and their container/consent helpers. Python-side request failures
+(such as a timeout or disconnected profile) can instead return an `error`
+string to the tool layer; predefined-script validation returns MCP tool text as
+described [above](#execute-predefined-script). Neither is an extension
+`data.code`. Handshake refusal uses WebSocket close status 1008, not this
+request-error envelope.
+
+### Browser action errors
+
+| Code | Meaning |
+|---|---|
+| `API_ERROR` | A browser API or action handler failed; the message describes the failure. |
+| `UNKNOWN_ACTION` | The action namespace or operation is unsupported. |
+| `INVALID_PARAMETER` | An action field is missing or has an invalid type/value. |
+| `UNSUPPORTED_API` | This Firefox lacks the API or permission required for the action. |
+| `CAPTURE_ERROR` | The screenshot API rejected capture of the visible or specified tab. |
+| `WINDOW_NOT_FOUND` | Firefox rejected a window ID as invalid. |
+| `INVALID_WINDOW_STATE` | Firefox rejected a requested window state. |
+| `INVALID_WINDOW_TYPE` | Firefox rejected a requested window type. |
+| `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
+| `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
+| `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+
+### Script execution and consent errors
+
+| Code | Meaning |
+|---|---|
+| `SCRIPT_ERROR` | Script execution failed without a more specific consent code. |
+| `SCRIPT_DENIED` | The user denied script injection for this tab/origin. |
+| `SCRIPT_CONSENT_TIMEOUT` | The active approval prompt expired. |
+| `SCRIPT_CONSENT_CANCELLED` | The extension invalidated the pending request, including on disconnect. |
+| `SCRIPT_TARGET_CHANGED` | The target origin changed, is opaque, or the tab closed. |
+
+Disconnect invalidates pending work locally, but a closed socket cannot deliver
+its error reply. These codes do not add a transport cancellation API.
+
+### Container errors
+
+| Code | Meaning |
+|---|---|
+| `CONTAINERS_UNAVAILABLE` | Firefox contextual identities are disabled. |
+| `CONTAINER_NOT_FOUND` | No named container matches the supplied cookie-store ID. |
+| `CONTAINER_IN_USE` | Container removal was refused while tabs still use it. |
+
+Container handlers also use the general validation/API errors above.
+
+### Legacy test-helper errors
+
+These codes belong to the retained `test.*` handlers, not ordinary MCP tools.
+
+| Code | Meaning |
+|---|---|
+| `TEST_ERROR` | The test-action dispatcher caught an unexpected failure. |
+| `STORAGE_ERROR` | A popup/options projection or raw storage read failed. |
+| `VALIDATION_ERROR` | The UI/storage projection validation failed. |
+| `REFRESH_ERROR` | Refreshing test UI state failed. |
+| `INVALID_PARAMETERS` | A test visit/history request lacks required inputs. |
+| `VISIT_URL_ERROR` | The single-URL test visit helper failed. |
+| `VISIT_MULTIPLE_URLS_ERROR` | The multiple-URL test visit helper failed. |
+| `CLEAR_HISTORY_ERROR` | The test-history cleanup helper failed. |
 
 ## Test Helper Messages
 

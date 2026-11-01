@@ -7,6 +7,7 @@ import json
 import time
 import re
 from datetime import datetime
+from pathlib import Path
 
 class TestProtocolMessages:
     
@@ -97,23 +98,42 @@ class TestProtocolMessages:
 
 class TestProtocolErrorCodes:
     
-    def test_error_codes_defined(self):
-        """Test that error codes are properly defined"""
-        expected_error_codes = [
-            "PERMISSION_DENIED",
-            "TAB_NOT_FOUND", 
-            "BOOKMARK_NOT_FOUND",
-            "INVALID_URL",
-            "SCRIPT_EXECUTION_FAILED",
-            "WEBSOCKET_ERROR",
-            "INVALID_REQUEST",
-            "UNKNOWN_ACTION"
-        ]
-        
-        # These would be defined in a constants file
-        # For now just verify the list exists
-        assert len(expected_error_codes) == 8
-    
+    def test_error_codes_match_extension_documentation(self):
+        """Pair the error reference with real emitters, not a fixture-only list."""
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "extension/background.js").read_text()
+        # Literal codes, container helper errors and sendError fallback codes.
+        codes = set(re.findall(r"sendError\(id,\s*'([A-Z_]+)'", source))
+        codes.update(re.findall(r"containerError\('([A-Z_]+)'", source))
+        codes.update(re.findall(
+            r"sendError\(id,\s*\w+\.\w+\s*\|\|\s*'([A-Z_]+)'", source))
+        # Consent errors are attached to Error.code before sendError receives them.
+        gate = source.split("class ScriptConsentGate", 1)[1].split(
+            "const scriptConsent =", 1)[0]
+        codes.update(re.findall(r"'(SCRIPT_[A-Z_]+)'", gate))
+        assert {"API_ERROR", "UNKNOWN_ACTION", "SCRIPT_ERROR"} <= codes
+        doc = (root / "docs/protocol.md").read_text()
+        section = doc.split("## Error Codes\n", 1)[1].split("## Test Helper Messages", 1)[0]
+        documented = set(re.findall(r"^\| `([A-Z_]+)` \|", section, re.MULTILINE))
+        assert documented == codes, (
+            f"undocumented: {sorted(codes - documented)}; "
+            f"not emitted: {sorted(documented - codes)}")
+
+    def test_documented_error_envelope_matches_extension(self, sample_error):
+        """The shared fixture and example must reflect the actual error sender."""
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "extension/background.js").read_text()
+        sender = source.split("function sendError(", 1)[1].split("\n}", 1)[0]
+        assert "details = {}" in sender
+        doc = (root / "docs/protocol.md").read_text()
+        section = doc.split("## Error Messages\n", 1)[1].split("## Error Codes", 1)[0]
+        example = json.loads(re.search(r"```json\n(.*?)```", section, re.DOTALL)[1])
+        for key in ("type", "action"):
+            value = re.search(rf"\b{key}:\s*'([^']*)'", sender)[1]
+            assert example[key] == sample_error[key] == value
+        assert example["data"]["code"] == sample_error["data"]["code"]
+        assert example["data"]["details"] == sample_error["data"]["details"] == {}
+
     def test_error_message_format(self, sample_error):
         """Test error messages have required format"""
         error_data = sample_error["data"]

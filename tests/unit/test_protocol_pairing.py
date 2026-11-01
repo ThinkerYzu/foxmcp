@@ -152,3 +152,12 @@ def test_no_allowed_orphan_is_actually_sent():
         f"UNSENT_HANDLERS_ALLOWED names actions the server does send: "
         f"{sorted(unnecessary)}. Remove them from the list."
     )
+
+
+def test_documented_wire_actions_have_extension_handlers():
+    """A tool-only operation must not masquerade as a wire action in examples."""
+    doc = (_repo_root() / "docs/protocol.md").read_text()
+    actions = set(re.findall(r'"action"\s*:\s*"([A-Za-z_]+\.[A-Za-z_]+)"', doc))
+    assert "content.execute_script" in actions
+    assert actions <= _actions_handled_by_extension(), sorted(
+        actions - _actions_handled_by_extension())

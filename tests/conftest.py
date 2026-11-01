@@ -223,11 +223,11 @@ def sample_error():
     return {
         "id": "test_001",
         "type": "error",
-        "action": "tabs.close", 
+        "action": "",
         "data": {
-            "code": "TAB_NOT_FOUND",
-            "message": "Tab with ID 999 not found",
-            "details": {"tabId": 999}
+            "code": "API_ERROR",
+            "message": "Tabs API error: Invalid tab ID: 999",
+            "details": {}
         },
         "timestamp": "2025-09-03T12:00:01.000Z"
     }
