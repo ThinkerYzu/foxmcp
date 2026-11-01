@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.ThinkerYzu/foxmcp -->
+
 ![Claude Code prepares Firefox for a FoxMCP meeting by organizing tabs, saving bookmarks, and closing distractions.](https://raw.githubusercontent.com/ThinkerYzu/foxmcp/master/assets/demo.gif)
 
 *Prepare for a FoxMCP meeting with Claude Code: organize tabs, save the project

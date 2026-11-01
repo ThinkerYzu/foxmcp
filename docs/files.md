@@ -37,6 +37,7 @@ foxmcp/
 ├── docs/                      # Product reference documentation
 ├── assets/                    # README demo and repository artwork
 ├── pyproject.toml             # Python packaging and console entry point
+├── server.json                # Official MCP Registry package and launch metadata
 ├── Makefile                   # Setup, build, test and archive targets
 ├── CHANGELOG.md               # Changes by release, including Unreleased
 ├── RELEASES.md                # User-facing release notes

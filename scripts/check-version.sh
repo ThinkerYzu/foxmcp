@@ -2,7 +2,7 @@
 #
 # Fail unless every file that carries the version agrees with the one given.
 #
-# The version is written out by hand in eight places, so a tag can disagree with
+# The version is written out by hand in nine files, so a tag can disagree with
 # the manifest and nothing notices until a user installs the result. The release
 # workflow runs this first and refuses to build when it fails. Run it yourself
 # after bumping, before tagging.
@@ -77,6 +77,43 @@ check README.md \
 check CHANGELOG.md \
       "a '## [$version]' section" \
       "^##[[:space:]]+\[$escaped\]"
+
+# Parse registry metadata instead of matching a version anywhere in the JSON:
+# its top-level and package versions must each match the release independently.
+# Python 3 is already required to build and run FoxMCP.
+if ! python3 - "$version" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+try:
+    metadata = json.loads(Path("server.json").read_text())
+    expected = sys.argv[1]
+    checks = [("server.json version", metadata.get("version") == expected)]
+    packages = metadata.get("packages")
+    if not isinstance(packages, list) or not packages:
+        raise ValueError("server.json must contain packages")
+    checks.extend(
+        (f"server.json packages[{i}].version", package.get("version") == expected)
+        for i, package in enumerate(packages)
+    )
+    name = metadata.get("name")
+    markers = re.findall(
+        r"mcp-name:[ \t]*(\S+?)(?=\s|<|-->|$)", Path("README.md").read_text()
+    )
+    checks.append(("README.md mcp-name", isinstance(name, str) and bool(name)
+                   and markers == [name]))
+    for label, passed in checks:
+        print(f"  {label:<38} {'ok' if passed else 'MISMATCH'}")
+    sys.exit(0 if all(passed for _, passed in checks) else 1)
+except (OSError, ValueError, AttributeError, TypeError) as exc:
+    print(f"  Registry metadata check failed: {exc}", file=sys.stderr)
+    sys.exit(1)
+PY
+then
+    failed=1
+fi
 
 # The README also names the version in prose next to the download URL, which is
 # easy to bump halfway. Old versions are legitimate in CHANGELOG.md and

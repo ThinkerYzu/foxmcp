@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to rehearse, e.g. 1.2.0. No tag, no release, no PyPI or AMO upload.'
+        description: 'Version to rehearse, e.g. 1.2.0. No tag or publication, including PyPI, AMO and MCP Registry.'
         required: true
 
 permissions:
@@ -54,6 +54,12 @@ jobs:
 
       - name: Every file must agree with the tag
         run: scripts/check-version.sh "${{ steps.resolve.outputs.version }}"
+
+      - name: Install the pinned MCP Registry publisher
+        run: scripts/install-mcp-publisher.sh "$RUNNER_TEMP/mcp-publisher"
+
+      - name: Validate MCP Registry metadata without publishing
+        run: '"$RUNNER_TEMP/mcp-publisher/mcp-publisher" validate server.json'
 
       - name: The changelog must have something to say
         run: scripts/release-notes.sh "${{ steps.resolve.outputs.version }}"
@@ -221,3 +227,23 @@ jobs:
         with:
           packages-dir: dist/python/packages/
           attestations: true
+
+  mcp-registry:
+    name: Publish metadata to the MCP Registry
+    needs: [verify, pypi]
+    if: needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: mcp-registry
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned MCP Registry publisher
+        run: scripts/install-mcp-publisher.sh "$RUNNER_TEMP/mcp-publisher"
+      - name: Validate metadata before publishing
+        run: '"$RUNNER_TEMP/mcp-publisher/mcp-publisher" validate server.json'
+      - name: Authenticate with the repository owner identity
+        run: '"$RUNNER_TEMP/mcp-publisher/mcp-publisher" login github-oidc'
+      - name: Publish the PyPI-backed server entry
+        run: '"$RUNNER_TEMP/mcp-publisher/mcp-publisher" publish'

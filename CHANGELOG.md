@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Official MCP Registry metadata and release publishing after PyPI succeeds.
+  Manual release rehearsals validate the entry without publishing.
+
 - Optional per-tab/origin consent for raw and predefined agent scripts, controlled
   by a default-off extension toggle. Sequential prompts activate each target tab
   and focus its window, with a 60-second decision deadline. Firefox Desktop 149+
