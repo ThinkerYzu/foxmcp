@@ -595,8 +595,10 @@ the machine where Firefox runs; see [Starting the Server](#starting-the-server).
 The server reads no configuration file and has no `--config` option. Set
 server options with the [command-line options](#command-line-options) and
 [environment variables](#environment-variables). The extension keeps its
-settings in `browser.storage.sync`; see
-[Configuring Extension](#configuring-extension).
+connection settings in `browser.storage.sync`; see
+[Configuring Extension](#configuring-extension). The
+[script-consent toggle](#script-injection-consent) instead uses the extension
+page's origin-local storage so content scripts cannot change it.
 
 ## Logging Configuration
 
