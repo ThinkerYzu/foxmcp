@@ -606,37 +606,11 @@ docker run -p 8765:8765 -p 3000:3000 foxmcp
 
 ## Configuration Files
 
-FoxMCP supports configuration files for persistent settings:
-
-### `config.json` (Optional)
-
-```json
-{
-  "server": {
-    "host": "localhost",
-    "websocket_port": 8765,
-    "mcp_port": 3000,
-    "enable_mcp": true
-  },
-  "security": {
-    "localhost_only": true,
-    "allow_external": false
-  },
-  "scripts": {
-    "directory": "/path/to/scripts",
-    "timeout": 30
-  },
-  "logging": {
-    "level": "INFO",
-    "file": "foxmcp.log"
-  }
-}
-```
-
-```bash
-# Use configuration file
-python server/server.py --config config.json
-```
+The server reads no configuration file and has no `--config` option. Set
+server options with the [command-line options](#command-line-options) and
+[environment variables](#environment-variables). The extension keeps its
+settings in `browser.storage.sync`; see
+[Configuring Extension](#configuring-extension).
 
 ## Logging Configuration
 
