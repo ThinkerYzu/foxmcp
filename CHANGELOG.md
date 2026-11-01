@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared-stdio frontends construct no browser listener or registry. CLI, tool
   schemas remain unchanged. The refactor alone retained protocol ID 3.
 
+### Fixed
+
+- Treat interrupted shared-server discovery reads and other network failures as
+  temporary unavailability, allowing startup to recover when an owner closes an
+  accepted connection during shutdown. Keep rejecting incompatible discovery
+  responses; browser commands are never replayed.
+
 ## [1.6.0] - 2026-10-30
 
 ### Added

@@ -147,7 +147,8 @@ async def probe(host, port):
     try:
         async with httpx.AsyncClient(trust_env=False) as client:
             response = await client.get(f"http://{host}:{port}/discovery", timeout=1.0)
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError):
+    except (httpx.NetworkError, httpx.TimeoutException, httpx.RemoteProtocolError):
+        # The owner may close/reset an accepted connection while shutting down.
         return None
     if response.status_code == 503:
         return None  # A compatible owner can be between idle shutdown and unbind.

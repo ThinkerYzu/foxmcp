@@ -1,6 +1,10 @@
 """Discovery compatibility and retries after a lost bind or an owner shutdown."""
 
+import asyncio
 import json
+import socket
+import struct
+import sys
 from unittest.mock import AsyncMock, Mock
 
 import httpx
@@ -60,3 +64,34 @@ async def test_timeout_does_not_replay_browser_commands(monkeypatch):
     response = await browser.send_request_and_wait({"id": "id", "action": "tabs.create"})
     assert "disconnected" in response["error"]
     websocket.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_probe_recovers_after_owner_resets_discovery_connection():
+    metadata = {"server": SERVER_NAME, "protocol_version": PROTOCOL_VERSION,
+                "proxy_path": "/proxy", "pid": 123}
+    requests = []
+
+    async def owner(reader, writer):
+        requests.append(await reader.readuntil(b"\r\n\r\n"))
+        if len(requests) == 1:
+            # An owner can disappear after accepting the discovery request.
+            # Force a TCP reset rather than a clean EOF to reproduce CI's ReadError.
+            writer.get_extra_info("socket").setsockopt(
+                socket.SOL_SOCKET, socket.SO_LINGER,
+                struct.pack("HH" if sys.platform == "win32" else "ii", 1, 0))
+            writer.transport.abort()
+            return
+        body = json.dumps(metadata).encode()
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                     + f"Content-Length: {len(body)}\r\n".encode()
+                     + b"Connection: close\r\n\r\n" + body)
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    async with await asyncio.start_server(owner, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        assert await single_instance.probe("127.0.0.1", port) is None
+        assert await single_instance.probe("127.0.0.1", port) == metadata
+    assert len(requests) == 2

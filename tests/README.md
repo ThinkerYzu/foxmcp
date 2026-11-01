@@ -69,6 +69,20 @@ without constructing FastMCP, and accepts every registered tool name.
 The real-process proxy, shared-stdio, multiple-profile and final-package checks
 continue to verify routing, uploads and cleanup across process boundaries.
 
+### Discovery shutdown regression
+
+`unit/test_single_instance_election.py` uses a real loopback HTTP server to
+reset an accepted discovery connection, then return valid metadata on the next
+probe. This covers the `httpx.ReadError` reported during shared-worker teardown
+in [CI run 41274592645](https://github.com/ThinkerYzu/foxmcp/actions/runs/41274592645).
+The probe treats network transport failures as temporary unavailability while
+continuing to reject completed incompatible responses. Existing shared-instance
+and container lifecycle integration tests cover normal worker shutdown/restart.
+The repair passed all 523 unit tests and all 12 tests in those two integration
+modules locally (535 total, no skips, Firefox Developer Edition 159.0b1).
+This focused result is separate from the full CI run, whose 734 test bodies
+passed before teardown failed; corrected-source CI has not yet run.
+
 ## Source-installation smoke checks
 
 CI tests source installation separately on Python 3.10 and 3.14, including HTTP
@@ -94,7 +108,7 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 522 | no |
+| `unit/` | 523 | no |
 | `integration/` | 212 | yes |
 | `tests/*.py` (root) | not collected | varies |
 

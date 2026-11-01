@@ -287,7 +287,10 @@ and incoming proxy calls.
 `single_instance.py` probes `/discovery` on the configured extension port and
 checks the server identity, protocol ID and proxy path. It then opens `/proxy`
 and validates its greeting before serving MCP over stdio. Incompatible owners
-are refused. `/` remains the extension connection; manual HTTP, plain stdio and
+are refused. A discovery request interrupted by a network read/write/close
+error reports temporary unavailability, allowing the bounded startup loop to
+probe again if an owner is shutting down. Completed incompatible discovery
+responses are still refused. `/` remains the extension connection; manual HTTP, plain stdio and
 browser-only servers expose the same discovery and proxy routes. See the
 [route and envelope contracts](protocol.md#discovery-and-proxy-routes).
 
