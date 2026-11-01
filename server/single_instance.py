@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 
 import httpx
@@ -86,16 +87,35 @@ def spawn_windows_worker(command, log_path):
     A small PowerShell broker waits for its exit so discovery can still detect
     startup failures. Killing that broker does not kill the shared worker.
     """
-    bootstrap = (
-        "import os,runpy,sys; "
-        "sys.stdin=open(os.devnull); sys.stdout=open(os.devnull,'w'); "
-        "sys.stderr=open(sys.argv[1],'a',encoding='utf-8'); "
-        "sys.argv=sys.argv[2:]; sys.path.insert(0,os.path.dirname(sys.argv[0])); "
-        "runpy.run_path(sys.argv[0],run_name='__main__')"
-    )
+    ready_event = "Global\\FoxMCP-worker-" + uuid.uuid4().hex
+    bootstrap = r"""import ctypes, os, runpy, sys
+sys.stdin = open(os.devnull)
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(sys.argv[1], 'a', encoding='utf-8')
+kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel.OpenEventW.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p]
+kernel.OpenEventW.restype = ctypes.c_void_p
+kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+kernel.WaitForSingleObject.restype = ctypes.c_uint32
+kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+kernel.CloseHandle.restype = ctypes.c_int
+handle = kernel.OpenEventW(0x00100000, False, sys.argv[2])
+if not handle:
+    raise ctypes.WinError(ctypes.get_last_error())
+try:
+    if kernel.WaitForSingleObject(handle, int(sys.argv[3])) != 0:
+        raise RuntimeError('Shared worker broker did not attach before startup timeout')
+finally:
+    kernel.CloseHandle(handle)
+sys.argv = sys.argv[4:]
+sys.path.insert(0, os.path.dirname(sys.argv[0]))
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
     payload = {
         "command": subprocess.list2cmdline(
-            [command[0], "-c", bootstrap, str(log_path), *command[1:]]),
+            [command[0], "-c", bootstrap, str(log_path), ready_event,
+             str(int(START_TIMEOUT * 1000)), *command[1:]]),
+        "ready_event": ready_event,
         "cwd": os.getcwd(),
         "environment": [f"{name}={value}" for name, value in os.environ.items()],
     }
@@ -113,17 +133,28 @@ $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property
     CreateFlags = [uint32]0x09000600
     EnvironmentVariables = [string[]]$settings.environment
 }
-$created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine = [string]$settings.command
-    CurrentDirectory = [string]$settings.cwd
-    ProcessStartupInformation = $startup
+$ready = [Threading.EventWaitHandle]::new(
+    $false, [Threading.EventResetMode]::ManualReset, [string]$settings.ready_event)
+$worker = $null
+try {
+    $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+        CommandLine = [string]$settings.command
+        CurrentDirectory = [string]$settings.cwd
+        ProcessStartupInformation = $startup
+    }
+    if ($created.ReturnValue -ne 0) {
+        throw "Cannot start shared FoxMCP server: WMI error $($created.ReturnValue)"
+    }
+    $worker = [Diagnostics.Process]::GetProcessById($created.ProcessId)
+    # Acquire a stable handle before the bootstrap is allowed to run/exit.
+    $null = $worker.Handle
+    $null = $ready.Set()
+    $worker.WaitForExit()
+    exit $worker.ExitCode
+} finally {
+    if ($null -ne $worker) { $worker.Dispose() }
+    $ready.Dispose()
 }
-if ($created.ReturnValue -ne 0) {
-    throw "Cannot start shared FoxMCP server: WMI error $($created.ReturnValue)"
-}
-$worker = [Diagnostics.Process]::GetProcessById($created.ProcessId)
-$worker.WaitForExit()
-exit $worker.ExitCode
 """
     with open(log_path, "ab") as log:
         broker = subprocess.Popen(

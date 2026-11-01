@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hold Windows worker execution until the WMI broker has a stable process
+  handle, preventing a short-lived worker from disappearing before its exit
+  status can be observed. Preserve hidden launch, environment and independent
+  worker lifetime; bound the startup wait if the broker disappears.
+
 - Treat interrupted shared-server discovery reads and other network failures as
   temporary unavailability, allowing startup to recover when an owner closes an
   accepted connection during shutdown. Keep rejecting incompatible discovery

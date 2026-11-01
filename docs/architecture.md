@@ -321,8 +321,16 @@ client launch can start a replacement. Browser commands are never replayed.
 
 On Windows, the local WMI provider starts the worker outside the client's Job
 Object. A hidden PowerShell broker passes the environment over stdin and waits
-for the worker's exit. This prevents SDK process-tree cleanup from terminating
-the shared worker. See [configuration](configuration.md#sharing-one-server-across-chats).
+for the worker's exit. Before running its target script, the Python bootstrap
+waits on a unique global named Windows event. The broker acquires and retains
+the worker's process handle, then signals that event. This prevents a short-lived
+worker from exiting before the broker can attach and collect its exit code.
+The bootstrap wait is bounded by the 30-second startup timeout; a broker lost
+before attachment cannot leave it waiting forever. Once released, the worker
+survives termination of the broker. Event and process handles are disposed when
+their owners finish; there is no discovery file or extra listener.
+WMI ownership prevents SDK process-tree cleanup from terminating the shared
+worker. See [configuration](configuration.md#sharing-one-server-across-chats).
 
 ## Data Flow
 

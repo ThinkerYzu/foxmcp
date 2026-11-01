@@ -69,6 +69,19 @@ without constructing FastMCP, and accepts every registered tool name.
 The real-process proxy, shared-stdio, multiple-profile and final-package checks
 continue to verify routing, uploads and cleanup across process boundaries.
 
+### Windows broker attachment regression
+
+`unit/test_windows_worker_bootstrap.py` runs the actual bootstrap with controlled
+Win32 API results to verify gating, timeout/failure cleanup, argument forwarding
+and nonzero script exits. These portable checks do not prove native WMI behavior.
+`windows/test_worker.py` retains the hidden-console/environment check and adds
+forced broker-attachment delay with immediate exits 0/7, plus a real worker
+heartbeat after broker termination. Native Windows CI runs these checks across
+Python 3.10/3.14 and PowerShell 5.1/7. Local validation passed all 528 unit tests and eight shared-server integration
+tests (536 total, zero skips); the exact broker script also parses with
+PowerShell 7.6.9 on Linux. Nine native Windows cases collect successfully, but
+native validation of this repair is pending.
+
 ### Discovery shutdown regression
 
 `unit/test_single_instance_election.py` uses a real loopback HTTP server to
@@ -108,7 +121,7 @@ and are **not** part of the normal suite. Run them by hand if you need them.
 
 | Directory | Tests | Needs Firefox |
 |---|---|---|
-| `unit/` | 523 | no |
+| `unit/` | 528 | no |
 | `integration/` | 212 | yes |
 | `tests/*.py` (root) | not collected | varies |
 
