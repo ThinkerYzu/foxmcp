@@ -405,11 +405,13 @@ consistency, not API compatibility.
 
 1. Complete and record the protocol ID compatibility review described above.
 2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
-   `scripts/install-from-github.sh`, `scripts/install-from-github.ps1` and the
-   install URLs in `README.md`
+   `scripts/install-from-github.sh`, `scripts/install-from-github.ps1`, both
+   the top-level and package versions in `server.json`, and the install URLs
+   in `README.md`
 3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.6.0] - <date>` and add
    the link reference at the bottom
-4. `scripts/check-version.sh 1.6.0` — fails unless all eight files agree
+4. `scripts/check-version.sh 1.6.0` — fails unless all nine files agree
+   and the README `mcp-name` marker matches the registry server name
 5. Commit, then tag: `git tag -a v1.6.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
@@ -427,7 +429,9 @@ CI also builds and tests a Python wheel and sdist once. The release reuses those
 exact files, verifies `PYTHON-SHA256SUMS`, and includes them in GitHub provenance
 and release assets. A separate tag-only job publishes them to PyPI with OIDC
 Trusted Publishing and PyPI attestations. Manual rehearsals publish neither
-to PyPI nor GitHub.
+to PyPI nor GitHub. The tag-only `mcp-registry` job runs after PyPI succeeds
+and publishes the matching `server.json` through GitHub OIDC. Registry metadata
+is validated in `verify` on both tags and manual rehearsals.
 The AMO job unpacks the tested XPI for submission rather than rebuilding it.
 Release notes come from the changelog section. No publication happens if lint,
 installation, minimum-Python checks, the full suite or package smoke testing fails.
@@ -444,7 +448,7 @@ either workflow can reach those secrets.
 
 To rehearse without releasing anything, run the workflow by hand from the
 Actions tab and give it a version. It verifies and builds; it publishes nothing
-and never touches AMO.
+and never touches AMO or authenticates to the MCP Registry.
 
 There is no release script to run. `release-commands.sh` used to sit in the
 repository root and was deleted in 1.2.0; if you find a copy, it is not the
@@ -481,6 +485,38 @@ the next release. Rehearse first, then publish through a new version tag. After
 publication, verify `uvx --from foxmcp==VERSION foxmcp --help` from an empty
 directory and promote the README's uvx setup into Quick start. Do not describe
 the package as published until PyPI serves that tested version.
+
+### MCP Registry publication
+
+[`server.json`](../server.json) describes the PyPI package and the command
+`uvx foxmcp==VERSION --stdio`. Firefox still needs the extension installed
+separately, as described in [Quick Start](../README.md#quick-start).
+The README ownership marker must exactly match `server.json`'s `name`:
+`io.github.ThinkerYzu/foxmcp`. The registry checks the README served by PyPI,
+so the first publication requires a new PyPI release containing that marker.
+Already-published 1.6.0 cannot be replaced or registered with this preparation.
+
+Before the first registry publication, create the GitHub `mcp-registry`
+deployment environment with a required maintainer reviewer and a `v*` tag-only
+deployment policy. Allow the maintainer to approve their own releases, as for
+`amo`. The workflow uses `id-token: write` and `mcp-publisher login github-oidc`;
+GitHub OIDC grants the repository owner's `io.github.ThinkerYzu/*` namespace.
+No registry secret or interactive device login is required. See the official
+[GitHub Actions publishing guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/github-actions.mdx).
+
+Both validation and publication install the Linux x86-64 publisher pinned in
+[`scripts/install-mcp-publisher.sh`](../scripts/install-mcp-publisher.sh).
+When upgrading it, deliberately update both its release tag and SHA-256 from
+the upstream release. Rehearse the release workflow from the intended branch
+with its current version before tagging: registry validation must pass while
+all publishing jobs remain skipped. This does not test OIDC authentication or
+remote PyPI ownership checks, which occur only during an approved publication.
+
+After PyPI succeeds, approve the `mcp-registry` deployment. If registry
+publication fails, retain the successful package releases, correct the registry
+configuration and rerun the failed job. Verify the exact name/version on the
+[official registry](https://registry.modelcontextprotocol.io/) before reporting
+it as listed. Updating the awesome-mcp-servers list is a separate one-time PR.
 
 ## Troubleshooting
 
