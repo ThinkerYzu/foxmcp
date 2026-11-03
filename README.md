@@ -11,6 +11,8 @@ pages, and clear away distractions.*
 
 # FoxMCP — Firefox Browser Automation via MCP
 
+[![Glama score](https://glama.ai/mcp/servers/ThinkerYzu/foxmcp/badges/score.svg)](https://glama.ai/mcp/servers/ThinkerYzu/foxmcp)
+
 Connect an MCP-compatible AI assistant to Firefox. Manage tabs and windows,
 read pages, upload local files, organize bookmarks, search history, and inspect
 network requests.
