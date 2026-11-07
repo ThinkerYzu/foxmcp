@@ -45,18 +45,25 @@ export FOXMCP_EXT_SCRIPTS="/path/to/your/scripts"
 
 ### 2. Claude Code Integration
 
-The `claude-ex/` directory contains CLAUDE.md templates that help Claude Code understand how to create predefined external scripts:
+[claude-ex/CLAUDE.md.template](../claude-ex/CLAUDE.md.template) is a sample
+`CLAUDE.md` for the project where you *use* FoxMCP, not for this repository.
+Copy it into that project's directory and edit it there; do not copy it over
+this checkout's own `CLAUDE.md`:
 
 ```bash
-# Copy the template to enable Claude Code script assistance
-cp claude-ex/CLAUDE.md.template CLAUDE.md
+cp claude-ex/CLAUDE.md.template /path/to/your/project/CLAUDE.md
 ```
 
-This template provides Claude Code with:
-- Context about foxmcp predefined script system
-- Examples of script creation patterns
-- Guidelines for work-related browser automation
-- Understanding of script argument handling
+The sample shows how to:
+- Describe FoxMCP and when the agent may use browser tools
+- Call predefined scripts, with arguments as a JSON array string
+- Note what the bundled example scripts do
+- Wrap injected JavaScript in a function
+
+It does not teach script authoring; see [creating scripts](#3-create-executable-script).
+The server already lists every available script in the
+`content_execute_predefined` description, as described in
+[Telling AI Tools What a Script Does](#telling-ai-tools-what-a-script-does).
 
 ### 3. Create Executable Script
 

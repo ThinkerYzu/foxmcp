@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-07
+
 ### Added
 
 - Official MCP Registry metadata and release publishing after PyPI succeeds.
@@ -36,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schemas remain unchanged. The refactor alone retained protocol ID 3.
 
 ### Fixed
+
+- With script approval disabled, origin-change events no longer cancel script
+  execution. Enabled approval retains origin checks and stale-target rejection.
+- Correct protocol examples, extension permission/content-script references and
+  script setup instructions. Clarify the response-body retention limit.
+- Correct developer Makefile lifecycle sequencing, Firefox path quoting and
+  virtualenv overrides; isolate regression probes from inherited overrides.
 
 - Preserve client-facing tool guidance across docstring paragraphs without
   including internal structured sections. Clarify connection discovery, tab
@@ -354,7 +363,8 @@ error. See **Removed** below.
 ### Initial Release Scope
 This v1.0.0 release represents a complete, production-ready browser automation solution that enables AI assistants and automation tools to control Firefox browsers through the standardized Model Context Protocol (MCP).
 
-[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/ThinkerYzu/foxmcp/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/ThinkerYzu/foxmcp/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/ThinkerYzu/foxmcp/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.4.0

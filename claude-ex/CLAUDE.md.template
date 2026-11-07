@@ -15,8 +15,10 @@ My personal information.
 ## Foxmcp Predefined External Scripts
 A predefined external script is defined at the server side of foxmcp.
 To call a script, for example, `hello.sh` with two arguments, it means to call
-`content_execute_predefined(tab_id, "hello.sh", "[\"arg1\", \"arg2\"]")`.
-The last argument is a stringified JSON object that is a list of strings.
+`content_execute_predefined(profile_id=profile_id, tab_id=tab_id,
+script_name="hello.sh", script_args="[\"arg1\", \"arg2\"]")`.
+Choose `profile_id` from `profiles_list`. `script_args` is a stringified JSON
+list of strings.
 
 - gcal-cal-event-js.sh: extracts Google Calendar
   event details. Usage: `gcal-cal-event-js.sh "Event Title" day time`

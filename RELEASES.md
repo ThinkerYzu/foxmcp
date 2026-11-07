@@ -6,6 +6,111 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
+## v1.7.0 - Optional script approval (2026-11-07)
+
+### Preparation status
+
+This candidate is not published. Version declarations and installer download
+URLs target 1.7.0. The most recent published release remains v1.6.0.
+Required local checks, native Windows CI and a non-publishing release rehearsal
+must pass before tagging. The candidate includes protocol/reference corrections,
+accurate monitor guidance and the consent-off navigation regression fix.
+
+### Highlights
+
+- Optional approval for raw and predefined scripts, with per-tab/origin
+  Allow/Deny decisions, sequential prompts and a 60-second decision deadline.
+  The setting is off by default. Firefox Desktop 149+ opens the popup
+  automatically; older versions use the toolbar badge and a manual click.
+- Script tool calls allow five minutes for queue wait, approval and execution.
+- Separate MCP frontend and browser ownership, preserving existing commands
+  and tool schemas across HTTP, direct stdio and shared stdio.
+- Windows worker startup synchronizes broker attachment before execution;
+  interrupted discovery reads recover as temporary unavailability.
+- More complete MCP tool guidance and simpler uvx/stdio setup documentation.
+- Official MCP Registry metadata and tag-only publishing after PyPI succeeds.
+
+### Upgrade from v1.6.0
+
+Update the server and extension together to obtain both script approval and the
+longer response timeout. Restart existing shared workers and reconnect clients;
+rediscover profile IDs after reconnection. No new tools or extension permissions
+are added. Python 3.10+ remains required, and the catalog remains at 46 tools.
+
+Enable **Ask before agents run scripts in a tab** in Popup or Options to use
+approval. Built-in content readers and file loading do not require this prompt.
+Predefined generators still run locally before their JavaScript reaches the
+extension. Client-side call deadlines remain independent of the five-minute
+server timeout. See [script approval](docs/configuration.md#script-injection-consent).
+
+### Protocol compatibility review
+
+Baseline: released `v1.6.0` at
+`53232dcf3555d841df966917a8724431d680624d`. Reviewed source changes through
+`7aac046`, the reference/metadata repairs, the consent-off navigation fix
+and this candidate's version metadata. Released and candidate protocol IDs
+are both **3**:
+
+- The BrowserServer/MCPFrontend extraction changes component ownership and
+  startup composition, preserving discovery, proxy and extension handshakes,
+  action names, payloads, routing IDs, results and monitor lifetimes.
+- Optional script consent uses the existing `content.execute_script` request
+  and error envelope. The default-off policy preserves ordinary execution;
+  enabling it explicitly requests the additional approval behavior. Retaining
+  ID 3 for this opt-in feature follows the maintainer's recorded decision.
+- Script tools extend their local response timeout to 300 seconds. The existing
+  proxy already accepts it; no new progress or cancellation messages are added.
+  Earlier ID-3 servers retain shorter timeouts, so matching protocol IDs alone
+  do not establish that the longer timeout is available.
+- Windows process synchronization and discovery-network recovery change local
+  startup reliability, preserving completed discovery responses and refusing
+  incompatible owners. Browser commands are never replayed.
+- The navigation fix restores the default-off execution contract: origin-change
+  events no longer cancel an explicitly ungated job. Enabled-policy checks still reject
+  stale targets, and preparing/deferred jobs retain origin invalidation.
+- Tool guidance, registry metadata and documentation do not modify action
+  contracts. No existing action is removed or renamed.
+
+Decision: retain ID 3. Recheck this review if preparation adds a wire-contract
+change. See the [protocol policy](docs/protocol.md#protocol-id-compatibility-policy).
+
+### Architecture review
+
+The refactor follows the updated system diagram and source-symbol map:
+`MCPFrontend` owns tools, MCP transports and file transfers; `BrowserServer`
+owns profiles, sockets and `BrowserProxyHub`; `RemoteBrowser` forwards browser
+commands across the existing process boundary. Script consent is owned by the
+extension background, with Popup/Options presenting its state. Release metadata
+and documentation changes add no component or process boundary. No outstanding
+architecture violation was identified in the reviewed release scope.
+
+### Release validation
+
+Local candidate validation passes:
+
+- Full Firefox suite: 774 tests, zero failures/errors/skips, all required
+  unit/integration modules; 967.47 seconds, 82% Python coverage.
+- Python 3.10 units: 562 tests, zero skips, all required unit modules.
+- The controlled consent-off navigation regression fails before the fix and
+  passes afterward. Five focused consent/file-loading checks pass.
+- Final ZIP/XPI clean installation and all 46 tools pass over HTTP and stdio,
+  with ten feature groups per transport and verified upload bytes/events.
+- Wheel and sdist pass content, version, executable-bit and strict metadata
+  checks. Both formats install and pass outside-checkout smoke checks on
+  Python 3.10 and 3.14; all dependency checks pass.
+- Strict Python lint, version consistency, changelog extraction, archive
+  checksums and pinned MCP Registry publisher schema validation pass.
+- All 46 registered tool names/signatures/return annotations and extension
+  permissions match v1.6.0.
+
+Native Windows candidate checks and the exact-candidate non-publishing GitHub
+rehearsal remain pending. AMO, PyPI and MCP Registry deployment environments
+allow only v* tags; AMO and MCP Registry retain maintainer approval gates.
+No successful remote rehearsal or publication is claimed here. Registry schema
+validation does not establish OIDC authentication or remote ownership checks.
+Older-Firefox manual popup presentation and signed standard-Firefox
+upgrade/policy checks remain separate from the unsigned Developer Edition tests.
+
 ## v1.6.0 - Multiple profiles and Windows installation (2026-10-30)
 
 ### Publication status

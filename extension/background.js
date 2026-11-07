@@ -237,7 +237,10 @@ class ScriptConsentGate {
         const decision = this.decisions.get(tabId);
         if (decision && decision.origin !== origin) this.decisions.delete(tabId);
         for (const job of [...this.jobs.values()]) {
-          if (job.tabId === tabId && job.origin !== undefined && job.origin !== origin) {
+          // Deferred/preparing jobs still retain their original target. Only
+          // jobs admitted with consent disabled bypass origin enforcement.
+          if (job.gated !== false && job.tabId === tabId &&
+              job.origin !== undefined && job.origin !== origin) {
             this.cancel(job.id, 'Target origin changed', 'SCRIPT_TARGET_CHANGED');
           }
         }

@@ -229,7 +229,7 @@ extension/
 ├── settings.js     # Shared controller for Popup/Options
 ├── settings.css    # Shared light/dark styling
 ├── options.html/.js/.css # Full-page settings and DOM adapter
-├── content.js      # Content script injection
+├── content.js      # Page text/HTML readers and file handles
 └── popup/          # Toolbar popup layout and DOM adapter
 ```
 
@@ -427,11 +427,11 @@ consistency, not API compatibility.
    `scripts/install-from-github.sh`, `scripts/install-from-github.ps1`, both
    the top-level and package versions in `server.json`, and the install URLs
    in `README.md`
-3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.6.0] - <date>` and add
+3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.7.0] - <date>` and add
    the link reference at the bottom
-4. `scripts/check-version.sh 1.6.0` — fails unless all nine files agree
+4. `scripts/check-version.sh 1.7.0` — fails unless all nine files agree
    and the README `mcp-name` marker matches the registry server name
-5. Commit, then tag: `git tag -a v1.6.0 -m "..."` and push the tag
+5. Commit, then tag: `git tag -a v1.7.0 -m "..."` and push the tag
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,

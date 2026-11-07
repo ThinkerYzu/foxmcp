@@ -161,3 +161,18 @@ def test_documented_wire_actions_have_extension_handlers():
     assert "content.execute_script" in actions
     assert actions <= _actions_handled_by_extension(), sorted(
         actions - _actions_handled_by_extension())
+
+
+def test_every_sent_action_is_documented():
+    """Each action the server sends must be described in protocol.md
+
+    The reference is how another client learns a wire shape. windows.update
+    was sent and handled for months while protocol.md never mentioned it.
+    A JSON example or a backticked name in a table or sentence both count.
+    """
+    doc = (_repo_root() / "docs/protocol.md").read_text()
+    documented = set(re.findall(r'"action"\s*:\s*"([A-Za-z_]+\.[A-Za-z_]+)"', doc))
+    documented.update(re.findall(r'`([A-Za-z_]+\.[A-Za-z_]+)`', doc))
+    undocumented = _actions_sent_by_server() - documented
+    assert not undocumented, (
+        f"actions sent by the server but absent from protocol.md: {sorted(undocumented)}")

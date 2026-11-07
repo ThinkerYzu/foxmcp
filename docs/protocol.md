@@ -84,7 +84,9 @@ Request monitors are owned by the proxy that starts them. On disconnect, pending
 requests finish before cleanup, including monitor-creation replies that arrive
 after the caller has gone. Only that proxy's monitors are stopped.
 
-### Script consent (unreleased, 2026-10-31)
+<a id="script-consent-unreleased-2026-10-31"></a>
+
+### Script consent (1.7.0)
 
 The optional per-tab/origin gate retains protocol ID **3**. Script requests,
 results and error envelopes are unchanged; no progress or cancellation message
@@ -104,6 +106,8 @@ Consent errors use the existing `type: error` envelope with `data.code`:
 `SCRIPT_DENIED`, `SCRIPT_CONSENT_TIMEOUT`, `SCRIPT_CONSENT_CANCELLED` and
 `SCRIPT_TARGET_CHANGED`. The cancellation code describes extension-local
 invalidation, such as connection loss; it adds no transport cancellation API.
+Origin-change cancellation applies to gated and not-yet-admitted jobs; an
+injection admitted while consent is disabled retains ordinary script behavior.
 Timeout rejects pending injections without remembering Deny. Explicit decisions
 are remembered only for that tab/current origin.
 See [configuration](configuration.md#script-injection-consent) for user behavior.
@@ -279,14 +283,14 @@ Browser requests and their replies follow this JSON structure (the standalone
         "lastVisitTime": 1693664400000,
         "visitCount": 5
       }
-    ],
-    "totalCount": 1
+    ]
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
 
 **Note:** `lastVisitTime` is in milliseconds since Unix epoch (not ISO 8601 string). This matches Firefox's WebExtensions API format.
+`data` holds only `items`, Firefox's `HistoryItem` records; there is no total count.
 
 #### Get Recent History
 **Request:**
@@ -726,9 +730,7 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
   "type": "response",
   "action": "content.get_text",
   "data": {
-    "text": "This is the page content...",
-    "url": "https://example.com",
-    "title": "Example Page"
+    "text": "This is the page content..."
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
@@ -896,7 +898,9 @@ for page-side use.
   "id": "req_020",
   "type": "request",
   "action": "windows.list",
-  "data": {},
+  "data": {
+    "populate": true
+  },
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
 ```
@@ -934,6 +938,9 @@ for page-side use.
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
 ```
+
+`populate` is optional and defaults to `true`; `false` omits each window's
+`tabs` list.
 
 #### Get Window Information
 **Request:**
@@ -1099,6 +1106,51 @@ new one keeps it.
 }
 ```
 
+#### Update Window
+**Request:**
+```json
+{
+  "id": "req_026",
+  "type": "request",
+  "action": "windows.update",
+  "data": {
+    "windowId": 1,
+    "state": "normal",
+    "width": 1280,
+    "height": 800,
+    "top": 0,
+    "left": 0
+  },
+  "timestamp": "2025-09-03T12:00:00.000Z"
+}
+```
+
+`windowId` is required. `state`, `focused`, `width`, `height`, `top` and `left`
+are optional and passed to Firefox's `windows.update`.
+
+**Response:**
+```json
+{
+  "id": "req_026",
+  "type": "response",
+  "action": "windows.update",
+  "data": {
+    "window": {
+      "id": 1,
+      "type": "normal",
+      "state": "normal",
+      "focused": true,
+      "top": 0,
+      "left": 0,
+      "width": 1280,
+      "height": 800,
+      "incognito": false
+    }
+  },
+  "timestamp": "2025-09-03T12:00:01.000Z"
+}
+```
+
 ### 6. Bookmark Management
 
 #### List Bookmarks
@@ -1187,10 +1239,11 @@ entry of a full listing has neither `parentId` nor `index`.
     "bookmark": {
       "id": "bm_003",
       "parentId": "1",
+      "index": 4,
       "title": "New Site",
       "url": "https://newsite.com",
-      "dateAdded": "2025-09-03T12:00:00.000Z",
-      "isFolder": false
+      "dateAdded": 1756900800000,
+      "type": "bookmark"
     }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
@@ -1222,8 +1275,9 @@ entry of a full listing has neither `parentId` nor `index`.
     "folder": {
       "id": "bm_004",
       "parentId": "1",
+      "index": 5,
       "title": "My Projects",
-      "dateAdded": "2025-09-03T12:00:00.000Z",
+      "dateAdded": 1756900800000,
       "type": "folder"
     }
   },
@@ -1257,10 +1311,11 @@ entry of a full listing has neither `parentId` nor `index`.
     "bookmark": {
       "id": "bm_003",
       "parentId": "1",
+      "index": 4,
       "title": "Updated Title",
       "url": "https://updated-site.com",
-      "dateAdded": "2025-09-03T12:00:00.000Z",
-      "dateGroupModified": "2025-09-03T12:05:00.000Z"
+      "dateAdded": 1756900800000,
+      "type": "bookmark"
     }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
@@ -1268,6 +1323,9 @@ entry of a full listing has neither `parentId` nor `index`.
 ```
 
 **Note:** For folders, omit the `url` parameter. Either `title` or `url` (or both) must be provided.
+Create, create-folder and update responses carry Firefox's own `BookmarkTreeNode`
+unchanged: `type` is `bookmark`, `folder` or `separator`, and dates are
+milliseconds since the Unix epoch. Only `bookmarks.list` adds an `isFolder` flag.
 
 #### Move Bookmark or Folder
 **Request:**
@@ -1368,7 +1426,11 @@ format only.
     "status": "active",
     "started_at": "2026-08-14T12:00:00.000Z",
     "url_patterns": ["https://example.org/*"],
-    "options": {}
+    "options": {
+      "capture_response_bodies": true,
+      "max_body_size": 50000,
+      "content_types_to_capture": ["application/json", "text/plain"]
+    }
   },
   "timestamp": "2026-08-14T12:00:00.100Z"
 }
@@ -1376,6 +1438,8 @@ format only.
 
 `tab_id` is optional; without it the monitor watches every tab. The `options` echoed
 back are the ones the server sent, including any the extension does not read.
+The FoxMCP server fills in its defaults before sending, so its own requests also
+carry `capture_request_bodies` and `sensitive_headers`.
 
 #### List Captured
 **Request:**
@@ -1416,6 +1480,8 @@ back are the ones the server sent, including any the extension does not read.
   "timestamp": "2026-08-14T12:01:00.100Z"
 }
 ```
+
+A request that failed also carries `error`, Firefox's network error string.
 
 #### Get Content
 **Request:**

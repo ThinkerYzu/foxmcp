@@ -2639,8 +2639,9 @@ class FoxMCPTools:
             requests_get_content and requests_stop_monitoring; monitors cannot be
             listed. Omit tab_id to capture matching traffic across this profile.
 
-            Capturing uses memory. Stop when finished; stored captures remain
-            readable until the profile disconnects. Client disconnection stops
+            Capturing uses memory. Stop when finished; summaries remain readable
+            until the profile disconnects, but only the latest 200 response
+            bodies across all monitors are kept. Client disconnection stops
             its monitors; profile disconnection clears monitors and captured data.
 
             Args:
@@ -2715,7 +2716,8 @@ class FoxMCPTools:
             traffic needs capturing. drain_timeout is ignored: this does not wait
             for in-flight requests. Already captured records remain available to
             requests_list_captured and requests_get_content until the profile
-            disconnects. An unknown monitor_id fails with MONITOR_NOT_FOUND.
+            disconnects, subject to the response-body limit. An unknown
+            monitor_id returns a "not found" error.
 
             Args:
                 monitor_id: ID of the monitoring session to stop

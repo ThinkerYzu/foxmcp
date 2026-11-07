@@ -304,7 +304,7 @@ never fall back to another connected profile.
 
 Every tool's description sits in an MCP client's context for the whole session,
 whether or not the tool is ever called. With no predefined scripts listed, the
-full set of 46 tools costs roughly 10,312 tokens. `--disable-tools` leaves a group unregistered, so a client never
+full set of 46 tools costs roughly 10,338 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -323,7 +323,7 @@ token, so treat them as proportions rather than exact counts:
 | `containers` | list, create, update, remove | 625 |
 | `bookmarks` | list, search, create, create_folder, update, move, delete | 1,438 |
 | `windows` | list, get, get_current, create, close, focus, update | 1,413 |
-| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 1,270 |
+| `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 1,296 |
 | `navigation` | back, forward, reload, go_to_url | 668 |
 | `content` | get_text, get_html, execute_script, execute_predefined, load_file | 1,203 plus listed scripts |
 | `history` | query, get_recent, delete_item | 506 |
@@ -751,6 +751,9 @@ in a tab**. It is off by default. This setting gates `content_execute_script`
 and JavaScript produced by `content_execute_predefined`; built-in content
 helpers, text/HTML reading and file loading continue without this prompt.
 Predefined generators still run locally before their output reaches the gate.
+When disabled, the gate neither asks for approval nor cancels an injection
+because of an origin-change event. Firefox still enforces its normal script
+permissions and document lifecycle.
 
 When enabled, FoxMCP activates the target tab, focuses its window and asks Allow
 or Deny in the extension's toolbar popup. Multiple targets are presented one at

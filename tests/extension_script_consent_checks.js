@@ -198,6 +198,20 @@
   check((await off.run('off')).value[0]===42 && !off.gate.current, 'default-off executes without approval');
   check(off.switches.length===0, 'disabled gate preserves background focus');
 
+  const offNavigation=await app(false);
+  const getTab=offNavigation.browser.tabs.get;
+  let reads=0;
+  offNavigation.browser.tabs.get=async id=>{
+    const tab=await getTab(id);
+    if (++reads===2) offNavigation.navigate(id,'https://example.org:8443/');
+    return tab;
+  };
+  const navigated=await offNavigation.run('off-navigation');
+  check(navigated.value?.[0]===42 && offNavigation.executions.length===1,
+    'disabled gate does not cancel execution on an origin-change event');
+  check(offNavigation.executions[0].code==='40+2' && offNavigation.switches.length===0,
+    'disabled navigation retains the original code and background focus');
+
   const a=await app();
   const first=a.run('first',2), same=a.run('same',2), third=a.run('third',3);
   await settle();

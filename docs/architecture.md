@@ -122,10 +122,18 @@ the popup. See
 [protocol](protocol.md#script-consent-unreleased-2026-10-31).
 
 #### Content Script (`content.js`)
-- **Page Injection**: Injected into all pages (`<all_urls>`) for content access
-- **JavaScript Execution**: Executes custom scripts in page context
-- **DOM Interaction**: Extracts text, HTML, and manipulates page content
-- **Communication Bridge**: Relays data between page and background script
+- **Page Injection**: Declared for `<all_urls>` in each tab's top-level document;
+  file loading injects it again if a page has none
+- **Content Readers**: Returns `document.body.innerText` and
+  `document.documentElement.outerHTML` for `content.get_text` and
+  `content.get_html`
+- **File Handles**: Keeps files received through `content.load_file` in
+  `globalThis.foxmcpFiles` for later scripts
+
+Agent scripts do not pass through `content.js`. `ScriptConsentGate` injects them
+with `browser.tabs.executeScript`, which runs them in the same isolated
+content-script scope, not in the page's own JavaScript context. The content
+script does not relay messages between the page and the extension.
 
 #### Shared settings UI
 
@@ -397,7 +405,7 @@ process. See [scripts.md](scripts.md).
 Neither port authenticates local processes, which is deliberate — a process running as the user already has the browser profile and the script directory, so a shared secret between two components under that user's control would guard nothing.
 
 ### 2. Extension Security
-- **Broad Permissions**: The extension requests `tabs`, `tabGroups`, `menus`, `clipboardWrite`, `windows`, `history`, `bookmarks`, `activeTab`, `storage`, `webRequest`, `webRequestBlocking`, and `<all_urls>`. `clipboardWrite` is there for the tab context menu's copy item, which writes a tab ID to the clipboard; nothing reads the clipboard. `webRequestBlocking` is there for `filterResponseData`, which is the only way to read a response body and which Firefox grants only to an extension holding that permission; no listener blocks, cancels or rewrites a request. The set is deliberately wide — the extension exists to expose browser state — and it is the reason the server must stay on localhost. Treat an installed FoxMCP as granting its MCP client the same reach over the browser that you have.
+- **Broad Permissions**: The extension requests `contextualIdentities`, `cookies`, `tabs`, `tabGroups`, `menus`, `clipboardWrite`, `history`, `bookmarks`, `activeTab`, `storage`, `webRequest`, `webRequestBlocking`, and `<all_urls>`. The window API needs no permission. `contextualIdentities` and `cookies` serve container management and cookie-store selection for tabs. `clipboardWrite` is there for the tab context menu's copy item, which writes a tab ID to the clipboard; nothing reads the clipboard. `webRequestBlocking` is there for `filterResponseData`, which is the only way to read a response body and which Firefox grants only to an extension holding that permission; no listener blocks, cancels or rewrites a request. The set is deliberately wide — the extension exists to expose browser state — and it is the reason the server must stay on localhost. Treat an installed FoxMCP as granting its MCP client the same reach over the browser that you have.
 - **Sandboxing**: Content scripts run in the standard isolated content-script context
 
 ### 3. Script Security

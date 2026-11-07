@@ -24,15 +24,15 @@ client talks to the server, which sends commands to the extension.
 scripts. Use trusted clients and consider a dedicated Firefox profile.
 See [SECURITY.md](SECURITY.md) for the threat model.
 
-Version 1.6.0 is published on [PyPI](https://pypi.org/project/foxmcp/1.6.0/)
-and [GitHub](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.6.0).
-The matching extension is available from
+Get the server from [PyPI](https://pypi.org/project/foxmcp/) or
+[GitHub releases](https://github.com/ThinkerYzu/foxmcp/releases).
+Install the matching extension from
 [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
 
 **Upgrading:** Update the server and extension together, restart shared workers,
 and refresh your client's tool schemas. Call `profiles_list` and pass its integer
 `profile_id` to every browser tool, even with one profile connected. Rediscover
-targets after reconnection. See [release notes](RELEASES.md#v160---multiple-profiles-and-windows-installation-2026-10-30).
+targets after reconnection. See [release notes](RELEASES.md#v170---optional-script-approval-2026-11-07).
 
 ## FoxMCP or firefox-devtools-mcp?
 
@@ -171,7 +171,7 @@ FoxMCP installed:
 
 ```bash
 mkdir foxmcp && cd foxmcp
-curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.6.0/install-from-github.sh | bash
+curl -fSL https://github.com/ThinkerYzu/foxmcp/releases/download/v1.7.0/install-from-github.sh | bash
 ```
 
 The installer verifies the release archive checksums, creates `venv/`, installs
@@ -190,7 +190,7 @@ Use separate commands below: PowerShell 5.1 cannot parse `&&`, which was added i
 
 ```powershell
 New-Item -ItemType Directory foxmcp-installer
-$installerBase = 'https://github.com/ThinkerYzu/foxmcp/releases/download/v1.6.0'
+$installerBase = 'https://github.com/ThinkerYzu/foxmcp/releases/download/v1.7.0'
 Invoke-WebRequest -UseBasicParsing "$installerBase/install-from-github.ps1" -OutFile foxmcp-installer/install-from-github.ps1
 Invoke-WebRequest -UseBasicParsing "$installerBase/install-xpi.ps1" -OutFile foxmcp-installer/install-xpi.ps1
 New-Item -ItemType Directory foxmcp
