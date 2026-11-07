@@ -8,13 +8,26 @@ generated from.
 
 ## v1.7.0 - Optional script approval (2026-11-07)
 
-### Preparation status
+### Publication status
 
-This candidate is not published. Version declarations and installer download
-URLs target 1.7.0. The most recent published release remains v1.6.0.
-Required local checks, native Windows CI and a non-publishing release rehearsal
-must pass before tagging. The candidate includes protocol/reference corrections,
-accurate monitor guidance and the consent-off navigation regression fix.
+- [GitHub release](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.7.0)
+  and [PyPI](https://pypi.org/project/foxmcp/1.7.0/) are public. GitHub published
+  at 2026-11-07T20:08:52Z. All nine assets downloaded; both checksum manifests,
+  extension version/protocol and all three tagged installers verify.
+- All four packages' signed provenance verifies against this repository,
+  release.yml, refs/tags/v1.7.0 and exact rehearsed source
+  b70c9ffe8e5f5c3a4fbd207385477042f9f5c057. PyPI hashes and downloaded bytes
+  exactly match the verified GitHub wheel and sdist.
+- Fresh isolated-cache PyPI uvx CLI and actual stdio startup pass: all 46 tools
+  are discoverable, disconnected-profile routing is refused, and shutdown is
+  clean. Real browser workflows are covered by the final-package gates.
+- The [official MCP Registry entry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.ThinkerYzu%2Ffoxmcp/versions/1.7.0)
+  is public as io.github.ThinkerYzu/foxmcp version 1.7.0 with matching PyPI
+  package metadata. This is the first official-registry publication.
+- AMO accepted submission 6678030 and awaits Mozilla review. The public
+  [Firefox Add-ons listing](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
+  still serves 1.6.0 when checked. Signed-extension verification and standard
+  Firefox upgrade/policy checks await the signed artifact.
 
 ### Highlights
 
@@ -103,11 +116,20 @@ Local candidate validation passes:
 - All 46 registered tool names/signatures/return annotations and extension
   permissions match v1.6.0.
 
-Native Windows candidate checks and the exact-candidate non-publishing GitHub
-rehearsal remain pending. AMO, PyPI and MCP Registry deployment environments
-allow only v* tags; AMO and MCP Registry retain maintainer approval gates.
-No successful remote rehearsal or publication is claimed here. Registry schema
-validation does not establish OIDC authentication or remote ownership checks.
+The exact b70c9ff candidate passed the
+[non-publishing rehearsal](https://github.com/ThinkerYzu/foxmcp/actions/runs/42406611753)
+and the [tagged publishing workflow](https://github.com/ThinkerYzu/foxmcp/actions/runs/42408135365).
+Both full suites passed 774 tests without failures/errors/skips and every
+required module (974.197 seconds for rehearsal, 951.572 for the tagged run).
+All four native Windows Python/PowerShell combinations pass, with ten tests
+per combination. Final archives pass all 46 tools and ten feature groups on
+each of HTTP and stdio, including exact file-upload bytes and page events.
+All 20 tagged workflow jobs succeeded. Master-push CI also passed on b70c9ff.
+
+AMO, PyPI and MCP Registry environments allow only v* tags. The maintainer's
+release request authorized the AMO and registry deployment approvals; both
+jobs completed. Registry OIDC authentication and remote package ownership
+checks succeeded during publication, followed by public exact-version readback.
 Older-Firefox manual popup presentation and signed standard-Firefox
 upgrade/policy checks remain separate from the unsigned Developer Edition tests.
 

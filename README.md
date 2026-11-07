@@ -24,10 +24,11 @@ client talks to the server, which sends commands to the extension.
 scripts. Use trusted clients and consider a dedicated Firefox profile.
 See [SECURITY.md](SECURITY.md) for the threat model.
 
-Get the server from [PyPI](https://pypi.org/project/foxmcp/) or
-[GitHub releases](https://github.com/ThinkerYzu/foxmcp/releases).
-Install the matching extension from
-[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/).
+Version 1.7.0 is published on [PyPI](https://pypi.org/project/foxmcp/1.7.0/)
+and [GitHub](https://github.com/ThinkerYzu/foxmcp/releases/tag/v1.7.0).
+The 1.7.0 extension update is awaiting Mozilla review;
+[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/foxmcp/)
+currently serves 1.6.0. See [release status](RELEASES.md#v170---optional-script-approval-2026-11-07).
 
 **Upgrading:** Update the server and extension together, restart shared workers,
 and refresh your client's tool schemas. Call `profiles_list` and pass its integer
