@@ -92,8 +92,8 @@ does not rely on an extension-supplied name or a user-entered label.
   - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
     not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
     has `tabs.captureTab`; an older one answers that it is too old
-- `tabs_record_start(profile_id, tab_id, interval_ms=500, max_frames=60, scale=0.5, quality=50)` - Start recording a tab as small JPEG captures (kept in the extension; stops by itself at `max_frames`, at most 300)
-- `tabs_record_stop(profile_id, recording_id, filename)` - Stop a recording and save it as an animated GIF; identical frames in a row are merged. GIF needs the optional Pillow package (`pip install pillow`); without it the frames are saved as numbered JPEG files in a folder
+- `tabs_record_start(profile_id, tab_id, interval_ms=500, max_frames=60, scale=0.5, quality=50)` - Start recording a tab as small JPEG captures kept in the extension (dropped when the tab closes or the connection ends). `interval_ms` is an integer from 100 to 5000, `max_frames` from 1 to 300 (it stops by itself there), `scale` a number above 0 and at most 1, `quality` an integer from 1 to 100. Starting again on the same tab drops the earlier recording
+- `tabs_record_stop(profile_id, recording_id, filename)` - Stop a recording and save it as an animated GIF; identical frames in a row are merged. The file is written where `filename` says and replaces an existing one, as the screenshot tool does. GIF needs the optional Pillow package (`pip install pillow`); without it the frames are saved as numbered JPEG files in a folder
 
 ### Firefox Containers
 

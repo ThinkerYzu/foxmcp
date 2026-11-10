@@ -721,8 +721,10 @@ GIF, so no message carries more than one frame.
 
 `tabs.record_start` answers `{"recordingId", "intervalMs", "maxFrames"}` after the first
 frame is taken (a tab that cannot be captured is a `CAPTURE_ERROR`). `intervalMs` is
-limited to 100-5000 and `maxFrames` to 1-300; capturing stops at that count. There is one
-recording per tab, and starting again replaces it. `tabs.record_stop` answers
+an integer from 100 to 5000, `maxFrames` from 1 to 300, `quality` from 1 to 100 and `scale` a finite
+number above 0 and at most 1, otherwise the answer is an `INVALID_PARAMETER` error (all four are
+required). Capturing stops at `maxFrames`. There is one recording per tab, and starting again
+replaces it. Frames are dropped when the tab closes or the connection to the server ends. `tabs.record_stop` answers
 `{"frames", "intervalMs", "durationMs", "error"}`, `tabs.record_frame` answers
 `{"dataUrl", "delayMs"}` with the time since the previous frame, and an unknown recording
 or frame is `RECORDING_NOT_FOUND`.

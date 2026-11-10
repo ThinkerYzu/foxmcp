@@ -1,4 +1,4 @@
-﻿"""Tests for recording a tab and assembling the frames into a GIF"""
+"""Tests for recording a tab and assembling the frames into a GIF"""
 
 import base64
 import io
@@ -78,6 +78,37 @@ class TestRecordStart:
         assert result == "Failed to start recording: Cannot record tab 4"
 
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("arguments, name", [
+        ({"interval_ms": 99}, "interval_ms"),
+        ({"interval_ms": 5001}, "interval_ms"),
+        ({"interval_ms": 250.5}, "interval_ms"),
+        ({"interval_ms": True}, "interval_ms"),
+        ({"max_frames": 0}, "max_frames"),
+        ({"max_frames": 301}, "max_frames"),
+        ({"quality": 0}, "quality"),
+        ({"quality": 101}, "quality"),
+        ({"quality": "50"}, "quality"),
+    ])
+    async def test_integer_arguments_are_checked(self, arguments, name):
+        stub = StubWebSocketServer()
+
+        result = await call(stub, "tabs_record_start", profile_id=1, tab_id=4, **arguments)
+
+        assert result.startswith(f"Failed to start recording: {name} must be an integer")
+        assert stub.sent_request is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scale", [0, -0.5, 1.5, float("nan"), float("inf"), True, "0.5"])
+    async def test_scale_must_be_above_zero_and_at_most_one(self, scale):
+        stub = StubWebSocketServer()
+
+        result = await call(stub, "tabs_record_start", profile_id=1, tab_id=4, scale=scale)
+
+        assert result == "Failed to start recording: scale must be a number above 0 and at most 1"
+        assert stub.sent_request is None
+
+
 class TestRecordStop:
 
     @pytest.mark.asyncio
@@ -105,6 +136,33 @@ class TestRecordStop:
                             filename="x.gif")
 
         assert result == "Failed to stop recording: No recording rec-9"
+
+
+    @pytest.mark.asyncio
+    async def test_a_failed_frame_read_still_discards_the_recording(self, tmp_path):
+        class FailingFrames(FrameServer):
+            async def send_request_and_wait(self, request, timeout=30.0):
+                if request["action"] == "tabs.record_frame":
+                    self.actions.append(request["action"])
+                    return {"type": "error", "data": {"message": "No frame 0 in recording rec-4"}}
+                return await super().send_request_and_wait(request, timeout)
+
+        server = FailingFrames([jpeg("red")])
+
+        result = await call(server, "tabs_record_stop", profile_id=1, recording_id="rec-4",
+                            filename=str(tmp_path / "demo.gif"))
+
+        assert result == "Failed to read frame 0: No frame 0 in recording rec-4"
+        assert server.actions[-1] == "tabs.record_discard"
+
+    @pytest.mark.asyncio
+    async def test_filename_must_not_be_empty(self):
+        stub = StubWebSocketServer()
+
+        result = await call(stub, "tabs_record_stop", profile_id=1, recording_id="rec-4", filename=" ")
+
+        assert result == "Failed to save the recording: filename must be a non-empty string"
+        assert stub.sent_request is None
 
 
 class TestAssemble:

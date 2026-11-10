@@ -946,6 +946,21 @@ function stopRecordingTimer(recording) {
     recording.timer = null;
   }
 }
+
+// Frames are kept in memory, so a recording nobody will fetch is dropped: when its tab
+// closes, and when the connection to the server ends (see clearAllMonitors).
+function clearAllRecordings() {
+  for (const recording of recordings.values()) {
+    stopRecordingTimer(recording);
+  }
+  recordings.clear();
+}
+
+browser.tabs.onRemoved.addListener(tabId => {
+  const recording = recordings.get(`rec-${tabId}`);
+  stopRecordingTimer(recording);
+  recordings.delete(`rec-${tabId}`);
+});
 // The tab group properties a request sets, out of title, color and collapsed
 //
 // Fields the request leaves out are left out here too, so Firefox keeps the
@@ -1294,14 +1309,28 @@ async function handleTabsAction(id, action, data) {
           sendError(id, 'INVALID_PARAMETER', 'tabs.record_start needs a non-negative integer tabId');
           break;
         }
+        const { intervalMs, maxFrames, quality, scale } = data;
+        if (!Number.isInteger(intervalMs) || intervalMs < 100 || intervalMs > 5000) {
+          sendError(id, 'INVALID_PARAMETER', 'intervalMs must be an integer from 100 to 5000');
+          break;
+        }
+        if (!Number.isInteger(maxFrames) || maxFrames < 1 || maxFrames > 300) {
+          sendError(id, 'INVALID_PARAMETER', 'maxFrames must be an integer from 1 to 300');
+          break;
+        }
+        if (!Number.isInteger(quality) || quality < 1 || quality > 100) {
+          sendError(id, 'INVALID_PARAMETER', 'quality must be an integer from 1 to 100');
+          break;
+        }
+        if (!Number.isFinite(scale) || scale <= 0 || scale > 1) {
+          sendError(id, 'INVALID_PARAMETER', 'scale must be a finite number above 0 and at most 1');
+          break;
+        }
         const recordingId = `rec-${recordTabId}`;
         stopRecordingTimer(recordings.get(recordingId));
-        const intervalMs = Math.min(Math.max(Number(data.intervalMs) || 500, 100), 5000);
         const recording = {
-          tabId: recordTabId, frames: [], times: [], busy: false, timer: null,
-          maxFrames: Math.min(Math.max(Number(data.maxFrames) || 60, 1), 300),
-          options: { format: 'jpeg', quality: Math.min(Math.max(Number(data.quality) || 50, 1), 100),
-                     scale: Number(data.scale) > 0 ? Number(data.scale) : 0.5 },
+          tabId: recordTabId, frames: [], times: [], busy: false, timer: null, maxFrames,
+          options: { format: 'jpeg', quality, scale },
           intervalMs
         };
         const grab = async () => {
@@ -1337,7 +1366,10 @@ async function handleTabsAction(id, action, data) {
           break;
         }
         stopRecordingTimer(recording);
-        while (recording.busy) await new Promise(resolve => setTimeout(resolve, 50));
+        // A capture that hangs must not hold the request until the server gives up.
+        for (let waited = 0; recording.busy && waited < 10000; waited += 50) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
         sendResponse(id, action, {
           frames: recording.frames.length, intervalMs: recording.intervalMs,
           durationMs: recording.times.length ? recording.times[recording.times.length - 1] - recording.times[0] : 0,
@@ -1946,6 +1978,7 @@ function setupWebRequestListeners() {
 // The captured data goes with the monitors for the same reason: the request ids
 // that reach it come from requests.list_captured.
 function clearAllMonitors(reason) {
+  clearAllRecordings();
   const monitorCount = activeMonitors.size;
 
   activeMonitors.clear();

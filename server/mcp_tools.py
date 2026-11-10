@@ -19,6 +19,8 @@ import shlex
 import sys
 import time
 import json
+import io
+import math
 import base64
 from datetime import datetime
 from typing import Dict, Any, Optional, List, TypedDict, Union
@@ -49,7 +51,6 @@ def assemble_recording(frames, filename):
     path = os.path.abspath(os.path.expanduser(filename))
     try:
         from PIL import Image
-        import io
     except ImportError:
         Image = None
 
@@ -1656,15 +1657,30 @@ class FoxMCPTools:
             with tabs_record_stop once the actions to show are done
 
             Recording stops by itself after max_frames, so a forgotten recording
-            does not grow without end. One recording per tab: starting again restarts it.
+            does not grow without end. One recording per tab: starting again drops the
+            frames of the earlier one. The frames are kept in the browser until
+            tabs_record_stop, and are dropped when the tab closes or the connection
+            to the server ends.
 
             Args:
                 tab_id: ID of the tab to record (it may be in the background)
-                interval_ms: Milliseconds between frames (default: 500, from 100 to 5000)
-                max_frames: Most frames to keep (default: 60, maximum: 300)
-                scale: Image scale, which sets the size of the GIF (default: 0.5)
-                quality: JPEG quality of each frame (default: 50)
+                interval_ms: (optional, an integer from 100 to 5000, default: 500)
+                    Milliseconds between frames
+                max_frames: (optional, an integer from 1 to 300, default: 60) Most frames
+                    to keep
+                scale: (optional, a finite number above 0 and at most 1, default: 0.5)
+                    Image scale, which sets the size of the GIF
+                quality: (optional, an integer from 1 to 100, default: 50) JPEG quality
+                    of each frame
             """
+            for name, value, low, high in (("interval_ms", interval_ms, 100, 5000),
+                                           ("max_frames", max_frames, 1, 300),
+                                           ("quality", quality, 1, 100)):
+                if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+                    return f"Failed to start recording: {name} must be an integer from {low} to {high}"
+            if (isinstance(scale, bool) or not isinstance(scale, (int, float))
+                    or not math.isfinite(scale) or not 0 < scale <= 1):
+                return "Failed to start recording: scale must be a number above 0 and at most 1"
             data, error = await tab_request(profile_id, {
                 "action": "tabs.record_start",
                 "data": {"tabId": tab_id, "intervalMs": interval_ms, "maxFrames": max_frames,
@@ -1680,30 +1696,36 @@ class FoxMCPTools:
 
             Identical frames in a row are merged, so a still page stays small. Without
             the Pillow package installed, the frames are saved as numbered JPEG files
-            in a folder instead.
+            in a folder instead. The file is written where the path says, replacing an
+            existing file, as tabs_capture_screenshot does with its filename.
 
             Args:
                 recording_id: ID returned by tabs_record_start
                 filename: Path of the GIF to write (".gif" is added when missing)
             """
+            if not isinstance(filename, str) or not filename.strip():
+                return "Failed to save the recording: filename must be a non-empty string"
             stopped, error = await tab_request(profile_id, {
                 "action": "tabs.record_stop", "data": {"recordingId": recording_id}})
             if error:
                 return f"Failed to stop recording: {error}"
             frames = []
-            for index in range(stopped.get("frames", 0)):
-                frame, error = await tab_request(profile_id, {
-                    "action": "tabs.record_frame",
-                    "data": {"recordingId": recording_id, "index": index}})
-                if error:
-                    return f"Failed to read frame {index}: {error}"
-                prefix = "data:image/jpeg;base64,"
-                url = frame.get("dataUrl", "")
-                if not url.startswith(prefix):
-                    return f"Failed to read frame {index}: unexpected image format"
-                frames.append((base64.b64decode(url[len(prefix):]), frame.get("delayMs", 500)))
-            await tab_request(profile_id, {
-                "action": "tabs.record_discard", "data": {"recordingId": recording_id}})
+            try:
+                for index in range(stopped.get("frames", 0)):
+                    frame, error = await tab_request(profile_id, {
+                        "action": "tabs.record_frame",
+                        "data": {"recordingId": recording_id, "index": index}})
+                    if error:
+                        return f"Failed to read frame {index}: {error}"
+                    prefix = "data:image/jpeg;base64,"
+                    url = frame.get("dataUrl", "")
+                    if not url.startswith(prefix):
+                        return f"Failed to read frame {index}: unexpected image format"
+                    frames.append((base64.b64decode(url[len(prefix):]), frame.get("delayMs", 500)))
+            finally:
+                # Whatever happened above, do not leave the frames in the browser.
+                await tab_request(profile_id, {
+                    "action": "tabs.record_discard", "data": {"recordingId": recording_id}})
             if not frames:
                 return "The recording has no frames" + (
                     f" ({stopped['error']})" if stopped.get("error") else "")
