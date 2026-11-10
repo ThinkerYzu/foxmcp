@@ -2268,6 +2268,45 @@ class FoxMCPTools:
                 if token is not None:
                     service.revoke(token)
 
+        # Wait Tool
+        @self._tool()
+        async def content_wait(
+            profile_id: int,
+            tab_id: int,
+            selector: Optional[str] = None,
+            text: Optional[str] = None,
+            url: Optional[str] = None,
+            gone: bool = False,
+            timeout: float = 10.0
+        ) -> str:
+            """Wait until the tab has finished loading and, if given, an element, some
+            text or a URL is there, for instance after a click that loads a page
+
+            Args:
+                tab_id: ID of the tab
+                selector: CSS selector that must match an element
+                text: Text that must appear in the page
+                url: Text the tab URL must contain
+                gone: Wait for the selector or text to disappear instead (default: False)
+                timeout: Seconds to wait at most (default: 10, maximum: 120)
+            """
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "content.wait",
+                "data": {"tabId": tab_id, "selector": selector, "text": text, "url": url,
+                         "state": "absent" if gone else "present",
+                         "timeoutMs": int(timeout * 1000)},
+                "timestamp": datetime.now().isoformat()
+            }, timeout=min(max(timeout, 0.1), 120.0) + 15.0)
+            if "error" in response:
+                return f"Failed to wait: {response['error']}"
+            if response.get("type") == "response" and "data" in response:
+                data = response["data"]
+                return (f"Ready after {data.get('waitedMs', 0)} ms: "
+                        f"{data.get('title', '')} ({data.get('url', '')})")
+            return f"Failed to wait: {response.get('data', {}).get('message', 'Unknown error')}"
+
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:

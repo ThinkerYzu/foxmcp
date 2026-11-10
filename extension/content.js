@@ -66,6 +66,15 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         break;
 
+      // One look at whether what content_wait waits for is on the page now.
+      case 'checkWait': {
+        let found = true;
+        if (data.selector) found = !!document.querySelector(data.selector);
+        if (found && data.text) found = (document.body?.innerText || '').includes(data.text);
+        sendResponse({ found });
+        break;
+      }
+
       default:
         sendResponse({ error: `Unknown content action: ${action}` });
     }

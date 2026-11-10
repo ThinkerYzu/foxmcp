@@ -1446,6 +1446,51 @@ async function handleContentAction(id, action, data) {
         break;
       }
 
+      // Polls until the tab is loaded and what was asked for is (or is no longer)
+      // on the page, so a client need not guess how long a click takes to land.
+      case 'content.wait': {
+        const timeoutMs = Math.min(Math.max(Number(data.timeoutMs) || 10000, 100), 120000);
+        const waitAbsent = data.state === 'absent';
+        const checksContent = !!(data.selector || data.text);
+        const deadline = Date.now() + timeoutMs;
+        let reason = 'the page did not finish loading';
+        let waited = false;
+        while (Date.now() < deadline) {
+          let ready = false;
+          try {
+            const tab = await browser.tabs.get(data.tabId);
+            reason = 'the page did not finish loading';
+            if (tab.status === 'complete' && (!data.url || (tab.url || '').includes(data.url))) {
+              if (!checksContent) {
+                ready = true;
+              } else {
+                const check = await browser.tabs.sendMessage(data.tabId,
+                  { action: 'checkWait', data: { selector: data.selector, text: data.text } });
+                ready = waitAbsent ? !check.found : check.found;
+                reason = waitAbsent ? 'it was still on the page' : 'it did not appear';
+              }
+            } else if (data.url) {
+              reason = `the tab URL did not contain "${data.url}"`;
+            }
+          } catch (waitError) {
+            // The page is navigating, or has no content script yet: look again.
+            if (!String(waitError.message).includes('Receiving end does not exist')) throw waitError;
+            try { await browser.tabs.executeScript(data.tabId, { file: '/content.js' }); } catch (e) { /* loading */ }
+          }
+          if (ready) {
+            const tab = await browser.tabs.get(data.tabId);
+            sendResponse(id, action, { waitedMs: timeoutMs - (deadline - Date.now()), url: tab.url, title: tab.title });
+            waited = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        if (!waited) {
+          sendError(id, 'WAIT_TIMEOUT', `Timed out after ${timeoutMs} ms: ${reason}`);
+        }
+        break;
+      }
+
       case 'content.get_text':
         const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'
