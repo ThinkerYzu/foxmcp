@@ -1653,6 +1653,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+| `RECORDING_NOT_FOUND` | No screen recording, or no such frame in it, exists with the supplied ID. |
 
 ### Script execution and consent errors
 
