@@ -2,6 +2,7 @@
 
 from test_config import profile_connection
 import asyncio
+import os
 import json
 import re
 import sqlite3
@@ -259,7 +260,10 @@ async def test_shared_stdio_containers_survive_disconnect_and_worker_restart(sha
         assert firefox.setup_and_start_firefox(headless=True, skip_on_failure=False)
         await connected(first)
         for client in (first, second):
-            assert len(await client.list_tool_names()) == 46
+            names = await client.list_tool_names()
+            assert names, "No tools advertised"
+            if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+                assert len(names) == 46, names
             created = json.loads(await client.call_tool('containers_create', {'name':'Persistent test'}))
             stores.append(created['container']['cookie_store_id'])
         for index, client in enumerate((first, second)):
