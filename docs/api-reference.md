@@ -179,8 +179,12 @@ for the complete input-assignment example and transfer details.
   - `drain_timeout`: **ignored** — the monitor stops immediately
   - Returns JSON with stop status and statistics
   - Captured data outlives the monitor: the two tools below still answer afterwards
-- `requests_list_captured(profile_id, monitor_id)` - List captured request summaries
+- `requests_list_captured(profile_id, monitor_id, url_contains=None, method=None, resource_type=None, min_status=None, failed_only=False, limit=None)` - List captured request summaries
   - Returns JSON with array of request summaries (metadata only, no full content)
+  - Optional filters (all must match) keep the list short on busy pages: URL text, method,
+    resource type, minimum status, `failed_only` (an error or status 400 and above), and
+    `limit` for the newest matches. When any is given the JSON also has `matched_requests`;
+    `total_requests` still counts everything captured
   - A request appears once it has completed, so a navigation started a moment ago
     is not in the list yet
   - `MONITOR_NOT_FOUND` for an id that never existed or has been cleared. Monitors

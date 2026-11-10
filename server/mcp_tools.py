@@ -2754,9 +2754,22 @@ class FoxMCPTools:
             return json.dumps({"error": "Unable to stop monitoring"})
 
         @self._tool()
-        async def requests_list_captured(profile_id: int, monitor_id: str) -> str:
+        async def requests_list_captured(
+            profile_id: int,
+            monitor_id: str,
+            url_contains: Optional[str] = None,
+            method: Optional[str] = None,
+            resource_type: Optional[str] = None,
+            min_status: Optional[int] = None,
+            failed_only: bool = False,
+            limit: Optional[int] = None
+        ) -> str:
             """
-            List all captured request summaries from a monitoring session
+            List captured request summaries from a monitoring session
+
+            Without filters every summary is returned. Filters keep the list short
+            on busy pages: only requests matching all of them are listed, and
+            total_requests still counts everything captured.
 
             A request appears here once it has completed, so a page navigation
             started a moment ago will not be in the list yet. Start with
@@ -2766,6 +2779,12 @@ class FoxMCPTools:
 
             Args:
                 monitor_id: ID of the monitoring session
+                url_contains: Only URLs containing this text
+                method: Only this HTTP method, such as POST
+                resource_type: Only this type, such as xmlhttprequest, script or image
+                min_status: Only responses with at least this status code, such as 400
+                failed_only: Only requests that failed (an error, or status 400 and above)
+                limit: Keep only the newest this many matches
 
             Returns:
                 JSON string with captured request summaries
@@ -2786,7 +2805,22 @@ class FoxMCPTools:
                 return json.dumps({"error": f"Failed to list captured requests: {response['error']}"})
 
             if response.get("type") == "response" and "data" in response:
-                return json.dumps(response["data"])
+                data = response["data"]
+                filtered = any(v not in (None, False) for v in
+                               (url_contains, method, resource_type, min_status, failed_only, limit))
+                if filtered and isinstance(data.get("requests"), list):
+                    def keep(item):
+                        status = item.get("status_code") or 0
+                        return ((not url_contains or url_contains in (item.get("url") or ""))
+                                and (not method or (item.get("method") or "").upper() == method.upper())
+                                and (not resource_type or item.get("type") == resource_type)
+                                and (min_status is None or status >= min_status)
+                                and (not failed_only or bool(item.get("error")) or status >= 400))
+                    matches = [item for item in data["requests"] if keep(item)]
+                    if limit is not None and limit >= 0:
+                        matches = matches[-limit:] if limit else []
+                    data = {**data, "matched_requests": len(matches), "requests": matches}
+                return json.dumps(data)
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")
                 return json.dumps({"error": f"Failed to list captured requests: {error_msg}"})
