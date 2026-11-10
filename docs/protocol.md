@@ -707,6 +707,26 @@ answers `UNKNOWN_ACTION`.
 `tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
 that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 
+#### Record a Tab
+A recording is a series of JPEG captures of one tab, kept in the extension; no encoder
+runs in the browser. The server fetches the frames one request at a time and builds the
+GIF, so no message carries more than one frame.
+
+```json
+{"action": "tabs.record_start", "data": {"tabId": 123, "intervalMs": 500, "maxFrames": 60, "scale": 0.5, "quality": 50}}
+{"action": "tabs.record_stop", "data": {"recordingId": "rec-123"}}
+{"action": "tabs.record_frame", "data": {"recordingId": "rec-123", "index": 0}}
+{"action": "tabs.record_discard", "data": {"recordingId": "rec-123"}}
+```
+
+`tabs.record_start` answers `{"recordingId", "intervalMs", "maxFrames"}` after the first
+frame is taken (a tab that cannot be captured is a `CAPTURE_ERROR`). `intervalMs` is
+limited to 100-5000 and `maxFrames` to 1-300; capturing stops at that count. There is one
+recording per tab, and starting again replaces it. `tabs.record_stop` answers
+`{"frames", "intervalMs", "durationMs", "error"}`, `tabs.record_frame` answers
+`{"dataUrl", "delayMs"}` with the time since the previous frame, and an unknown recording
+or frame is `RECORDING_NOT_FOUND`.
+
 ### 3. Tab Content
 
 #### Get Page Content

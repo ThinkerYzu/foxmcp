@@ -937,6 +937,15 @@ function isBrowserId(value) {
   return Number.isInteger(value) && value >= 0;
 }
 
+// Screen recordings in progress or waiting to be fetched, by recording ID
+const recordings = new Map();
+
+function stopRecordingTimer(recording) {
+  if (recording && recording.timer) {
+    clearInterval(recording.timer);
+    recording.timer = null;
+  }
+}
 // The tab group properties a request sets, out of title, color and collapsed
 //
 // Fields the request leaves out are left out here too, so Firefox keeps the
@@ -1274,6 +1283,87 @@ async function handleTabsAction(id, action, data) {
         } catch (captureError) {
           sendError(id, 'CAPTURE_ERROR', `Failed to capture screenshot: ${captureError.message}`);
         }
+        break;
+
+      // A screen recording is a series of small JPEG captures of one tab, kept
+      // here until the server has fetched them frame by frame and built the
+      // animation; no encoder runs in the browser.
+      case 'tabs.record_start': {
+        const recordTabId = data.tabId;
+        if (!isBrowserId(recordTabId)) {
+          sendError(id, 'INVALID_PARAMETER', 'tabs.record_start needs a non-negative integer tabId');
+          break;
+        }
+        const recordingId = `rec-${recordTabId}`;
+        stopRecordingTimer(recordings.get(recordingId));
+        const intervalMs = Math.min(Math.max(Number(data.intervalMs) || 500, 100), 5000);
+        const recording = {
+          tabId: recordTabId, frames: [], times: [], busy: false, timer: null,
+          maxFrames: Math.min(Math.max(Number(data.maxFrames) || 60, 1), 300),
+          options: { format: 'jpeg', quality: Math.min(Math.max(Number(data.quality) || 50, 1), 100),
+                     scale: Number(data.scale) > 0 ? Number(data.scale) : 0.5 },
+          intervalMs
+        };
+        const grab = async () => {
+          if (recording.busy) return;
+          recording.busy = true;
+          try {
+            recording.frames.push(await browser.tabs.captureTab(recordTabId, recording.options));
+            recording.times.push(Date.now());
+          } catch (frameError) {
+            recording.error = frameError.message;
+            stopRecordingTimer(recording);
+          } finally {
+            recording.busy = false;
+          }
+          if (recording.frames.length >= recording.maxFrames) stopRecordingTimer(recording);
+        };
+        recordings.set(recordingId, recording);
+        await grab();
+        if (recording.error) {
+          recordings.delete(recordingId);
+          sendError(id, 'CAPTURE_ERROR', `Cannot record tab ${recordTabId}: ${recording.error}`);
+          break;
+        }
+        recording.timer = setInterval(grab, intervalMs);
+        sendResponse(id, action, { recordingId, intervalMs, maxFrames: recording.maxFrames });
+        break;
+      }
+
+      case 'tabs.record_stop': {
+        const recording = recordings.get(data.recordingId);
+        if (!recording) {
+          sendError(id, 'RECORDING_NOT_FOUND', `No recording ${data.recordingId}`);
+          break;
+        }
+        stopRecordingTimer(recording);
+        while (recording.busy) await new Promise(resolve => setTimeout(resolve, 50));
+        sendResponse(id, action, {
+          frames: recording.frames.length, intervalMs: recording.intervalMs,
+          durationMs: recording.times.length ? recording.times[recording.times.length - 1] - recording.times[0] : 0,
+          error: recording.error || null
+        });
+        break;
+      }
+
+      case 'tabs.record_frame': {
+        const recording = recordings.get(data.recordingId);
+        if (!recording || !Number.isInteger(data.index) || data.index < 0 || data.index >= recording.frames.length) {
+          sendError(id, 'RECORDING_NOT_FOUND', `No frame ${data.index} in recording ${data.recordingId}`);
+          break;
+        }
+        sendResponse(id, action, {
+          dataUrl: recording.frames[data.index],
+          // Time since the previous frame, so a pause in capturing is kept in the animation
+          delayMs: data.index === 0 ? recording.intervalMs : recording.times[data.index] - recording.times[data.index - 1]
+        });
+        break;
+      }
+
+      case 'tabs.record_discard':
+        stopRecordingTimer(recordings.get(data.recordingId));
+        recordings.delete(data.recordingId);
+        sendResponse(id, action, { discarded: true });
         break;
 
       case 'tabs.captureTab': {
