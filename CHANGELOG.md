@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tabs_capture_screenshot` takes `x`, `y`, `width` and `height` to capture only a region of the page, and `scale` to shrink the image, so a client reads fewer tokens.
 
+### Changed
+
+- Enforce fixed tool counts and complete archive tool coverage during release
+  rehearsals and tagged releases, while ordinary CI keeps functional checks
+  running without blocking tool additions on catalog totals.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added
