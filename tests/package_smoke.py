@@ -314,11 +314,18 @@ async def exercise(client, url, source, work, transport, receipts):
         store = None
         recorded.checked("container discovery, lifecycle and tab selection")
         names = {tool.name for tool in await client.list_tools()}
-        assert len(names) == 46, names
+        assert names, "No tools advertised"
+        if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+            assert len(names) == 46, names
         called = {call["tool"] for call in recorded.report["calls"]}
-        assert not names - called, f"Tools missing package smoke coverage: {sorted(names - called)}"
+        missing = sorted(names - called)
+        recorded.report["uncovered_tools"] = missing
+        if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+            assert not missing, f"Tools missing package smoke coverage: {missing}"
+        elif missing:
+            print(f"INFO {transport}: tools awaiting release smoke coverage: {missing}", flush=True)
         recorded.report["passed"] = True
-        print(f"PASS {transport}: all {len(names)} advertised tools exercised", flush=True)
+        print(f"PASS {transport}: {len(names & called)}/{len(names)} advertised tools exercised", flush=True)
     except Exception as error:
         recorded.report["error"] = str(error)
         raise

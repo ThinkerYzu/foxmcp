@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `requests_list_captured` filters by URL text, method, resource type, minimum status, failures and a limit, and reports `matched_requests` next to `total_requests`.
 
+### Changed
+
+- Enforce fixed tool counts and complete archive tool coverage during release
+  rehearsals and tagged releases, while ordinary CI keeps functional checks
+  running without blocking tool additions on catalog totals.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added
