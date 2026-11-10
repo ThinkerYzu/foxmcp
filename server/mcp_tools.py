@@ -2268,6 +2268,57 @@ class FoxMCPTools:
                 if token is not None:
                     service.revoke(token)
 
+        # Downloads Tools
+        def downloads_text(items):
+            if not items:
+                return "No downloads"
+            return "\n".join(
+                f"- [{item.get('id')}] {item.get('filename')} ({item.get('state')}, "
+                f"{item.get('bytes')} bytes) from {item.get('url')}"
+                + (f" - error: {item['error']}" if item.get("error") else "")
+                for item in items)
+
+        @self._tool()
+        async def content_list_downloads(profile_id: int, limit: int = 10) -> str:
+            """List the most recent downloads with the path each file was saved to
+
+            Args:
+                limit: How many downloads to list, newest first (default: 10, maximum: 100)
+            """
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()), "type": "request",
+                "action": "content.list_downloads", "data": {"limit": limit},
+                "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Failed to list downloads: {response['error']}"
+            if response.get("type") != "response" or "data" not in response:
+                return f"Failed to list downloads: {response.get('data', {}).get('message', 'Unknown error')}"
+            return downloads_text(response["data"].get("downloads", []))
+
+        @self._tool()
+        async def content_wait_download(profile_id: int, timeout: float = 30.0) -> str:
+            """Wait for a download to finish, for instance after clicking an export button,
+            and return where the file was saved
+
+            Firefox may ask the person to confirm a download first, and the wait
+            includes that time.
+
+            Args:
+                timeout: Seconds to wait at most (default: 30, maximum: 300)
+            """
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()), "type": "request",
+                "action": "content.wait_download",
+                "data": {"timeoutMs": int(timeout * 1000)},
+                "timestamp": datetime.now().isoformat()
+            }, timeout=min(max(timeout, 0.1), 300.0) + 15.0)
+            if "error" in response:
+                return f"Failed to wait for a download: {response['error']}"
+            if response.get("type") == "response" and "data" in response:
+                return downloads_text([response["data"].get("download")])
+            return f"Failed to wait for a download: {response.get('data', {}).get('message', 'Unknown error')}"
+
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:

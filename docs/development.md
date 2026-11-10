@@ -348,8 +348,8 @@ runs `make install` on a clean checkout — which nothing else does, since the o
 jobs create the venv themselves — then starts the server and asks it for its tools
 over HTTP as a real MCP client would, checking the count with every group enabled
 and with two groups disabled. It also checks stdio startup and that an individually
-enabled tool survives its disabled group. With 46 tools and 10 in the tabs group,
-`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 37 tools.
+enabled tool survives its disabled group. With 48 tools and 10 in the tabs group,
+`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 39 tools.
 When adding or removing tools, update all affected counts in the install job,
 including this override check. To check the default HTTP tool count by hand:
 

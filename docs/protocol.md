@@ -750,6 +750,20 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 }
 ```
 
+#### Downloads
+`content.list_downloads` and `content.wait_download` use the `downloads` permission
+to report files the browser saved, so a client can tell whether an export worked.
+
+```json
+{"action": "content.list_downloads", "data": {"limit": 10}}
+{"action": "content.wait_download", "data": {"timeoutMs": 30000}}
+```
+
+They answer `{"downloads": [...]}` and `{"download": {...}}`, where each item has `id`,
+`filename` (the saved path), `url`, `state`, `bytes`, `mime`, `startTime` and `error`.
+`limit` is capped at 100 and `timeoutMs` at 300000. `content.wait_download` answers a
+download that started up to 3 seconds before the request and has ended, or `WAIT_TIMEOUT`.
+
 #### Execute Script
 **Request:**
 ```json

@@ -1403,6 +1403,14 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 20
   }
 }
 
+function describeDownload(item) {
+  return {
+    id: item.id, filename: item.filename, url: item.url, state: item.state,
+    bytes: item.fileSize >= 0 ? item.fileSize : item.bytesReceived, mime: item.mime,
+    startTime: item.startTime, error: item.error || null
+  };
+}
+
 // Content handlers
 async function handleContentAction(id, action, data) {
   try {
@@ -1443,6 +1451,37 @@ async function handleContentAction(id, action, data) {
         });
         if (!result || result.error) throw new Error(result?.error || 'Content script unavailable');
         sendResponse(id, action, result);
+        break;
+      }
+
+      // Files the browser has downloaded, newest first
+      case 'content.list_downloads': {
+        const items = await browser.downloads.search({
+          orderBy: ['-startTime'], limit: Math.min(Math.max(Number(data.limit) || 10, 1), 100)
+        });
+        sendResponse(id, action, { downloads: items.map(describeDownload) });
+        break;
+      }
+
+      // Waits for a download that starts now (or just started) to end
+      case 'content.wait_download': {
+        const timeoutMs = Math.min(Math.max(Number(data.timeoutMs) || 30000, 100), 300000);
+        const since = Date.now() - 3000;
+        const deadline = Date.now() + timeoutMs;
+        let found = null;
+        while (Date.now() < deadline) {
+          const [latest] = await browser.downloads.search({ orderBy: ['-startTime'], limit: 1 });
+          if (latest && Date.parse(latest.startTime) >= since && latest.state !== 'in_progress') {
+            found = latest;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        if (found) {
+          sendResponse(id, action, { download: describeDownload(found) });
+        } else {
+          sendError(id, 'WAIT_TIMEOUT', `No download finished within ${timeoutMs} ms`);
+        }
         break;
       }
 

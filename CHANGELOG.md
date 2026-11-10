@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `content_list_downloads` and `content_wait_download` report the files Firefox downloaded and where each was saved. The extension asks for the `downloads` permission.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added
