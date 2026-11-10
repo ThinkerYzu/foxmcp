@@ -750,6 +750,18 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 }
 ```
 
+#### Console
+`content.console` returns what the page has logged since the first request, and
+uncaught errors and unhandled promise rejections (level `uncaught`, also returned for
+`level: "error"`). The first request on a page only starts recording, answering
+`{"started": true, "entries": []}`, because wrapping `console` everywhere from the
+start would change stack locations on pages nobody is debugging. At most 500 entries
+are kept, and the recording ends when the page navigates.
+
+```json
+{"action": "content.console", "data": {"tabId": 123, "level": null, "pattern": null, "limit": 50, "clear": false}}
+```
+
 #### Execute Script
 **Request:**
 ```json

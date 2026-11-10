@@ -314,7 +314,7 @@ async def exercise(client, url, source, work, transport, receipts):
         store = None
         recorded.checked("container discovery, lifecycle and tab selection")
         names = {tool.name for tool in await client.list_tools()}
-        assert len(names) == 46, names
+        assert len(names) == 47, names
         called = {call["tool"] for call in recorded.report["calls"]}
         assert not names - called, f"Tools missing package smoke coverage: {sorted(names - called)}"
         recorded.report["passed"] = True

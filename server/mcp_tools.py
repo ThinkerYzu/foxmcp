@@ -2268,6 +2268,50 @@ class FoxMCPTools:
                 if token is not None:
                     service.revoke(token)
 
+        # Console Tool
+        @self._tool()
+        async def content_read_console(
+            profile_id: int,
+            tab_id: int,
+            level: Optional[str] = None,
+            pattern: Optional[str] = None,
+            limit: int = 50,
+            clear: bool = False
+        ) -> str:
+            """Read what the page logged to its console and its uncaught JavaScript errors
+
+            Recording starts with the first call on a page, so call it once before the
+            action to debug; it restarts when the tab navigates.
+
+            Args:
+                tab_id: ID of the tab
+                level: Only log, info, warn, error (which includes uncaught errors) or debug
+                pattern: Only messages containing this text
+                limit: Newest entries to return (default: 50)
+                clear: Forget the entries after reading them (default: False)
+            """
+            if level not in (None, "log", "info", "warn", "error", "debug"):
+                raise ValueError("level must be log, info, warn, error or debug")
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "content.console",
+                "data": {"tabId": tab_id, "level": level, "pattern": pattern,
+                         "limit": limit, "clear": clear},
+                "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Failed to read the console: {response['error']}"
+            if response.get("type") != "response" or "data" not in response:
+                return f"Failed to read the console: {response.get('data', {}).get('message', 'Unknown error')}"
+            data = response["data"]
+            if data.get("started"):
+                return "Console recording started; call again after the page has logged something"
+            entries = data.get("entries", [])
+            if not entries:
+                return "No console entries"
+            return "\n".join(f"[{e['level']}] {e['message']}" for e in entries)
+
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:

@@ -304,7 +304,7 @@ never fall back to another connected profile.
 
 Every tool's description sits in an MCP client's context for the whole session,
 whether or not the tool is ever called. With no predefined scripts listed, the
-full set of 46 tools costs roughly 10,338 tokens. `--disable-tools` leaves a group unregistered, so a client never
+full set of 47 tools costs roughly 10,621 tokens. `--disable-tools` leaves a group unregistered, so a client never
 sees it:
 
 ```bash
@@ -325,7 +325,7 @@ token, so treat them as proportions rather than exact counts:
 | `windows` | list, get, get_current, create, close, focus, update | 1,413 |
 | `requests` | start_monitoring, stop_monitoring, list_captured, get_content | 1,296 |
 | `navigation` | back, forward, reload, go_to_url | 668 |
-| `content` | get_text, get_html, execute_script, execute_predefined, load_file | 1,203 plus listed scripts |
+| `content` | get_text, get_html, execute_script, execute_predefined, load_file, read_console | 1,486 plus listed scripts |
 | `history` | query, get_recent, delete_item | 506 |
 | `debug` | websocket_status | 113 |
 
