@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `content_read_console` returns what a page logged to its console and its uncaught errors, filtered by level and text.
 
+### Changed
+
+- Enforce fixed tool counts and complete archive tool coverage during release
+  rehearsals and tagged releases, while ordinary CI keeps functional checks
+  running without blocking tool additions on catalog totals.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added

@@ -68,6 +68,8 @@ jobs:
     name: Release checks
     needs: verify
     uses: ./.github/workflows/ci.yml
+    with:
+      release-checks: true
 
   build:
     name: Verify and attest tested packages
