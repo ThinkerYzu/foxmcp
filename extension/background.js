@@ -1377,7 +1377,7 @@ async function getCurrentTabUrl(tabId) {
 // Tabs Firefox restored after a restart, or unloaded to save memory, have no
 // page and so no content script: nothing could answer until they are loaded.
 // Reload such a tab and wait for it, as the person opening it would.
-async function loadDiscardedTab(tab, timeoutMs = 20000) {
+async function loadDiscardedTab(tab, timeoutMs = 15000) {
   if (!tab.discarded) {
     return tab;
   }
@@ -1390,19 +1390,30 @@ async function loadDiscardedTab(tab, timeoutMs = 20000) {
     }
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  throw new Error('The tab was not loaded and did not finish loading in time');
+  throw new Error('The tab was discarded and did not finish loading in time');
 }
 
 // Helper function to send message with retry logic for content script
 async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 2000) {
+  // A discarded tab is loaded once, before the retries. Waiting for it on every attempt
+  // could outlast the server's own request timeout, and a failed load is not worth retrying.
+  let initial = null;
+  try {
+    initial = await browser.tabs.get(tabId);
+  } catch (error) {
+    // A missing tab is reported by the loop below, as before.
+  }
+  if (initial) {
+    await loadDiscardedTab(initial);
+  }
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       // Check if tab exists and is accessible
-      let tab = await browser.tabs.get(tabId);
+      const tab = await browser.tabs.get(tabId);
       if (!tab) {
         throw new Error('Tab not found');
       }
-      tab = await loadDiscardedTab(tab);
 
       // Skip status check for now and try to send message
       // The content script should be available on all URLs except chrome:// pages

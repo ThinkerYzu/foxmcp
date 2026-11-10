@@ -99,6 +99,9 @@ and [pyproject.toml](../pyproject.toml).
   The [multiple-profile matrix](../tests/README.md#multiple-profile-coverage)
   distinguishes direct tool calls with real browsers from actual MCP transports
   with simulated browser responders.
+- `tests/extension_discarded_tab_checks.js` runs the discarded-tab loading helpers from
+  `extension/background.js` against a fake browser and clock; `tests/unit/test_discarded_tab_loading.py`
+  runs it with Node.
 - `tests/extension_settings_checks.js` exercises settings and handshake behavior
   with controlled sockets, storage, timers and UI. The Firefox integration test
   executes it with browser DOM support.
