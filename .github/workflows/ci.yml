@@ -9,6 +9,16 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      release-checks:
+        description: Enforce tool counts and complete advertised-tool smoke coverage
+        type: boolean
+        default: false
+
+# Direct local tests are strict by default. Ordinary CI explicitly relaxes only
+# catalog completeness; the release caller opts in for rehearsals and tags.
+env:
+  FOXMCP_RELEASE_CHECKS: ${{ inputs.release-checks && '1' || '0' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -185,6 +195,7 @@ jobs:
 
           venv/bin/python - <<'PY'
           import asyncio
+          import os
           from fastmcp import Client
 
           EXPECTED = 46
@@ -193,7 +204,9 @@ jobs:
               async with Client("http://localhost:13000/mcp/") as client:
                   names = sorted(tool.name for tool in await client.list_tools())
                   print(f"{len(names)} tools: {', '.join(names)}")
-                  assert len(names) == EXPECTED, f"expected {EXPECTED} tools, got {len(names)}"
+                  assert names, "No tools advertised"
+                  if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+                      assert len(names) == EXPECTED, f"expected {EXPECTED} tools, got {len(names)}"
 
           asyncio.run(main())
           PY
@@ -210,12 +223,15 @@ jobs:
 
           venv/bin/python - <<'PY'
           import asyncio
+          import os
           from fastmcp import Client
 
           async def main():
               async with Client("http://localhost:13001/mcp/") as client:
                   names = {tool.name for tool in await client.list_tools()}
-                  assert len(names) == 36, f"expected 36 tools, got {len(names)}"
+                  assert names, "No tools advertised"
+                  if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+                      assert len(names) == 36, f"expected 36 tools, got {len(names)}"
                   assert not [n for n in names if n.startswith(("bookmarks_", "history_"))]
                   assert "tabs_list" in names
 
@@ -229,6 +245,7 @@ jobs:
           # No background server here: the client starts it, which is the mode.
           venv/bin/python - <<'PY'
           import asyncio
+          import os
           from fastmcp import Client
           from fastmcp.client.transports import PythonStdioTransport
 
@@ -242,7 +259,9 @@ jobs:
               async with Client(transport) as client:
                   names = sorted(tool.name for tool in await client.list_tools())
                   print(f"{len(names)} tools over stdio: {', '.join(names)}")
-                  assert len(names) == EXPECTED, f"expected {EXPECTED} tools, got {len(names)}"
+                  assert names, "No tools advertised"
+                  if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+                      assert len(names) == EXPECTED, f"expected {EXPECTED} tools, got {len(names)}"
 
                   # Reaches the bridge and comes back as a result rather than a
                   # protocol error, which is what a stray write to stdout would be.
@@ -265,13 +284,16 @@ jobs:
 
           venv/bin/python - <<'PY'
           import asyncio
+          import os
           from fastmcp import Client
 
           async def main():
               async with Client("http://localhost:13002/mcp/") as client:
                   names = {tool.name for tool in await client.list_tools()}
                   # 46 tools minus 10 tab tools, plus the enabled screenshot.
-                  assert len(names) == 37, f"expected 37 tools, got {len(names)}"
+                  assert names, "No tools advertised"
+                  if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
+                      assert len(names) == 37, f"expected 37 tools, got {len(names)}"
                   assert "tabs_capture_screenshot" in names
                   assert not [n for n in names
                               if n.startswith("tabs_") and n != "tabs_capture_screenshot"]

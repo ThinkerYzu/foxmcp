@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `content_handle_dialogs` accepts or dismisses a page's `alert`, `confirm` and `prompt` dialogs and logs what was shown, so they no longer block automation.
 
+### Changed
+
+- Enforce fixed tool counts and complete archive tool coverage during release
+  rehearsals and tagged releases, while ordinary CI keeps functional checks
+  running without blocking tool additions on catalog totals.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added
