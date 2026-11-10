@@ -19,6 +19,7 @@ import shlex
 import sys
 import time
 import json
+import math
 import base64
 from datetime import datetime
 from typing import Dict, Any, Optional, List, TypedDict, Union
@@ -1473,10 +1474,10 @@ class FoxMCPTools:
             format: str = "png",
             quality: int = 90,
             tab_id: Optional[int] = None,
-            x: Optional[float] = None,
-            y: Optional[float] = None,
-            width: Optional[float] = None,
-            height: Optional[float] = None,
+            x: Optional[int] = None,
+            y: Optional[int] = None,
+            width: Optional[int] = None,
+            height: Optional[int] = None,
             scale: Optional[float] = None
         ) -> str:
             """Capture a screenshot of the visible tab, or of the tab given by tab_id
@@ -1495,8 +1496,13 @@ class FoxMCPTools:
                 format: Image format ('png' or 'jpeg', default: 'png')
                 quality: Image quality for JPEG format (1-100, default: 90)
                 tab_id: Capture this tab, even in the background (not with window_id)
-                x, y, width, height: Region to capture, in CSS pixels (all four or none)
-                scale: Scale factor for the image (default: 1; e.g. 0.5 for half size)
+                x: Left edge of the region to capture (optional, integer CSS pixels from the left of
+                    the visible page, 0 or more; give x, y, width and height together)
+                y: Top edge of the region (optional, integer CSS pixels from the top, 0 or more)
+                width: Width of the region (optional, integer CSS pixels, more than 0)
+                height: Height of the region (optional, integer CSS pixels, more than 0)
+                scale: Scale factor for the image (optional, a finite number above 0 and up to 1.0,
+                    for example 0.5 for half size; default: full size)
 
             Returns:
                 Success message with file path if filename provided, otherwise base64 encoded image data URL
@@ -1510,13 +1516,20 @@ class FoxMCPTools:
             if any(v is not None for v in (x, y, width, height)):
                 if None in (x, y, width, height):
                     return "Error capturing screenshot: pass x, y, width and height together"
+                if not all(isinstance(v, int) and not isinstance(v, bool)
+                           for v in (x, y, width, height)):
+                    return "Error capturing screenshot: x, y, width and height must be integers"
+                if x < 0 or y < 0:
+                    return "Error capturing screenshot: x and y must not be negative"
                 if width <= 0 or height <= 0:
                     return "Error capturing screenshot: width and height must be positive"
                 region["rect"] = {"x": x, "y": y, "width": width, "height": height}
             if scale is not None:
-                if scale <= 0:
-                    return "Error capturing screenshot: scale must be positive"
-                region["scale"] = scale
+                if isinstance(scale, bool) or not isinstance(scale, (int, float)):
+                    return "Error capturing screenshot: scale must be a number"
+                if not math.isfinite(scale) or not 0 < scale <= 1.0:
+                    return "Error capturing screenshot: scale must be above 0 and at most 1.0"
+                region["scale"] = float(scale)
 
             if tab_id is not None:
                 request = {

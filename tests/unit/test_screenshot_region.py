@@ -1,4 +1,4 @@
-﻿"""Tests for capturing a region of a tab and scaling the screenshot"""
+"""Tests for capturing a region of a tab and scaling the screenshot"""
 
 import pytest
 
@@ -68,9 +68,45 @@ class TestScreenshotRegion:
         assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
-    async def test_empty_region_or_scale_sends_nothing(self, capture, stub_server):
-        empty = await capture(profile_id=1, x=0, y=0, width=0, height=10)
-        scaled = await capture(profile_id=1, scale=0)
+    async def test_empty_region_sends_nothing(self, capture, stub_server):
+        result = await capture(profile_id=1, x=0, y=0, width=0, height=10)
 
-        assert "positive" in empty and "positive" in scaled
+        assert "positive" in result
         assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_negative_origin_sends_nothing(self, capture, stub_server):
+        result = await capture(profile_id=1, x=-1, y=0, width=10, height=10)
+
+        assert "must not be negative" in result
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [1.5, True, "10"])
+    async def test_region_values_must_be_integers(self, capture, stub_server, bad):
+        result = await capture(profile_id=1, x=0, y=0, width=bad, height=10)
+
+        assert "must be integers" in result
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [0, -0.5, 1.5, float("nan"), float("inf")])
+    async def test_scale_must_be_above_zero_and_at_most_one(self, capture, stub_server, bad):
+        result = await capture(profile_id=1, scale=bad)
+
+        assert "above 0 and at most 1.0" in result
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [True, "0.5"])
+    async def test_scale_must_be_a_number(self, capture, stub_server, bad):
+        result = await capture(profile_id=1, scale=bad)
+
+        assert "must be a number" in result
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_scale_of_one_is_allowed(self, capture, stub_server):
+        await capture(profile_id=1, scale=1)
+
+        assert stub_server.sent_request["data"]["scale"] == 1.0

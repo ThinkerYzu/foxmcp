@@ -946,7 +946,7 @@ function captureRegionOptions(data) {
       && rect.width > 0 && rect.height > 0) {
     result.rect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   }
-  if (Number.isFinite(data.scale) && data.scale > 0) {
+  if (Number.isFinite(data.scale) && data.scale > 0 && data.scale <= 1) {
     result.scale = data.scale;
   }
   return result;

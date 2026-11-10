@@ -85,8 +85,6 @@ does not rely on an extension-supplied name or a user-entered label.
 - `tabs_groups_update(profile_id, group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
 - `tabs_groups_query(profile_id, window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
 - `tabs_capture_screenshot(profile_id, filename=None, window_id=None, format="png", quality=90, tab_id=None, x=None, y=None, width=None, height=None, scale=None)` - Capture screenshot of the visible tab, or of one given tab
-  - `x`, `y`, `width`, `height` (all four together, CSS pixels) capture only that region, and
-    `scale` (e.g. `0.5`) shrinks the image; both reduce the size of the result
   - If `filename` provided: saves screenshot to file and returns success message
   - If `filename` omitted: returns base64 encoded image data URL
   - Automatically adds file extension (.png/.jpeg) if not provided
@@ -94,6 +92,10 @@ does not rely on an extension-supplied name or a user-entered label.
   - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
     not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
     has `tabs.captureTab`; an older one answers that it is too old
+  - `x`, `y`, `width`, `height` (optional, all four together, integer CSS pixels; `x` and `y` at
+    least 0, `width` and `height` above 0) capture only that region
+  - `scale` (optional, a finite number above 0 and up to 1.0, e.g. `0.5`) shrinks the image;
+    region and scale both reduce the size of the result
 
 ### Firefox Containers
 
