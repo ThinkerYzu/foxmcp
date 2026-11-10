@@ -706,8 +706,17 @@ answers `UNKNOWN_ACTION`.
 
 Both capture actions accept an optional `rect` (`{"x", "y", "width", "height"}`, CSS pixels) to
 capture only a region and an optional `scale` (a finite number above 0 and up to 1) for the
-image size. The server sends integers for `rect`, with `x` and `y` at least 0 and `width` and
-`height` above 0.
+image size:
+
+```json
+{"action": "tabs.captureVisibleTab", "data": {"format": "png", "quality": 90, "rect": {"x": 0, "y": 0, "width": 400, "height": 200}, "scale": 0.5}}
+{"action": "tabs.captureTab", "data": {"tabId": 123, "format": "png", "quality": 90, "rect": {"x": 0, "y": 0, "width": 400, "height": 200}, "scale": 0.5}}
+```
+
+`x`, `y`, `width` and `height` must be integers, `x` and `y` at least 0 and `width` and `height`
+above 0. A `rect` or `scale` that breaks these rules is an `INVALID_PARAMETER` error, not a
+full-size capture. An extension older than this change ignores both fields and returns the whole
+image, so a client that needs the region should check the extension version.
 
 `tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
 that does not exist or cannot be captured is a `CAPTURE_ERROR`.

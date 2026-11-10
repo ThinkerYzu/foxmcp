@@ -939,14 +939,25 @@ function isBrowserId(value) {
 
 // Optional crop (rect, in CSS pixels of the page) and scale for a screenshot,
 // so a request can ask for a small part of the page instead of all of it.
+// A malformed rect or scale is an error, not a full-size screenshot: the caller
+// asked for something smaller and would otherwise not notice it did not get it.
 function captureRegionOptions(data) {
   const result = {};
-  const rect = data.rect;
-  if (rect && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-      && rect.width > 0 && rect.height > 0) {
+  if (data.rect !== undefined && data.rect !== null) {
+    const rect = data.rect;
+    if (typeof rect !== 'object' ||
+        ![rect.x, rect.y, rect.width, rect.height].every(Number.isInteger)) {
+      throw new Error('rect needs integer x, y, width and height');
+    }
+    if (rect.x < 0 || rect.y < 0 || rect.width <= 0 || rect.height <= 0) {
+      throw new Error('rect needs x and y of 0 or more, and width and height above 0');
+    }
     result.rect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   }
-  if (Number.isFinite(data.scale) && data.scale > 0 && data.scale <= 1) {
+  if (data.scale !== undefined && data.scale !== null) {
+    if (!Number.isFinite(data.scale) || data.scale <= 0 || data.scale > 1) {
+      throw new Error('scale needs a finite number above 0 and at most 1');
+    }
     result.scale = data.scale;
   }
   return result;
@@ -1273,10 +1284,17 @@ async function handleTabsAction(id, action, data) {
 
       case 'tabs.captureVisibleTab':
         const windowId = data.windowId || null;
+        let visibleRegion;
+        try {
+          visibleRegion = captureRegionOptions(data);
+        } catch (regionError) {
+          sendError(id, 'INVALID_PARAMETER', regionError.message);
+          break;
+        }
         const options = {
           format: data.format || 'png',
           quality: data.quality || 90,
-          ...captureRegionOptions(data)
+          ...visibleRegion
         };
 
         try {
@@ -1300,10 +1318,17 @@ async function handleTabsAction(id, action, data) {
           sendError(id, 'INVALID_PARAMETER', 'tabs.captureTab needs a non-negative integer tabId');
           break;
         }
+        let tabRegion;
+        try {
+          tabRegion = captureRegionOptions(data);
+        } catch (regionError) {
+          sendError(id, 'INVALID_PARAMETER', regionError.message);
+          break;
+        }
         const captureOptions = {
           format: data.format || 'png',
           quality: data.quality || 90,
-          ...captureRegionOptions(data)
+          ...tabRegion
         };
 
         try {

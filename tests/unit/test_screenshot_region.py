@@ -51,7 +51,23 @@ class TestScreenshotRegion:
         await capture(profile_id=1, x=0, y=0, width=50, height=40)
 
         assert stub_server.sent_request["action"] == "tabs.captureVisibleTab"
-        assert stub_server.sent_request["data"]["rect"]["width"] == 50
+        assert stub_server.sent_request["data"]["rect"] == {"x": 0, "y": 0, "width": 50, "height": 40}
+
+    @pytest.mark.asyncio
+    async def test_region_with_window_id(self, capture, stub_server):
+        await capture(profile_id=1, window_id=7, x=1, y=2, width=3, height=4, scale=1)
+
+        data = stub_server.sent_request["data"]
+        assert data["windowId"] == 7
+        assert data["rect"] == {"x": 1, "y": 2, "width": 3, "height": 4}
+        assert data["scale"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_region_is_refused_together_with_tab_and_window(self, capture, stub_server):
+        result = await capture(profile_id=1, tab_id=4, window_id=7, x=0, y=0, width=5, height=5)
+
+        assert "not both" in result
+        assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
     async def test_without_region_nothing_extra_is_sent(self, capture, stub_server):
