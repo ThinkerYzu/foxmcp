@@ -47,7 +47,7 @@ class TestDialogs:
         assert stub_server.sent_request["action"] == "content.dialogs"
         assert stub_server.sent_request["data"] == {
             "tabId": 4, "mode": "accept", "promptText": None}
-        assert result == "Dialog handling: accept\n- confirm (accepted): Delete?\n- alert (accepted): Done"
+        assert result == "Dialog handling: accept\n- confirm (accepted): Delete?\n- alert (shown): Done"
 
     @pytest.mark.asyncio
     async def test_dismissed_dialogs_say_so(self, handle_dialogs, stub_server):
