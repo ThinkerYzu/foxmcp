@@ -346,12 +346,24 @@ these checks also gate tag releases and manual rehearsals.
 The install job is the one that follows README rather than the test harness. It
 runs `make install` on a clean checkout — which nothing else does, since the other
 jobs create the venv themselves — then starts the server and asks it for its tools
-over HTTP as a real MCP client would, checking the count with every group enabled
-and with two groups disabled. It also checks stdio startup and that an individually
-enabled tool survives its disabled group. With 48 tools and 12 in the tabs group,
-`--disable-tools tabs --enable-tools tabs_capture_screenshot` must expose 37 tools.
-When adding or removing tools, update all affected counts in the install job,
-including this override check. To check the default HTTP tool count by hand:
+over HTTP as a real MCP client would. It checks discovery with every group enabled
+and with two groups disabled, stdio startup, and that an individually enabled tool
+survives its disabled group. These behavior checks run on every PR and push.
+
+Fixed tool totals and complete advertised-tool coverage in the archive smoke test
+are release gates. Reusable CI accepts boolean `release-checks` (default false);
+`release.yml` sets it to true for both manual rehearsals and tagged releases.
+Every CI job receives `FOXMCP_RELEASE_CHECKS=0` for ordinary runs or `1` for
+release runs. Local checks remain strict unless explicitly run with
+`FOXMCP_RELEASE_CHECKS=0`. Only the catalog gates are relaxed: functional tests,
+nonempty discovery, filtering and the no-skipped-tests guard remain required.
+Archive reports list uncovered tools during ordinary CI; release runs fail until
+all advertised tools have smoke scenarios and all expected counts are updated.
+
+Before release, update affected totals in the install workflow, Windows installer,
+Python-package, shared-stdio container and archive smoke checks. For example,
+with 48 tools and 12 in the tabs group, enabling only its screenshot exposes 37.
+To check the default HTTP tool count by hand:
 
 ```bash
 venv/bin/python server/server.py --port 18765 --mcp-port 13000 &
@@ -423,6 +435,9 @@ tagging or publishing; `scripts/check-version.sh` checks release-version
 consistency, not API compatibility.
 
 1. Complete and record the protocol ID compatibility review described above.
+   Update expected tool totals and add archive smoke scenarios for every new
+   tool. Run a non-publishing release rehearsal before tagging; its
+   `release-checks: true` enables the catalog gates that ordinary CI relaxes.
 2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh`, `scripts/install-from-github.ps1`, both
    the top-level and package versions in `server.json`, and the install URLs
