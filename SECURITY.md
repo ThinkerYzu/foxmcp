@@ -58,7 +58,7 @@ excluded deliberately:
 unless you can show the reasoning is wrong:
 
 - **The extension holds broad permissions** — `<all_urls>`, `webRequest`, `tabs`,
-  `history`, `bookmarks`. This is what the tool is for. Treat an installed FoxMCP as
+  `history`, `bookmarks`, `downloads`. This is what the tool is for. Treat an installed FoxMCP as
   granting its MCP client the same reach over the browser that you have.
 - **Neither port authenticates local callers.** Any local process can drive the MCP port.
   See the threat model above.

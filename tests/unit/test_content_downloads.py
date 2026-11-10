@@ -1,4 +1,7 @@
-﻿"""Tests for content_list_downloads and content_wait_download"""
+"""Tests for content_list_downloads and content_wait_download"""
+
+import json
+from pathlib import Path
 
 import pytest
 
@@ -90,3 +93,39 @@ class TestWaitDownload:
         result = await call_tool("content_wait_download", profile_id=1, timeout=1)
 
         assert result == "Failed to wait for a download: No download finished within 1000 ms"
+
+
+class TestArguments:
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("limit", [0, -1, 101, True, 2.5, "3"])
+    async def test_limit_must_be_an_integer_from_1_to_100(self, call_tool, stub_server, limit):
+        result = await call_tool("content_list_downloads", profile_id=1, limit=limit)
+
+        assert result == "Failed to list downloads: limit must be an integer from 1 to 100"
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("timeout", [0, -5, 301, True, "5", float("nan"), float("inf")])
+    async def test_timeout_must_be_above_zero_and_at_most_300(self, call_tool, stub_server, timeout):
+        result = await call_tool("content_wait_download", profile_id=1, timeout=timeout)
+
+        assert result == ("Failed to wait for a download: "
+                          "timeout must be a number above 0 and at most 300")
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_extension_rejection_is_reported(self, call_tool, stub_server):
+        stub_server.response = {"type": "error", "data": {
+            "code": "INVALID_PARAMETER", "message": "limit must be an integer from 1 to 100"}}
+
+        result = await call_tool("content_list_downloads", profile_id=1)
+
+        assert result == "Failed to list downloads: limit must be an integer from 1 to 100"
+
+
+def test_manifest_asks_for_the_downloads_permission():
+    manifest = json.loads(
+        (Path(__file__).resolve().parents[2] / "extension/manifest.json").read_text())
+
+    assert "downloads" in manifest["permissions"]

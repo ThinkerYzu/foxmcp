@@ -19,6 +19,7 @@ import shlex
 import sys
 import time
 import json
+import math
 import base64
 from datetime import datetime
 from typing import Dict, Any, Optional, List, TypedDict, Union
@@ -2282,9 +2283,15 @@ class FoxMCPTools:
         async def content_list_downloads(profile_id: int, limit: int = 10) -> str:
             """List the most recent downloads with the path each file was saved to
 
+            The absolute path and URL of each download are returned. Private-browsing
+            downloads are left out.
+
             Args:
-                limit: How many downloads to list, newest first (default: 10, maximum: 100)
+                limit: (optional, an integer from 1 to 100, default: 10) How many downloads
+                    to list, newest first
             """
+            if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+                return "Failed to list downloads: limit must be an integer from 1 to 100"
             response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request",
                 "action": "content.list_downloads", "data": {"limit": limit},
@@ -2302,17 +2309,23 @@ class FoxMCPTools:
             and return where the file was saved
 
             Firefox may ask the person to confirm a download first, and the wait
-            includes that time.
+            includes that time. A download that started up to 3 seconds before the call
+            counts, one still in progress keeps the wait going, and an interrupted one
+            ends it with its error. Private-browsing downloads are ignored.
 
             Args:
-                timeout: Seconds to wait at most (default: 30, maximum: 300)
+                timeout: (optional, a number above 0 and at most 300, default: 30) Seconds
+                    to wait at most
             """
+            if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+                    or not math.isfinite(timeout) or not 0 < timeout <= 300):
+                return "Failed to wait for a download: timeout must be a number above 0 and at most 300"
             response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request",
                 "action": "content.wait_download",
-                "data": {"timeoutMs": int(timeout * 1000)},
+                "data": {"timeoutMs": max(1, int(timeout * 1000))},
                 "timestamp": datetime.now().isoformat()
-            }, timeout=min(max(timeout, 0.1), 300.0) + 15.0)
+            }, timeout=timeout + 15.0)
             if "error" in response:
                 return f"Failed to wait for a download: {response['error']}"
             if response.get("type") == "response" and "data" in response:

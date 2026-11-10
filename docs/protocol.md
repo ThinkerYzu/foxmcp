@@ -760,9 +760,13 @@ to report files the browser saved, so a client can tell whether an export worked
 ```
 
 They answer `{"downloads": [...]}` and `{"download": {...}}`, where each item has `id`,
-`filename` (the saved path), `url`, `state`, `bytes`, `mime`, `startTime` and `error`.
-`limit` is capped at 100 and `timeoutMs` at 300000. `content.wait_download` answers a
-download that started up to 3 seconds before the request and has ended, or `WAIT_TIMEOUT`.
+`filename` (the absolute saved path), `url`, `state`, `bytes` (the file size, or the bytes
+received so far when it is unknown), `mime`, `startTime` and `error`. Downloads made in
+private browsing are left out. `limit` must be an integer from 1 to 100 and `timeoutMs` an
+integer from 1 to 300000, otherwise the answer is an `INVALID_PARAMETER` error.
+`content.wait_download` considers the downloads that started up to 3 seconds before the
+request: it waits while any of them is in progress and then answers the newest, finished or
+interrupted (with its `error`), or `WAIT_TIMEOUT`.
 
 #### Execute Script
 **Request:**
@@ -1647,7 +1651,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
-| `WAIT_TIMEOUT` | A wait ended without the awaited page state or download; the message says what it was still waiting for. |
+| `WAIT_TIMEOUT` | A wait ended before any download finished; the message says how long it waited. |
 
 ### Script execution and consent errors
 
