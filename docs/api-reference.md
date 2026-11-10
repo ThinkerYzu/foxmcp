@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 46 tools are offered by default. Each section below corresponds to a *group*
+All 47 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -167,6 +167,7 @@ for the complete input-assignment example and transfer details.
   when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
+- `content_handle_dialogs(profile_id, tab_id, mode="log", prompt_text=None)` - Answer the page's `alert`, `confirm` and `prompt` (`accept`, `dismiss`, `off`, or `log` to list what was shown); lasts until the tab navigates
 
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests

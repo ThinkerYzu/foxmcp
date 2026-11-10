@@ -2268,6 +2268,49 @@ class FoxMCPTools:
                 if token is not None:
                     service.revoke(token)
 
+        # Dialog Handling Tool
+        @self._tool()
+        async def content_handle_dialogs(
+            profile_id: int,
+            tab_id: int,
+            mode: str = "log",
+            prompt_text: Optional[str] = None
+        ) -> str:
+            """Answer the page's alert, confirm and prompt dialogs, which otherwise block it
+            and cannot be closed from outside. Turn this on before the action that opens one.
+
+            The page's own functions are replaced, so it lasts until the tab navigates
+            and needs turning on again after that.
+
+            Args:
+                tab_id: ID of the tab
+                mode: accept (OK, and prompts get prompt_text), dismiss (Cancel), off
+                    (restore the native dialogs) or log (just list what was shown)
+                prompt_text: Text a prompt answers with in accept mode (default: its default)
+            """
+            if mode not in ("accept", "dismiss", "off", "log"):
+                raise ValueError("mode must be accept, dismiss, off or log")
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "content.dialogs",
+                "data": {"tabId": tab_id, "mode": mode, "promptText": prompt_text},
+                "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Failed to handle dialogs: {response['error']}"
+            if response.get("type") != "response" or "data" not in response:
+                return f"Failed to handle dialogs: {response.get('data', {}).get('message', 'Unknown error')}"
+            data = response["data"]
+            shown = data.get("dialogs", [])
+            lines = [f"Dialog handling: {data.get('mode')}"]
+            for dialog in shown:
+                answer = "accepted" if dialog.get("accepted") else "dismissed"
+                lines.append(f"- {dialog.get('type')} ({answer}): {dialog.get('message')}")
+            if not shown:
+                lines.append("No dialog was shown since the last call")
+            return "\n".join(lines)
+
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:

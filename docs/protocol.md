@@ -750,6 +750,18 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 }
 ```
 
+#### Dialogs
+A native `alert`, `confirm` or `prompt` blocks a page and cannot be answered from an
+extension, so `content.dialogs` replaces the page's own functions. `mode` is `accept`,
+`dismiss` or `off` (restore); any other value only reads the log. The answer lists the
+dialogs shown since the last call and is discarded when the page navigates.
+
+```json
+{"action": "content.dialogs", "data": {"tabId": 123, "mode": "accept", "promptText": null}}
+```
+
+It answers `{"mode": "accept", "dialogs": [{"type": "confirm", "message": "...", "accepted": true}]}`.
+
 #### Execute Script
 **Request:**
 ```json

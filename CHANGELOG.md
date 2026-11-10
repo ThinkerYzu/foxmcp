@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `content_handle_dialogs` accepts or dismisses a page's `alert`, `confirm` and `prompt` dialogs and logs what was shown, so they no longer block automation.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added

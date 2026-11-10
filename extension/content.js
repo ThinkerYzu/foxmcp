@@ -11,6 +11,43 @@ function expireFileHandle(handles, fileId, delay) {
   setTimeout(() => handles.delete(fileId), delay);
 }
 
+// A native alert, confirm or prompt blocks the page and nothing in an
+// extension can answer it, so while handling is on the page's own functions are
+// replaced: they record the dialog and answer it as the client chose. This lasts
+// until the page navigates, which discards the replacements.
+const dialogState = { mode: 'off', promptText: null, log: [], originals: null };
+
+function setDialogHandling(mode, promptText) {
+  const page = window.wrappedJSObject;
+  dialogState.promptText = promptText ?? null;
+  if (mode === 'off') {
+    if (dialogState.originals) {
+      Object.assign(page, dialogState.originals);
+      dialogState.originals = null;
+    }
+    dialogState.mode = 'off';
+    return;
+  }
+  dialogState.mode = mode;
+  if (dialogState.originals) {
+    return;
+  }
+  dialogState.originals = { alert: page.alert, confirm: page.confirm, prompt: page.prompt };
+  const record = (type, message, extra) => dialogState.log.push(
+    { type, message: String(message ?? ''), accepted: dialogState.mode === 'accept', ...extra });
+  page.alert = exportFunction(function (message) {
+    record('alert', message);
+  }, window);
+  page.confirm = exportFunction(function (message) {
+    record('confirm', message);
+    return dialogState.mode === 'accept';
+  }, window);
+  page.prompt = exportFunction(function (message, fallback) {
+    record('prompt', message, { default: fallback ?? '' });
+    return dialogState.mode === 'accept' ? (dialogState.promptText ?? fallback ?? '') : null;
+  }, window);
+}
+
 // Listen for messages from background script
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const { action, script, data } = request;
@@ -65,6 +102,15 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ error: error.message });
         }
         break;
+
+      case 'dialogs': {
+        if (data.mode === 'accept' || data.mode === 'dismiss' || data.mode === 'off') {
+          setDialogHandling(data.mode, data.promptText);
+        }
+        const log = dialogState.log.splice(0);
+        sendResponse({ mode: dialogState.mode, dialogs: log });
+        break;
+      }
 
       default:
         sendResponse({ error: `Unknown content action: ${action}` });
