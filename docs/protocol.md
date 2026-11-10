@@ -753,7 +753,9 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 #### Wait
 `content.wait` polls the tab until it has finished loading and, when given, the
 `selector` matches, the `text` is in the page and the tab URL contains `url`.
-`state: "absent"` waits for the selector or text to disappear instead. `timeoutMs`
+`state: "absent"` waits for the selector or text to disappear instead. The selector is looked up in
+the top frame only, and `text` is matched case-sensitively against its rendered text; an invalid
+selector is an `INVALID_PARAMETER` error. `timeoutMs`
 defaults to 10000 and is capped at 120000. A page that is navigating or has no
 content script yet is looked at again, not treated as an error.
 
@@ -1647,7 +1649,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
-| `WAIT_TIMEOUT` | A wait ended without the awaited page state or download; the message says what it was still waiting for. |
+| `WAIT_TIMEOUT` | A wait ended before the awaited page state appeared; the message says what it was still waiting for. |
 
 ### Script execution and consent errors
 

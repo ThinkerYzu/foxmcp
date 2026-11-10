@@ -69,7 +69,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // One look at whether what content_wait waits for is on the page now.
       case 'checkWait': {
         let found = true;
-        if (data.selector) found = !!document.querySelector(data.selector);
+        if (data.selector) {
+          try {
+            found = !!document.querySelector(data.selector);
+          } catch (selectorError) {
+            sendResponse({ error: `Invalid selector: ${selectorError.message}` });
+            break;
+          }
+        }
         if (found && data.text) found = (document.body?.innerText || '').includes(data.text);
         sendResponse({ found });
         break;

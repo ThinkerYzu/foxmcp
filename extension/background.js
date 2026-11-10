@@ -1452,7 +1452,8 @@ async function handleContentAction(id, action, data) {
         const timeoutMs = Math.min(Math.max(Number(data.timeoutMs) || 10000, 100), 120000);
         const waitAbsent = data.state === 'absent';
         const checksContent = !!(data.selector || data.text);
-        const deadline = Date.now() + timeoutMs;
+        const started = Date.now();
+        const deadline = started + timeoutMs;
         let reason = 'the page did not finish loading';
         let waited = false;
         while (Date.now() < deadline) {
@@ -1466,6 +1467,11 @@ async function handleContentAction(id, action, data) {
               } else {
                 const check = await browser.tabs.sendMessage(data.tabId,
                   { action: 'checkWait', data: { selector: data.selector, text: data.text } });
+                if (check.error) {
+                  sendError(id, 'INVALID_PARAMETER', check.error);
+                  waited = true;
+                  break;
+                }
                 ready = waitAbsent ? !check.found : check.found;
                 reason = waitAbsent ? 'it was still on the page' : 'it did not appear';
               }
@@ -1475,11 +1481,16 @@ async function handleContentAction(id, action, data) {
           } catch (waitError) {
             // The page is navigating, or has no content script yet: look again.
             if (!String(waitError.message).includes('Receiving end does not exist')) throw waitError;
-            try { await browser.tabs.executeScript(data.tabId, { file: '/content.js' }); } catch (e) { /* loading */ }
+            reason = 'the page has no content script yet (still loading, or a page extensions cannot read)';
+            try {
+              await browser.tabs.executeScript(data.tabId, { file: '/content.js' });
+            } catch (injectError) {
+              // Still loading, or a page content scripts cannot run on: try again until the deadline.
+            }
           }
           if (ready) {
             const tab = await browser.tabs.get(data.tabId);
-            sendResponse(id, action, { waitedMs: timeoutMs - (deadline - Date.now()), url: tab.url, title: tab.title });
+            sendResponse(id, action, { waitedMs: Date.now() - started, url: tab.url, title: tab.title });
             waited = true;
             break;
           }

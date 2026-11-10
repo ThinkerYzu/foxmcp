@@ -19,6 +19,7 @@ import shlex
 import sys
 import time
 import json
+import math
 import base64
 from datetime import datetime
 from typing import Dict, Any, Optional, List, TypedDict, Union
@@ -2284,12 +2285,23 @@ class FoxMCPTools:
 
             Args:
                 tab_id: ID of the tab
-                selector: CSS selector that must match an element
-                text: Text that must appear in the page
-                url: Text the tab URL must contain
-                gone: Wait for the selector or text to disappear instead (default: False)
-                timeout: Seconds to wait at most (default: 10, maximum: 120)
+                selector: (optional, a CSS selector) Element that must match, in the top frame
+                text: (optional) Text that must appear in the page, case-sensitive
+                url: (optional) Text the tab URL must contain
+                gone: (optional, default: False) Wait for the selector or text to disappear
+                    instead; needs a selector or text
+                timeout: (optional, default: 10) Seconds to wait at most, above 0 and up to 120
             """
+            for name, value in (("selector", selector), ("text", text), ("url", url)):
+                if value is not None and not isinstance(value, str):
+                    return f"Failed to wait: {name} must be a string"
+            if not isinstance(gone, bool):
+                return "Failed to wait: gone must be a boolean"
+            if gone and not (selector or text):
+                return "Failed to wait: gone needs a selector or text to wait for"
+            if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+                    or not math.isfinite(timeout) or not 0 < timeout <= 120):
+                return "Failed to wait: timeout must be a number above 0 and at most 120"
             response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()),
                 "type": "request",
@@ -2298,7 +2310,7 @@ class FoxMCPTools:
                          "state": "absent" if gone else "present",
                          "timeoutMs": int(timeout * 1000)},
                 "timestamp": datetime.now().isoformat()
-            }, timeout=min(max(timeout, 0.1), 120.0) + 15.0)
+            }, timeout=timeout + 15.0)
             if "error" in response:
                 return f"Failed to wait: {response['error']}"
             if response.get("type") == "response" and "data" in response:

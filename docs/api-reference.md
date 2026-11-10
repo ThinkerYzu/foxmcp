@@ -167,6 +167,7 @@ for the complete input-assignment example and transfer details.
   when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
+- `content_wait(profile_id, tab_id, selector=None, text=None, url=None, gone=False, timeout=10.0)` - Wait until the tab has finished loading and, when given, the CSS `selector` matches an element, the `text` is in the page and the tab URL contains `url`; with `gone`, until the selector or text is absent. `timeout` is in seconds, above 0 and at most 120. Returns the title and URL when ready, or fails with `WAIT_TIMEOUT` saying what it still waited for. `text` is matched case-sensitively against the top frame's rendered text, and `selector` is looked up in the top frame only. An invalid selector is an `INVALID_PARAMETER` error
 
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests

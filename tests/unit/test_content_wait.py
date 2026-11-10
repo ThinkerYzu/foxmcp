@@ -1,4 +1,4 @@
-﻿"""Tests for content_wait"""
+"""Tests for content_wait"""
 
 import pytest
 
@@ -62,9 +62,9 @@ class TestWait:
 
     @pytest.mark.asyncio
     async def test_server_timeout_outlasts_the_wait(self, wait, stub_server):
-        await wait(profile_id=1, tab_id=4, timeout=500)
+        await wait(profile_id=1, tab_id=4, timeout=120)
 
-        assert stub_server.timeout > 120.0
+        assert stub_server.timeout == 135.0
 
     @pytest.mark.asyncio
     async def test_reports_a_timeout(self, wait, stub_server):
@@ -74,3 +74,35 @@ class TestWait:
         result = await wait(profile_id=1, tab_id=4, selector="#ok", timeout=1)
 
         assert result == "Failed to wait: Timed out after 1000 ms: it did not appear"
+
+    @pytest.mark.asyncio
+    async def test_reports_an_invalid_selector(self, wait, stub_server):
+        stub_server.response = {"type": "error", "data": {
+            "code": "INVALID_PARAMETER", "message": "Invalid selector: ''a['' is not a valid selector"}}
+
+        result = await wait(profile_id=1, tab_id=4, selector="a[")
+
+        assert result.startswith("Failed to wait: Invalid selector")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("timeout", [0, -1, 121, True, "5", float("nan"), float("inf")])
+    async def test_timeout_must_be_a_number_above_zero_up_to_120(self, wait, stub_server, timeout):
+        result = await wait(profile_id=1, tab_id=4, timeout=timeout)
+
+        assert result == "Failed to wait: timeout must be a number above 0 and at most 120"
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_gone_needs_something_to_wait_for(self, wait, stub_server):
+        result = await wait(profile_id=1, tab_id=4, url="/done", gone=True)
+
+        assert result == "Failed to wait: gone needs a selector or text to wait for"
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("field", ["selector", "text", "url"])
+    async def test_text_arguments_must_be_strings(self, wait, stub_server, field):
+        result = await wait(profile_id=1, tab_id=4, **{field: 5})
+
+        assert result == f"Failed to wait: {field} must be a string"
+        assert stub_server.sent_request is None
