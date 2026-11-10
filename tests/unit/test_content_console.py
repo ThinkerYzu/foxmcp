@@ -1,4 +1,4 @@
-﻿"""Tests for content_read_console"""
+"""Tests for content_read_console"""
 
 import pytest
 
@@ -73,7 +73,17 @@ class TestConsole:
         assert result == "Failed to read the console: Tab not found"
 
     @pytest.mark.asyncio
-    async def test_level_is_checked(self, read_console, stub_server):
-        with pytest.raises(ValueError, match="level"):
-            await read_console(profile_id=1, tab_id=4, level="loud")
+    @pytest.mark.parametrize("arguments, message", [
+        ({"level": "loud"}, "level"),
+        ({"level": 3}, "level"),
+        ({"pattern": 1}, "pattern"),
+        ({"limit": 0}, "limit"),
+        ({"limit": 501}, "limit"),
+        ({"limit": True}, "limit"),
+        ({"limit": "5"}, "limit"),
+        ({"clear": "yes"}, "clear"),
+    ])
+    async def test_arguments_are_checked(self, read_console, stub_server, arguments, message):
+        with pytest.raises(ValueError, match=message):
+            await read_console(profile_id=1, tab_id=4, **arguments)
         assert stub_server.sent_request is None

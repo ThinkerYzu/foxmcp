@@ -2283,15 +2283,29 @@ class FoxMCPTools:
             Recording starts with the first call on a page, so call it once before the
             action to debug; it restarts when the tab navigates.
 
+            Entries are kept up to 500 per page, each cut to 2,000 characters. What a
+            page logs can include secrets and personal data, and it is returned as is.
+
             Args:
                 tab_id: ID of the tab
-                level: Only log, info, warn, error (which includes uncaught errors) or debug
-                pattern: Only messages containing this text
-                limit: Newest entries to return (default: 50)
-                clear: Forget the entries after reading them (default: False)
+                level: (optional) Only log, info, warn, error (which includes uncaught
+                    errors) or debug
+                pattern: (optional, a string) Only messages containing this text,
+                    case-sensitive
+                limit: (optional, an integer from 1 to 500, default: 50) Newest entries
+                    to return
+                clear: (optional, default: False) Forget all the entries after reading
+                    them, not only the ones returned; ignored on the first call
             """
-            if level not in (None, "log", "info", "warn", "error", "debug"):
+            if level is not None and (not isinstance(level, str) or level not in (
+                    "log", "info", "warn", "error", "debug")):
                 raise ValueError("level must be log, info, warn, error or debug")
+            if pattern is not None and not isinstance(pattern, str):
+                raise ValueError("pattern must be a string")
+            if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+                raise ValueError("limit must be an integer from 1 to 500")
+            if not isinstance(clear, bool):
+                raise ValueError("clear must be a boolean")
             response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()),
                 "type": "request",

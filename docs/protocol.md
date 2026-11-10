@@ -760,7 +760,14 @@ are kept, and the recording ends when the page navigates.
 
 ```json
 {"action": "content.console", "data": {"tabId": 123, "level": null, "pattern": null, "limit": 50, "clear": false}}
+{"type": "response", "data": {"started": false, "entries": [{"level": "error", "message": "boom"}, {"level": "uncaught", "message": "x is not defined (https://example.org/:1:9)"}]}}
 ```
+
+`level` is one of `log`, `info`, `warn`, `error` or `debug`, `pattern` is a case-sensitive
+substring of the message, `limit` (1 to 500) keeps the newest entries, and `clear` empties the
+whole buffer, not only the entries returned; it is ignored when `started` is true. A value of
+the wrong type or range is a `PAGE_ERROR`. Entries hold whatever the page logged, which can
+include secrets or personal data, and are returned unchanged.
 
 #### Execute Script
 **Request:**

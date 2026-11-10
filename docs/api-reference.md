@@ -167,7 +167,7 @@ for the complete input-assignment example and transfer details.
   when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
-- `content_read_console(profile_id, tab_id, level=None, pattern=None, limit=50, clear=False)` - Read the page's console output and uncaught errors; recording starts with the first call on a page and restarts when the tab navigates
+- `content_read_console(profile_id, tab_id, level=None, pattern=None, limit=50, clear=False)` - Read the page's console output and uncaught errors, filtered by `level`, `pattern` (a case-sensitive substring) and `limit` (1 to 500, the newest entries); `clear` forgets all entries after reading. Recording starts with the first call on a page and restarts when the tab navigates. At most 500 entries of 2,000 characters are kept, and what a page logs (including secrets or personal data) is returned as is
 
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests
