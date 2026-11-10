@@ -2779,16 +2779,36 @@ class FoxMCPTools:
 
             Args:
                 monitor_id: ID of the monitoring session
-                url_contains: Only URLs containing this text
-                method: Only this HTTP method, such as POST
-                resource_type: Only this type, such as xmlhttprequest, script or image
-                min_status: Only responses with at least this status code, such as 400
-                failed_only: Only requests that failed (an error, or status 400 and above)
-                limit: Keep only the newest this many matches
+                url_contains: (optional, a string) Only URLs containing this text,
+                    case-sensitive
+                method: (optional, a string) Only this HTTP method, such as POST,
+                    case-insensitive
+                resource_type: (optional, a string) Only this type, such as
+                    xmlhttprequest, script or image, case-sensitive
+                min_status: (optional, an integer from 100 to 599) Only responses with at
+                    least this status code, such as 400
+                failed_only: (optional, default: False) Only requests that failed, meaning
+                    they have an error or a status of 400 and above
+                limit: (optional, an integer of 1 or more) Keep only this many of the
+                    newest matches, the last ones captured
 
             Returns:
                 JSON string with captured request summaries
             """
+            for name, value in (("url_contains", url_contains), ("method", method),
+                                ("resource_type", resource_type)):
+                if value is not None and not isinstance(value, str):
+                    return json.dumps({"error": f"{name} must be a string"})
+            if min_status is not None and (
+                    isinstance(min_status, bool) or not isinstance(min_status, int)
+                    or not 100 <= min_status <= 599):
+                return json.dumps({"error": "min_status must be an integer from 100 to 599"})
+            if limit is not None and (
+                    isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
+                return json.dumps({"error": "limit must be an integer of 1 or more"})
+            if not isinstance(failed_only, bool):
+                return json.dumps({"error": "failed_only must be a boolean"})
+
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
@@ -2806,9 +2826,15 @@ class FoxMCPTools:
 
             if response.get("type") == "response" and "data" in response:
                 data = response["data"]
-                filtered = any(v not in (None, False) for v in
+                # Compare with None and False by identity: 0 == False, so a test
+                # such as `v not in (None, False)` would treat 0 as no filter.
+                filtered = any(v is not None and v is not False for v in
                                (url_contains, method, resource_type, min_status, failed_only, limit))
-                if filtered and isinstance(data.get("requests"), list):
+                if filtered:
+                    if not isinstance(data, dict) or not isinstance(data.get("requests"), list):
+                        return json.dumps({"error": "Failed to list captured requests: "
+                                                    "the extension returned no request list"})
+
                     def keep(item):
                         status = item.get("status_code") or 0
                         return ((not url_contains or url_contains in (item.get("url") or ""))
@@ -2817,8 +2843,8 @@ class FoxMCPTools:
                                 and (min_status is None or status >= min_status)
                                 and (not failed_only or bool(item.get("error")) or status >= 400))
                     matches = [item for item in data["requests"] if keep(item)]
-                    if limit is not None and limit >= 0:
-                        matches = matches[-limit:] if limit else []
+                    if limit is not None:
+                        matches = matches[-limit:]
                     data = {**data, "matched_requests": len(matches), "requests": matches}
                 return json.dumps(data)
             elif response.get("type") == "error":

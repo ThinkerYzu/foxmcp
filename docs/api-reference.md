@@ -181,9 +181,12 @@ for the complete input-assignment example and transfer details.
   - Captured data outlives the monitor: the two tools below still answer afterwards
 - `requests_list_captured(profile_id, monitor_id, url_contains=None, method=None, resource_type=None, min_status=None, failed_only=False, limit=None)` - List captured request summaries
   - Returns JSON with array of request summaries (metadata only, no full content)
-  - Optional filters (all must match) keep the list short on busy pages: URL text, method,
-    resource type, minimum status, `failed_only` (an error or status 400 and above), and
-    `limit` for the newest matches. When any is given the JSON also has `matched_requests`;
+  - Optional filters (all must match) keep the list short on busy pages: `url_contains` and
+    `resource_type` match exactly as written (case-sensitive), `method` ignores case,
+    `min_status` is an integer from 100 to 599, `failed_only` keeps requests that have an error
+    or a status of 400 and above, and `limit` (1 or more) keeps the last matches captured.
+    A wrongly typed or out-of-range filter returns `{"error": ...}` without contacting the
+    extension. When any filter is given the JSON also has `matched_requests`;
     `total_requests` still counts everything captured
   - A request appears once it has completed, so a navigation started a moment ago
     is not in the list yet
