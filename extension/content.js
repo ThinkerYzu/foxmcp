@@ -15,6 +15,7 @@ function expireFileHandle(handles, fileId, delay) {
 // extension can answer it, so while handling is on the page's own functions are
 // replaced: they record the dialog and answer it as the client chose. This lasts
 // until the page navigates, which discards the replacements.
+const DIALOG_LOG_LIMIT = 100;
 const dialogState = { mode: 'off', promptText: null, log: [], originals: null };
 
 function setDialogHandling(mode, promptText) {
@@ -22,7 +23,9 @@ function setDialogHandling(mode, promptText) {
   dialogState.promptText = promptText ?? null;
   if (mode === 'off') {
     if (dialogState.originals) {
-      Object.assign(page, dialogState.originals);
+      page.alert = dialogState.originals.alert;
+      page.confirm = dialogState.originals.confirm;
+      page.prompt = dialogState.originals.prompt;
       dialogState.originals = null;
     }
     dialogState.mode = 'off';
@@ -33,8 +36,12 @@ function setDialogHandling(mode, promptText) {
     return;
   }
   dialogState.originals = { alert: page.alert, confirm: page.confirm, prompt: page.prompt };
-  const record = (type, message, extra) => dialogState.log.push(
-    { type, message: String(message ?? ''), accepted: dialogState.mode === 'accept', ...extra });
+  // A page that opens dialogs in a loop must not fill the log without end.
+  const record = (type, message, extra) => {
+    dialogState.log.push({ type, message: String(message).slice(0, 1000),
+      accepted: dialogState.mode === 'accept', ...extra });
+    if (dialogState.log.length > DIALOG_LOG_LIMIT) dialogState.log.shift();
+  };
   page.alert = exportFunction(function (message) {
     record('alert', message);
   }, window);
@@ -43,8 +50,8 @@ function setDialogHandling(mode, promptText) {
     return dialogState.mode === 'accept';
   }, window);
   page.prompt = exportFunction(function (message, fallback) {
-    record('prompt', message, { default: fallback ?? '' });
-    return dialogState.mode === 'accept' ? (dialogState.promptText ?? fallback ?? '') : null;
+    record('prompt', message, { default: String(fallback ?? '') });
+    return dialogState.mode === 'accept' ? (dialogState.promptText ?? String(fallback ?? '')) : null;
   }, window);
 }
 
@@ -104,7 +111,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         break;
 
       case 'dialogs': {
-        if (data.mode === 'accept' || data.mode === 'dismiss' || data.mode === 'off') {
+        if (!['accept', 'dismiss', 'off', 'log'].includes(data.mode)) {
+          sendResponse({ error: 'content.dialogs needs a mode of accept, dismiss, off or log' });
+          break;
+        }
+        if (data.mode !== 'log') {
           setDialogHandling(data.mode, data.promptText);
         }
         const log = dialogState.log.splice(0);

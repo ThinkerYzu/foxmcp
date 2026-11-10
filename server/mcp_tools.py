@@ -21,7 +21,7 @@ import time
 import json
 import base64
 from datetime import datetime
-from typing import Dict, Any, Optional, List, TypedDict, Union
+from typing import Dict, Any, Literal, Optional, List, TypedDict, Union
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -2273,23 +2273,35 @@ class FoxMCPTools:
         async def content_handle_dialogs(
             profile_id: int,
             tab_id: int,
-            mode: str = "log",
+            mode: Literal["accept", "dismiss", "off", "log"],
             prompt_text: Optional[str] = None
         ) -> str:
             """Answer the page's alert, confirm and prompt dialogs, which otherwise block it
             and cannot be closed from outside. Turn this on before the action that opens one.
 
             The page's own functions are replaced, so it lasts until the tab navigates
-            and needs turning on again after that.
+            and needs turning on again after that. Only the top frame is covered, and not
+            dialogs opened before this call or by beforeunload.
+
+            Careful: accept answers OK to every confirm, including ones such as
+            "Delete this account?". Prefer dismiss, or accept for one known step and
+            then off.
 
             Args:
                 tab_id: ID of the tab
                 mode: accept (OK, and prompts get prompt_text), dismiss (Cancel), off
-                    (restore the native dialogs) or log (just list what was shown)
-                prompt_text: Text a prompt answers with in accept mode (default: its default)
+                    (restore the native dialogs) or log (only list the dialogs shown while
+                    accept or dismiss was on; it changes nothing on the page)
+                prompt_text: (optional, a string, only with accept) Text a prompt answers
+                    with; by default a prompt answers with its own default value
             """
             if mode not in ("accept", "dismiss", "off", "log"):
                 raise ValueError("mode must be accept, dismiss, off or log")
+            if prompt_text is not None:
+                if not isinstance(prompt_text, str):
+                    raise ValueError("prompt_text must be a string")
+                if mode != "accept":
+                    raise ValueError("prompt_text only applies to mode accept")
             response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()),
                 "type": "request",
@@ -2305,7 +2317,10 @@ class FoxMCPTools:
             shown = data.get("dialogs", [])
             lines = [f"Dialog handling: {data.get('mode')}"]
             for dialog in shown:
-                answer = "accepted" if dialog.get("accepted") else "dismissed"
+                if dialog.get("type") == "alert":
+                    answer = "shown"
+                else:
+                    answer = "accepted" if dialog.get("accepted") else "dismissed"
                 lines.append(f"- {dialog.get('type')} ({answer}): {dialog.get('message')}")
             if not shown:
                 lines.append("No dialog was shown since the last call")

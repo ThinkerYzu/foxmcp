@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `content_handle_dialogs` accepts or dismisses a page's `alert`, `confirm` and `prompt` dialogs and logs what was shown, so they no longer block automation.
+- `content_handle_dialogs` accepts or dismisses a page's `alert`, `confirm` and `prompt` dialogs and logs what was shown, so they no longer block automation. Errors in the page action use the new `PAGE_ERROR` code.
 
 ### Changed
 

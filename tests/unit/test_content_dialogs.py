@@ -1,4 +1,4 @@
-﻿"""Tests for content_handle_dialogs"""
+"""Tests for content_handle_dialogs"""
 
 import pytest
 
@@ -77,6 +77,32 @@ class TestDialogs:
     async def test_reports_an_extension_error(self, handle_dialogs, stub_server):
         stub_server.response = {"type": "error", "data": {"message": "Tab not found"}}
 
-        result = await handle_dialogs(profile_id=1, tab_id=4)
+        result = await handle_dialogs(profile_id=1, tab_id=4, mode="dismiss")
 
         assert result == "Failed to handle dialogs: Tab not found"
+
+    @pytest.mark.asyncio
+    async def test_alerts_are_shown_not_accepted(self, handle_dialogs, stub_server):
+        stub_server.response = {"type": "response", "data": {"mode": "accept", "dialogs": [
+            {"type": "alert", "message": "Saved", "accepted": True}]}}
+
+        result = await handle_dialogs(profile_id=1, tab_id=4, mode="log")
+
+        assert result == "Dialog handling: accept\n- alert (shown): Saved"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode, prompt_text, message", [
+        ("dismiss", "Dor", "only applies to mode accept"),
+        ("log", "Dor", "only applies to mode accept"),
+        ("accept", 5, "must be a string"),
+    ])
+    async def test_prompt_text_is_only_for_accept(
+            self, handle_dialogs, stub_server, mode, prompt_text, message):
+        with pytest.raises(ValueError, match=message):
+            await handle_dialogs(profile_id=1, tab_id=4, mode=mode, prompt_text=prompt_text)
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_a_mode_is_required(self, handle_dialogs):
+        with pytest.raises(TypeError):
+            await handle_dialogs(profile_id=1, tab_id=4)

@@ -752,9 +752,13 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 
 #### Dialogs
 A native `alert`, `confirm` or `prompt` blocks a page and cannot be answered from an
-extension, so `content.dialogs` replaces the page's own functions. `mode` is `accept`,
-`dismiss` or `off` (restore); any other value only reads the log. The answer lists the
-dialogs shown since the last call and is discarded when the page navigates.
+extension, so `content.dialogs` replaces the page's own functions. `mode` is `accept` (OK),
+`dismiss` (Cancel) or `off` (restore the native dialogs); `log` changes nothing and only
+returns the log, so it lists dialogs only after accept or dismiss was on. Any other value is a
+`PAGE_ERROR`. `accept` answers OK to every `confirm`, including destructive ones. The answer
+lists the dialogs shown since the last call (the last 100 at most, each message cut to 1,000
+characters), and is discarded when the page navigates. Only the top frame is covered, and not
+dialogs opened before the call or by `beforeunload`; `accepted` is not meaningful for `alert`.
 
 ```json
 {"action": "content.dialogs", "data": {"tabId": 123, "mode": "accept", "promptText": null}}
