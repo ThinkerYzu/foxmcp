@@ -1647,6 +1647,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+| `WAIT_TIMEOUT` | A wait ended without the awaited page state or download; the message says what it was still waiting for. |
 
 ### Script execution and consent errors
 
