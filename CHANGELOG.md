@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tabs_capture_screenshot` takes `x`, `y`, `width` and `height` to capture only a region of the page, and `scale` to shrink the image, so a client reads fewer tokens.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added

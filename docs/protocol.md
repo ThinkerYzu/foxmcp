@@ -704,6 +704,9 @@ answers `UNKNOWN_ACTION`.
 }
 ```
 
+Both capture actions accept an optional `rect` (`{"x", "y", "width", "height"}`, CSS pixels) to
+capture only a region and an optional `scale` (positive number) for the image size.
+
 `tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
 that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 

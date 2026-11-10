@@ -937,6 +937,21 @@ function isBrowserId(value) {
   return Number.isInteger(value) && value >= 0;
 }
 
+// Optional crop (rect, in CSS pixels of the page) and scale for a screenshot,
+// so a request can ask for a small part of the page instead of all of it.
+function captureRegionOptions(data) {
+  const result = {};
+  const rect = data.rect;
+  if (rect && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
+      && rect.width > 0 && rect.height > 0) {
+    result.rect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }
+  if (Number.isFinite(data.scale) && data.scale > 0) {
+    result.scale = data.scale;
+  }
+  return result;
+}
+
 // The tab group properties a request sets, out of title, color and collapsed
 //
 // Fields the request leaves out are left out here too, so Firefox keeps the
@@ -1260,7 +1275,8 @@ async function handleTabsAction(id, action, data) {
         const windowId = data.windowId || null;
         const options = {
           format: data.format || 'png',
-          quality: data.quality || 90
+          quality: data.quality || 90,
+          ...captureRegionOptions(data)
         };
 
         try {
@@ -1286,7 +1302,8 @@ async function handleTabsAction(id, action, data) {
         }
         const captureOptions = {
           format: data.format || 'png',
-          quality: data.quality || 90
+          quality: data.quality || 90,
+          ...captureRegionOptions(data)
         };
 
         try {

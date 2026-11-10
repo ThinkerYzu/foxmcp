@@ -1472,9 +1472,18 @@ class FoxMCPTools:
             window_id: Optional[int] = None,
             format: str = "png",
             quality: int = 90,
-            tab_id: Optional[int] = None
+            tab_id: Optional[int] = None,
+            x: Optional[float] = None,
+            y: Optional[float] = None,
+            width: Optional[float] = None,
+            height: Optional[float] = None,
+            scale: Optional[float] = None
         ) -> str:
             """Capture a screenshot of the visible tab, or of the tab given by tab_id
+
+            To save tokens, capture only a region (x, y, width, height, in CSS pixels from
+            the top-left of the visible page; all four together) and/or shrink it with scale
+            (e.g. 0.5).
 
             What comes back depends on whether you pass a filename: with one, the image is
             written to disk and you get a success message and the path; without one, you get
@@ -1486,6 +1495,8 @@ class FoxMCPTools:
                 format: Image format ('png' or 'jpeg', default: 'png')
                 quality: Image quality for JPEG format (1-100, default: 90)
                 tab_id: Capture this tab, even in the background (not with window_id)
+                x, y, width, height: Region to capture, in CSS pixels (all four or none)
+                scale: Scale factor for the image (default: 1; e.g. 0.5 for half size)
 
             Returns:
                 Success message with file path if filename provided, otherwise base64 encoded image data URL
@@ -1495,12 +1506,24 @@ class FoxMCPTools:
             if tab_id is not None and window_id is not None:
                 return "Error capturing screenshot: pass tab_id or window_id, not both"
 
+            region = {}
+            if any(v is not None for v in (x, y, width, height)):
+                if None in (x, y, width, height):
+                    return "Error capturing screenshot: pass x, y, width and height together"
+                if width <= 0 or height <= 0:
+                    return "Error capturing screenshot: width and height must be positive"
+                region["rect"] = {"x": x, "y": y, "width": width, "height": height}
+            if scale is not None:
+                if scale <= 0:
+                    return "Error capturing screenshot: scale must be positive"
+                region["scale"] = scale
+
             if tab_id is not None:
                 request = {
                     "id": str(uuid.uuid4()),
                     "type": "request",
                     "action": "tabs.captureTab",
-                    "data": {"tabId": tab_id, "format": format, "quality": quality},
+                    "data": {"tabId": tab_id, "format": format, "quality": quality, **region},
                     "timestamp": datetime.now().isoformat()
                 }
             else:
@@ -1511,7 +1534,8 @@ class FoxMCPTools:
                     "data": {
                         **({"windowId": window_id} if window_id else {}),
                         "format": format,
-                        "quality": quality
+                        "quality": quality,
+                        **region
                     },
                     "timestamp": datetime.now().isoformat()
                 }

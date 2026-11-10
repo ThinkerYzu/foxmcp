@@ -84,7 +84,9 @@ does not rely on an extension-supplied name or a user-entered label.
 - `tabs_ungroup(profile_id, tab_ids)` - Take tabs out of their group
 - `tabs_groups_update(profile_id, group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
 - `tabs_groups_query(profile_id, window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
-- `tabs_capture_screenshot(profile_id, filename=None, window_id=None, format="png", quality=90, tab_id=None)` - Capture screenshot of the visible tab, or of one given tab
+- `tabs_capture_screenshot(profile_id, filename=None, window_id=None, format="png", quality=90, tab_id=None, x=None, y=None, width=None, height=None, scale=None)` - Capture screenshot of the visible tab, or of one given tab
+  - `x`, `y`, `width`, `height` (all four together, CSS pixels) capture only that region, and
+    `scale` (e.g. `0.5`) shrinks the image; both reduce the size of the result
   - If `filename` provided: saves screenshot to file and returns success message
   - If `filename` omitted: returns base64 encoded image data URL
   - Automatically adds file extension (.png/.jpeg) if not provided
