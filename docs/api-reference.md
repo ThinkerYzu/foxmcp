@@ -93,7 +93,7 @@ does not rely on an extension-supplied name or a user-entered label.
     not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
     has `tabs.captureTab`; an older one answers that it is too old
 - `tabs_record_start(profile_id, tab_id, interval_ms=500, max_frames=60, scale=0.5, quality=50)` - Start recording a tab as small JPEG captures (kept in the extension; stops by itself at `max_frames`, at most 300)
-- `tabs_record_stop(profile_id, recording_id, filename)` - Stop a recording and save it as an animated GIF; identical frames in a row are merged. GIF needs Pillow (`pip install "foxmcp[gif]"`); without it the frames are saved as numbered JPEG files in a folder
+- `tabs_record_stop(profile_id, recording_id, filename)` - Stop a recording and save it as an animated GIF; identical frames in a row are merged. GIF needs the optional Pillow package (`pip install pillow`); without it the frames are saved as numbered JPEG files in a folder
 
 ### Firefox Containers
 

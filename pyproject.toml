@@ -18,10 +18,6 @@ dependencies = [
     "pydantic>=2.11.7",
 ]
 
-[project.optional-dependencies]
-# Lets tabs_record_stop write an animated GIF instead of numbered JPEG files
-gif = ["pillow>=10"]
-
 [project.urls]
 Homepage = "https://github.com/ThinkerYzu/foxmcp"
 Issues = "https://github.com/ThinkerYzu/foxmcp/issues"

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `tabs_record_start` and `tabs_record_stop` record a tab and save an animated GIF of the actions shown. Pillow is an optional extra (`foxmcp[gif]`); without it the frames are saved as numbered JPEG files.
+- `tabs_record_start` and `tabs_record_stop` record a tab and save an animated GIF of the actions shown. Pillow is optional (`pip install pillow`); without it the frames are saved as numbered JPEG files.
 
 ### Changed
 
