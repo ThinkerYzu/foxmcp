@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from fastmcp import Client
 
 import test_imports  # noqa: F401
 from server.mcp_tools import FoxMCPTools
@@ -85,3 +86,13 @@ async def test_extension_errors_still_come_through(listed, browser):
     data = await listed(limit=1)
 
     assert data == {"error": "Failed to list captured requests: Monitor m not found"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [True, "5", 0, -1, 1.5])
+async def test_the_mcp_layer_rejects_a_lax_limit(browser, limit):
+    async with Client(FoxMCPTools(browser).mcp) as client:
+        with pytest.raises(Exception, match="validation|Validation"):
+            await client.call_tool("requests_list_captured", {
+                "profile_id": 1, "monitor_id": "m", "limit": limit})
+    assert browser.sent == 0

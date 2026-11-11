@@ -1972,10 +1972,13 @@ function shouldCaptureRequest(monitor, details) {
     return false;
   }
 
-  // Check the method and resource type filters, which are known as soon as the request starts
+  // Check the method and resource type filters, which are known as soon as the request starts.
+  // A redirect keeps the request id but can change the method (a POST answered with 302
+  // is followed as a GET), so a request already recorded keeps the method it started with.
   const filters = monitor.options;
-  if (filters && filters.methods.length > 0 &&
-      !filters.methods.includes((details.method || 'GET').toUpperCase())) {
+  const known = requestDetails.get(details.requestId);
+  const method = (known ? known.method : (details.method || 'GET')).toUpperCase();
+  if (filters && filters.methods.length > 0 && !filters.methods.includes(method)) {
     return false;
   }
   if (filters && filters.resource_types.length > 0 && !filters.resource_types.includes(details.type)) {

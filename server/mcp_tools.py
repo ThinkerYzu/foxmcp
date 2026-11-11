@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class MonitorOptions(BaseModel):
-    """Validated capture policy, separate from filters used when listing requests."""
+    """Validated capture policy: body capture settings and the filters that narrow capture."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -2793,7 +2793,7 @@ class FoxMCPTools:
         async def requests_list_captured(
             profile_id: int,
             monitor_id: str,
-            limit: Optional[int] = None
+            limit: Annotated[Optional[int], Field(strict=True, ge=1)] = None
         ) -> str:
             """
             List captured request summaries from a monitoring session

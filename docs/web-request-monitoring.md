@@ -123,8 +123,8 @@ four filters narrow what is captured:
 | `content_types_to_capture` | `["application/json", "text/plain"]` | A body is returned as text only if its `Content-Type` **contains** one of these — `application/json` matches `application/json; charset=utf-8`, and the bare string `json` would match it too. An entry with a `*`, such as `text/*`, matches on the major type. An empty list means every type. Whatever does not match is still counted, and comes back with `content: null` |
 | `methods` | `[]` | HTTP methods to capture, such as `["POST"]`; case-insensitive, and an empty list means every method. Decided when the request starts |
 | `resource_types` | `[]` | Firefox resource types to capture, such as `["xmlhttprequest", "script"]`; an empty list means every type. Decided when the request starts |
-| `min_status` | `null` | An integer from 100 to 599: only requests whose response status is at least this are listed. A request that failed has no status, so it is not listed |
-| `failed_only` | `false` | `true` lists only requests that failed, meaning an error or a status of 400 and above |
+| `min_status` | `null` | An integer from 100 to 599: only requests whose response status is at least this are listed. A request that failed before any response arrived has no status, so it is not listed |
+| `failed_only` | `false` | `true` lists only requests that failed, meaning an error or a status of 400 and above. A request aborted by navigating away counts as an error |
 
 `methods` and `resource_types` decide what is captured at all, so a request that does not match
 is neither listed nor has its body kept. `min_status` and `failed_only` depend on the outcome, so
