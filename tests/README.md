@@ -52,6 +52,15 @@ validate the report. See [Finding Firefox](#finding-firefox).
 Keep commit-specific counts, durations and validation results in CI reports or
 dated validation records. This guide describes how to test the current checkout.
 
+#### Monitor option isolation
+
+`unit/test_monitor_option_validation.py` uses actual MCP calls to verify strict
+nested types, unknown-field rejection and no browser calls on invalid options.
+`integration/test_monitor_options_end_to_end.py` drives a local page in Firefox
+through MCP, checking overlapping monitors with different byte/type policies,
+disabled request/response capture, complete page delivery, raw-protocol
+validation, monitor membership and reads after stop.
+
 #### Startup composition coverage
 
 `unit/test_server_composition.py` checks the source roles documented in the
