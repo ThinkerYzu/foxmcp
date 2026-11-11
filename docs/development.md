@@ -435,18 +435,29 @@ tagging or publishing; `scripts/check-version.sh` checks release-version
 consistency, not API compatibility.
 
 1. Complete and record the protocol ID compatibility review described above.
-   Update expected tool totals and add archive smoke scenarios for every new
-   tool. Run a non-publishing release rehearsal before tagging; its
-   `release-checks: true` enables the catalog gates that ordinary CI relaxes.
-2. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
+2. Reconcile the tool catalog as part of release preparation. Discover the
+   candidate's actual tools and update every fixed expected total, including
+   disabled-group and individually enabled-tool variants. Update the source
+   install workflow, Windows installer tests, wheel/sdist smoke check,
+   shared-stdio container test and final-archive smoke check as needed. Add or
+   update meaningful tests for new or changed tools and an archive smoke
+   scenario for every advertised tool over both HTTP and stdio. Do this work
+   before the release rehearsal; do not bypass the catalog gates to release.
+3. Bump the version in `extension/manifest.json`, `package.json`, `pyproject.toml`, `server/version.py`,
    `scripts/install-from-github.sh`, `scripts/install-from-github.ps1`, both
    the top-level and package versions in `server.json`, and the install URLs
    in `README.md`
-3. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.7.0] - <date>` and add
+4. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [1.7.0] - <date>` and add
    the link reference at the bottom
-4. `scripts/check-version.sh 1.7.0` — fails unless all nine files agree
-   and the README `mcp-name` marker matches the registry server name
-5. Commit, then tag: `git tag -a v1.7.0 -m "..."` and push the tag
+5. `scripts/check-version.sh 1.7.0` fails unless all nine files agree
+   and the README `mcp-name` marker matches the registry server name.
+6. Commit the prepared candidate and run a non-publishing release rehearsal
+   on that exact commit. Its `release-checks: true` enables fixed tool totals
+   and complete advertised-tool coverage. Resolve failures and rehearse the
+   updated commit again before proceeding. Record the validated catalog totals
+   and test results in the release preparation record.
+7. After every rehearsal gate passes, tag that exact validated commit:
+   `git tag -a v1.7.0 -m "..."`, then push the tag.
 
 Pushing the tag is the whole release. `.github/workflows/release.yml` re-checks
 the version and runs all CI checks. The package job builds the archives once,
