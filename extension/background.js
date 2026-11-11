@@ -1448,8 +1448,52 @@ async function getCurrentTabUrl(tabId) {
   }
 }
 
+// Tabs Firefox restored after a restart, or unloaded to save memory, have no
+// page and so no content script: nothing could answer until they are loaded.
+// Reload such a tab and wait for it, as the person opening it would.
+//
+// Requests that arrive while a tab is being loaded join that load, so concurrent
+// requests on the same tab reload it once.
+const discardedTabLoads = new Map();
+
+function loadDiscardedTab(tab, timeoutMs = 15000) {
+  const inProgress = discardedTabLoads.get(tab.id);
+  if (inProgress) {
+    return inProgress;
+  }
+  if (!tab.discarded) {
+    return Promise.resolve(tab);
+  }
+  const load = (async () => {
+    await browser.tabs.reload(tab.id);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const current = await browser.tabs.get(tab.id);
+      if (!current.discarded && current.status === 'complete') {
+        return current;
+      }
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    throw new Error('The tab was discarded and did not finish loading in time');
+  })().finally(() => discardedTabLoads.delete(tab.id));
+  discardedTabLoads.set(tab.id, load);
+  return load;
+}
+
 // Helper function to send message with retry logic for content script
 async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 2000) {
+  // A discarded tab is loaded once, before the retries. Waiting for it on every attempt
+  // could outlast the server's own request timeout, and a failed load is not worth retrying.
+  let initial = null;
+  try {
+    initial = await browser.tabs.get(tabId);
+  } catch (error) {
+    // A missing tab is reported by the loop below, as before.
+  }
+  if (initial) {
+    await loadDiscardedTab(initial);
+  }
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       // Check if tab exists and is accessible
