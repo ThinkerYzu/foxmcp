@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- `content_wait` waits until a tab has loaded and a selector, some text or a URL fragment is present (or gone), so a client no longer guesses how long a click takes to land.
-
 ### Changed
 
 - Enforce fixed tool counts and complete archive tool coverage during release
