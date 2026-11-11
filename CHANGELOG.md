@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- `tabs_record_start` and `tabs_record_stop` record a tab and save an animated GIF of the actions shown. Pillow is optional (`pip install pillow`); without it the frames are saved as numbered JPEG files.
-
 ### Changed
 
 - Enforce fixed tool counts and complete archive tool coverage during release
