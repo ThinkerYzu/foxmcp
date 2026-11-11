@@ -713,7 +713,7 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 `content.get_text` and `content.get_html` first reload a discarded tab (one Firefox restored
 or unloaded) and wait up to 15 seconds for it to load, so the page runs as if the person had
 opened the tab. If it does not finish loading in time the request fails with an `API_ERROR`
-whose message says the tab was discarded and did not finish loading.
+(`Content API error: The tab was discarded and did not finish loading in time`).
 
 **Request:**
 ```json
