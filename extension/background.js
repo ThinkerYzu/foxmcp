@@ -1464,15 +1464,16 @@ async function handleContentAction(id, action, data) {
           sendError(id, 'INVALID_PARAMETER', 'intervalMs must be an integer from 100 to 5000');
           break;
         }
-        // An error inside the script comes back as a value, so it can be told apart from the
-        // errors of a tab that cannot be scripted yet (still loading, navigating). The value is
-        // cloned once in the page, so one that cannot be returned (a DOM node, a function) is an
-        // error of the script, not a failure to retry.
-        // The key is random for each wait, so a page cannot return one that looks like an error.
-        const errorKey = '__foxmcpWaitError' + Math.random().toString(36).slice(2);
-        const wrapped = '(async () => { try { const value = await eval(' + JSON.stringify(data.script) +
-          '); structuredClone(value); return value; } catch (error) {' +
-          ' return { ' + errorKey + ': String((error && error.message) || error) }; } })()';
+        // The script runs as an indirect eval, so in the page's global scope and not in the scope of
+        // this wrapper: it cannot collide with, or see, anything the wrapper declares. The wrapper
+        // answers {value} or {error}, so an error of the script is told apart from the errors of
+        // a tab that cannot be scripted yet (still loading, navigating), and a returned object
+        // cannot be mistaken for an error. The value is cloned once in the page, so one that cannot
+        // be returned (a DOM node, a function) is an error of the script, not a failure to retry.
+        const wrapped = '(async () => { try { return await Promise.resolve((0, eval)(' +
+          JSON.stringify(data.script) + ')).then(result => { structuredClone(result);' +
+          ' return { value: result }; }); } catch (error) {' +
+          ' return { error: String((error && error.message) || error) }; } })()';
         const started = Date.now();
         let deadline = null;
         let attempts = 0;
@@ -1489,16 +1490,15 @@ async function handleContentAction(id, action, data) {
               scriptConsent.run(id, data.tabId, wrapped),
               new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('attempt timed out')), remaining); })
             ]);
-            const value = results && results.length > 0 ? results[0] : null;
-            if (value !== null && value !== undefined) {
-              if (typeof value === 'object' && errorKey in value) {
-                sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${value[errorKey]}`);
-              } else {
-                sendResponse(id, action, {
-                  result: value, waitedMs: Date.now() - started, attempts,
-                  url: await getCurrentTabUrl(data.tabId)
-                });
-              }
+            const outcome = results && results.length > 0 ? results[0] : null;
+            if (outcome && typeof outcome === 'object' && 'error' in outcome) {
+              sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${outcome.error}`);
+              finished = true;
+            } else if (outcome && outcome.value !== null && outcome.value !== undefined) {
+              sendResponse(id, action, {
+                result: outcome.value, waitedMs: Date.now() - started, attempts,
+                url: await getCurrentTabUrl(data.tabId)
+              });
               finished = true;
             }
             lastProblem = null;
