@@ -756,8 +756,9 @@ that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 count as values, and the value must be JSON-compatible. The script goes through the same consent
 gate as `content.execute_script`, so with script consent on the first run may wait for the
 person to approve, the later runs reuse the answer, and the time limit starts after the first run
-(a single run, the first included, is cut off after 90 seconds at most). A script that throws ends
-the wait with `SCRIPT_ERROR`; a tab that cannot be scripted yet (loading, navigating) is tried
+(a single run, the first included, is cut off after 90 seconds at most). A script that throws, or returns a value
+that cannot be cloned (a DOM node, a function), ends the wait with `SCRIPT_ERROR`; a tab that no
+longer exists is an `API_ERROR`; a tab that cannot be scripted yet (loading, navigating) is tried
 again until the limit; consent errors are the ones `content.execute_script` gives.
 
 ```json

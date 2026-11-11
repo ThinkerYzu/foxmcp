@@ -1465,9 +1465,14 @@ async function handleContentAction(id, action, data) {
           break;
         }
         // An error inside the script comes back as a value, so it can be told apart from the
-        // errors of a tab that cannot be scripted yet (still loading, navigating).
-        const wrapped = '(async () => { try { return await eval(' + JSON.stringify(data.script) +
-          '); } catch (error) { return { __foxmcpWaitError: String((error && error.message) || error) }; } })()';
+        // errors of a tab that cannot be scripted yet (still loading, navigating). The value is
+        // cloned once in the page, so one that cannot be returned (a DOM node, a function) is an
+        // error of the script, not a failure to retry.
+        // The key is random for each wait, so a page cannot return one that looks like an error.
+        const errorKey = '__foxmcpWaitError' + Math.random().toString(36).slice(2);
+        const wrapped = '(async () => { try { const value = await eval(' + JSON.stringify(data.script) +
+          '); structuredClone(value); return value; } catch (error) {' +
+          ' return { ' + errorKey + ': String((error && error.message) || error) }; } })()';
         const started = Date.now();
         let deadline = null;
         let attempts = 0;
@@ -1485,8 +1490,8 @@ async function handleContentAction(id, action, data) {
             ]);
             const value = results && results.length > 0 ? results[0] : null;
             if (value !== null && value !== undefined) {
-              if (typeof value === 'object' && '__foxmcpWaitError' in value) {
-                sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${value.__foxmcpWaitError}`);
+              if (typeof value === 'object' && errorKey in value) {
+                sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${value[errorKey]}`);
               } else {
                 sendResponse(id, action, {
                   result: value, waitedMs: Date.now() - started, attempts,
@@ -1497,7 +1502,7 @@ async function handleContentAction(id, action, data) {
             }
             lastProblem = null;
           } catch (waitError) {
-            if (waitError.code) {
+            if (typeof waitError.code === 'string' && waitError.code) {
               // Consent was denied or cancelled, or the origin changed: not worth another run.
               sendError(id, waitError.code, `Wait script not run: ${waitError.message}`);
               finished = true;
@@ -1505,7 +1510,14 @@ async function handleContentAction(id, action, data) {
               lastProblem = 'a run of the script did not finish';
               break;
             } else {
-              // The tab cannot be scripted right now (loading, navigating): look again.
+              // The tab cannot be scripted right now (loading, navigating): look again, unless
+              // it is gone.
+              try {
+                await browser.tabs.get(data.tabId);
+              } catch (tabError) {
+                sendError(id, 'API_ERROR', `Tab ${data.tabId} not found: ${tabError.message}`);
+                finished = true;
+              }
               lastProblem = `the tab could not be scripted (${waitError.message})`;
             }
           } finally {
@@ -1513,7 +1525,8 @@ async function handleContentAction(id, action, data) {
           }
           if (finished) break;
           if (deadline === null) deadline = Date.now() + data.timeoutMs;
-          await new Promise(resolve => setTimeout(resolve, data.intervalMs));
+          // Sleep no longer than the time left, so the wait does not overshoot its limit.
+          await new Promise(resolve => setTimeout(resolve, Math.min(data.intervalMs, Math.max(0, deadline - Date.now()))));
         }
         if (!finished) {
           sendError(id, 'WAIT_TIMEOUT', `Timed out after ${data.timeoutMs} ms: ${lastProblem || 'the script kept returning null'}`);
