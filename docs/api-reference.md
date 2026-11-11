@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 47 tools are offered by default. Each section below corresponds to a *group*
+All 46 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -167,7 +167,7 @@ for the complete input-assignment example and transfer details.
   when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
-- `content_wait(profile_id, tab_id, selector=None, text=None, url=None, gone=False, timeout=10.0)` - Wait until the tab has finished loading and, when given, the CSS `selector` matches an element, the `text` is in the page and the tab URL contains `url`; with `gone`, until the selector or text is absent. `timeout` is in seconds, above 0 and at most 120. Returns the title and URL when ready, or fails with `WAIT_TIMEOUT` saying what it still waited for. `text` is matched case-sensitively against the top frame's rendered text, and `selector` is looked up in the top frame only. An invalid selector is an `INVALID_PARAMETER` error
+- `content_wait(profile_id, tab_id, script, timeout=10.0, interval=0.2)` - Run `script` in the tab every `interval` seconds until it returns something other than `null` or `undefined`, and return that value (`false` and `0` are values). Use it to wait for an element, text, a URL, an animation, a video or an event; for example `document.querySelector('#done') ? true : null`. `script` is a nonempty string whose last value is the result, and a promise is awaited. `timeout` is a number of seconds above 0 and at most 120, counted after the first run, and `interval` is from 0.1 to 5. A script that throws ends the wait with its error (`SCRIPT_ERROR`); a tab that is loading or navigating is tried again; the wait fails with `WAIT_TIMEOUT` when time runs out. The script runs repeatedly, so it must not change the page. It is subject to the same per-tab approval as `content_execute_script`, asked once
 
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests

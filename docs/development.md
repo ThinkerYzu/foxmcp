@@ -362,7 +362,7 @@ all advertised tools have smoke scenarios and all expected counts are updated.
 
 Before release, update affected totals in the install workflow, Windows installer,
 Python-package, shared-stdio container and archive smoke checks. For example,
-with 47 tools and 10 in the tabs group, enabling only its screenshot exposes 38.
+with 46 tools and 10 in the tabs group, enabling only its screenshot exposes 37.
 To check the default HTTP tool count by hand:
 
 ```bash

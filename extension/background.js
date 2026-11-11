@@ -1446,58 +1446,77 @@ async function handleContentAction(id, action, data) {
         break;
       }
 
-      // Polls until the tab is loaded and what was asked for is (or is no longer)
-      // on the page, so a client need not guess how long a click takes to land.
+      // Runs a script in the tab again and again until it returns something other than null
+      // (or undefined), then answers that value. The script goes through the same consent
+      // gate as content.execute_script, so a tab that needs approval is asked once and the
+      // later runs reuse the answer. The first run may wait for the person to approve, so
+      // the time limit starts after it; every later run has to end within what is left.
       case 'content.wait': {
-        const timeoutMs = Math.min(Math.max(Number(data.timeoutMs) || 10000, 100), 120000);
-        const waitAbsent = data.state === 'absent';
-        const checksContent = !!(data.selector || data.text);
-        const started = Date.now();
-        const deadline = started + timeoutMs;
-        let reason = 'the page did not finish loading';
-        let waited = false;
-        while (Date.now() < deadline) {
-          let ready = false;
-          try {
-            const tab = await browser.tabs.get(data.tabId);
-            reason = 'the page did not finish loading';
-            if (tab.status === 'complete' && (!data.url || (tab.url || '').includes(data.url))) {
-              if (!checksContent) {
-                ready = true;
-              } else {
-                const check = await browser.tabs.sendMessage(data.tabId,
-                  { action: 'checkWait', data: { selector: data.selector, text: data.text } });
-                if (check.error) {
-                  sendError(id, 'INVALID_PARAMETER', check.error);
-                  waited = true;
-                  break;
-                }
-                ready = waitAbsent ? !check.found : check.found;
-                reason = waitAbsent ? 'it was still on the page' : 'it did not appear';
-              }
-            } else if (data.url) {
-              reason = `the tab URL did not contain "${data.url}"`;
-            }
-          } catch (waitError) {
-            // The page is navigating, or has no content script yet: look again.
-            if (!String(waitError.message).includes('Receiving end does not exist')) throw waitError;
-            reason = 'the page has no content script yet (still loading, or a page extensions cannot read)';
-            try {
-              await browser.tabs.executeScript(data.tabId, { file: '/content.js' });
-            } catch (injectError) {
-              // Still loading, or a page content scripts cannot run on: try again until the deadline.
-            }
-          }
-          if (ready) {
-            const tab = await browser.tabs.get(data.tabId);
-            sendResponse(id, action, { waitedMs: Date.now() - started, url: tab.url, title: tab.title });
-            waited = true;
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 200));
+        if (typeof data.script !== 'string' || data.script.trim() === '') {
+          sendError(id, 'INVALID_PARAMETER', 'script must be a nonempty string');
+          break;
         }
-        if (!waited) {
-          sendError(id, 'WAIT_TIMEOUT', `Timed out after ${timeoutMs} ms: ${reason}`);
+        if (!Number.isInteger(data.timeoutMs) || data.timeoutMs < 1 || data.timeoutMs > 120000) {
+          sendError(id, 'INVALID_PARAMETER', 'timeoutMs must be an integer from 1 to 120000');
+          break;
+        }
+        if (!Number.isInteger(data.intervalMs) || data.intervalMs < 100 || data.intervalMs > 5000) {
+          sendError(id, 'INVALID_PARAMETER', 'intervalMs must be an integer from 100 to 5000');
+          break;
+        }
+        // An error inside the script comes back as a value, so it can be told apart from the
+        // errors of a tab that cannot be scripted yet (still loading, navigating).
+        const wrapped = '(async () => { try { return await eval(' + JSON.stringify(data.script) +
+          '); } catch (error) { return { __foxmcpWaitError: String((error && error.message) || error) }; } })()';
+        const started = Date.now();
+        let deadline = null;
+        let attempts = 0;
+        let lastProblem = null;
+        let finished = false;
+        while (!finished) {
+          const remaining = deadline === null ? 90000 : deadline - Date.now();
+          if (remaining <= 0) break;
+          attempts++;
+          let timer;
+          try {
+            const results = await Promise.race([
+              scriptConsent.run(id, data.tabId, wrapped),
+              new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('attempt timed out')), remaining); })
+            ]);
+            const value = results && results.length > 0 ? results[0] : null;
+            if (value !== null && value !== undefined) {
+              if (typeof value === 'object' && '__foxmcpWaitError' in value) {
+                sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${value.__foxmcpWaitError}`);
+              } else {
+                sendResponse(id, action, {
+                  result: value, waitedMs: Date.now() - started, attempts,
+                  url: await getCurrentTabUrl(data.tabId)
+                });
+              }
+              finished = true;
+            }
+            lastProblem = null;
+          } catch (waitError) {
+            if (waitError.code) {
+              // Consent was denied or cancelled, or the origin changed: not worth another run.
+              sendError(id, waitError.code, `Wait script not run: ${waitError.message}`);
+              finished = true;
+            } else if (waitError.message === 'attempt timed out') {
+              lastProblem = 'a run of the script did not finish';
+              break;
+            } else {
+              // The tab cannot be scripted right now (loading, navigating): look again.
+              lastProblem = `the tab could not be scripted (${waitError.message})`;
+            }
+          } finally {
+            clearTimeout(timer);
+          }
+          if (finished) break;
+          if (deadline === null) deadline = Date.now() + data.timeoutMs;
+          await new Promise(resolve => setTimeout(resolve, data.intervalMs));
+        }
+        if (!finished) {
+          sendError(id, 'WAIT_TIMEOUT', `Timed out after ${data.timeoutMs} ms: ${lastProblem || 'the script kept returning null'}`);
         }
         break;
       }
