@@ -2,6 +2,15 @@
 
 Setup, workflow, and maintenance for FoxMCP development.
 
+## Design Approach
+
+Follow the [design principles](../CONTRIBUTING.md#design-principles): prefer
+content scripts when they can meet a feature's requirements, and favor generic,
+reusable mechanisms across sites and workflows. Consider existing script
+execution before adding specialized tools or protocol actions. Explain any need
+for privileged/background/server work, and preserve the
+[existing component responsibilities](architecture.md#system-overview).
+
 ## Quick Cycle
 
 1. `make setup` — install dependencies and create the test import symlinks

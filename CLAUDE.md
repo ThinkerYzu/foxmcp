@@ -25,6 +25,13 @@ include that explanation in the commit-message body. Follow the
 [architecture-review requirements](CONTRIBUTING.md#architecture-review),
 including design discussion and diagram updates before merge.
 
+Prefer content scripts when they can implement a feature, and favor generic,
+reusable capabilities over site-specific or workflow-specific additions. Start
+with the existing script mechanisms and explain any need for privileged or
+server implementation. Follow the
+[design principles](CONTRIBUTING.md#design-principles) while preserving component
+ownership, permissions, execution contexts and script consent.
+
 Keep model-visible tool descriptions concise. Follow the
 [tool-description guidelines](CONTRIBUTING.md#tool-descriptions); put parameter
 details in argument help and longer guidance in the API reference.

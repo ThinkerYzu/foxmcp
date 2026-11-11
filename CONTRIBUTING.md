@@ -35,6 +35,22 @@ checks you could not run. State the architecture-review result and disclose any
 violations or proposed design changes as described below. All required CI checks
 must pass before merge.
 
+### Design Principles
+
+Prefer content scripts for features they can implement while meeting the
+requirements and respecting browser permissions, execution contexts and script
+consent. First consider the existing script execution and predefined-script
+mechanisms for page-level behavior. When privileged extension APIs, background
+state or server work are necessary, explain the content-script limitation in
+the proposal or PR and keep those responsibilities in their existing components.
+
+Prefer generic, reusable solutions. Solve the underlying class of problems with
+small, composable capabilities that work across sites and workflows. Keep
+site-specific selectors, domain rules and workflow details in scripts or caller
+configuration. Reuse or extend existing mechanisms before adding specialized
+MCP tools, protocol actions or parallel implementations. Keep abstractions
+proportionate to the actual requirements.
+
 ### Architecture Review
 
 Every change must follow the existing design described in
