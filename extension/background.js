@@ -1520,6 +1520,16 @@ async function handleContentAction(id, action, data) {
         break;
       }
 
+      case 'content.console': {
+        const consoleResult = await sendMessageWithRetry(data.tabId, { action: 'console', data });
+        if (consoleResult && consoleResult.error) {
+          sendError(id, 'PAGE_ERROR', consoleResult.error);
+        } else {
+          sendResponse(id, action, consoleResult);
+        }
+        break;
+      }
+
       case 'content.get_text':
         const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'

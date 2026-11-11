@@ -67,7 +67,7 @@ async def test_clean_install_http_and_stdio(tmp_path):
                         names = {tool.name for tool in await client.list_tools()}
                         assert names, "No tools advertised"
                         if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
-                            assert len(names) == 46
+                            assert len(names) == 47
                         assert {"profiles_list", "content_execute_predefined"} <= names
                     break
                 except (RuntimeError, OSError):
@@ -86,7 +86,7 @@ async def test_clean_install_http_and_stdio(tmp_path):
         names = {tool.name for tool in await client.list_tools()}
         assert names, "No tools advertised"
         if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
-            assert len(names) == 46, names
+            assert len(names) == 47, names
         result = await client.call_tool("tabs_list", {"profile_id": 1})
         assert "profile is not connected" in result.content[0].text
     # The HTTP helper refuses an unsupported protocol relay immediately and

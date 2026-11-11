@@ -11,6 +11,54 @@ function expireFileHandle(handles, fileId, delay) {
   setTimeout(() => handles.delete(fileId), delay);
 }
 
+// The page's console output and uncaught errors, kept from the moment a client
+// first asks. Wrapping console on every page from the start would change stack
+// locations and cost time for pages nobody is debugging, so it waits to be asked.
+const CONSOLE_LIMIT = 500;
+const consoleState = { armed: false, entries: [] };
+
+function formatConsoleArg(value) {
+  if (value === undefined) return 'undefined';
+  if (value === null || typeof value !== 'object') return String(value);
+  try {
+    if (value instanceof window.wrappedJSObject.Error) return value.stack || String(value);
+    return JSON.stringify(value);
+  } catch (error) {
+    return Object.prototype.toString.call(value);
+  }
+}
+
+function addConsoleEntry(level, message) {
+  consoleState.entries.push({ level, message: message.slice(0, 2000) });
+  if (consoleState.entries.length > CONSOLE_LIMIT) consoleState.entries.shift();
+}
+
+function armConsole() {
+  if (consoleState.armed) return;
+  consoleState.armed = true;
+  const page = window.wrappedJSObject;
+  for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+    const original = page.console[level];
+    if (typeof original !== 'function') continue;
+    // A page that froze or replaced console methods must not stop the others from being wrapped.
+    try {
+      page.console[level] = exportFunction(function (...args) {
+        addConsoleEntry(level, args.map(formatConsoleArg).join(' '));
+        // Spread, not apply(this, args): the array belongs to this script's side, and
+        // the page's console cannot read it ("Permission denied to access property
+        // length"), which would make every logged call throw in the page.
+        return original.call(this || page.console, ...args);
+      }, window);
+    } catch (wrapError) {
+      // Left as the page had it; its entries just are not recorded.
+    }
+  }
+  window.addEventListener('error', event => addConsoleEntry('uncaught',
+    `${event.message} (${event.filename}:${event.lineno}:${event.colno})`));
+  window.addEventListener('unhandledrejection', event => addConsoleEntry('uncaught',
+    'Unhandled promise rejection: ' + formatConsoleArg(event.reason)));
+}
+
 // Listen for messages from background script
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const { action, script, data } = request;
@@ -65,6 +113,24 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ error: error.message });
         }
         break;
+
+      case 'console': {
+        if ((data.level != null && typeof data.level !== 'string') ||
+            (data.pattern != null && typeof data.pattern !== 'string') ||
+            (data.limit != null && !(Number.isInteger(data.limit) && data.limit >= 1 && data.limit <= 500))) {
+          sendResponse({ error: 'content.console needs a string level and pattern and an integer limit from 1 to 500' });
+          break;
+        }
+        const wasArmed = consoleState.armed;
+        armConsole();
+        let entries = consoleState.entries.filter(entry =>
+          (!data.level || entry.level === data.level || (data.level === 'error' && entry.level === 'uncaught'))
+          && (!data.pattern || entry.message.includes(data.pattern)));
+        entries = entries.slice(-(data.limit || 50));
+        if (data.clear) consoleState.entries.length = 0;
+        sendResponse({ started: !wasArmed, entries });
+        break;
+      }
 
       default:
         sendResponse({ error: `Unknown content action: ${action}` });

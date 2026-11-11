@@ -2319,6 +2319,64 @@ class FoxMCPTools:
                 if token is not None:
                     service.revoke(token)
 
+        # Console Tool
+        @self._tool()
+        async def content_read_console(
+            profile_id: int,
+            tab_id: int,
+            level: Optional[str] = None,
+            pattern: Optional[str] = None,
+            limit: int = 50,
+            clear: bool = False
+        ) -> str:
+            """Read what the page logged to its console and its uncaught JavaScript errors
+
+            Recording starts with the first call on a page, so call it once before the
+            action to debug; it restarts when the tab navigates.
+
+            Entries are kept up to 500 per page, each cut to 2,000 characters. What a
+            page logs can include secrets and personal data, and it is returned as is.
+
+            Args:
+                tab_id: ID of the tab
+                level: (optional) Only log, info, warn, error (which includes uncaught
+                    errors) or debug
+                pattern: (optional, a string) Only messages containing this text,
+                    case-sensitive
+                limit: (optional, an integer from 1 to 500, default: 50) Newest entries
+                    to return
+                clear: (optional, default: False) Forget all the entries after reading
+                    them, not only the ones returned; ignored on the first call
+            """
+            if level is not None and (not isinstance(level, str) or level not in (
+                    "log", "info", "warn", "error", "debug")):
+                raise ValueError("level must be log, info, warn, error or debug")
+            if pattern is not None and not isinstance(pattern, str):
+                raise ValueError("pattern must be a string")
+            if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+                raise ValueError("limit must be an integer from 1 to 500")
+            if not isinstance(clear, bool):
+                raise ValueError("clear must be a boolean")
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "content.console",
+                "data": {"tabId": tab_id, "level": level, "pattern": pattern,
+                         "limit": limit, "clear": clear},
+                "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Failed to read the console: {response['error']}"
+            if response.get("type") != "response" or "data" not in response:
+                return f"Failed to read the console: {response.get('data', {}).get('message', 'Unknown error')}"
+            data = response["data"]
+            if data.get("started"):
+                return "Console recording started; call again after the page has logged something"
+            entries = data.get("entries", [])
+            if not entries:
+                return "No console entries"
+            return "\n".join(f"[{e['level']}] {e['message']}" for e in entries)
+
         # Get Page Text Tool
         @self._tool()
         async def content_get_text(profile_id: int, tab_id: int, max_length: Optional[int] = None) -> str:

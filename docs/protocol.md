@@ -807,6 +807,25 @@ during [release preparation](development.md#release-process).
 }
 ```
 
+#### Console
+`content.console` returns what the page has logged since the first request, and
+uncaught errors and unhandled promise rejections (level `uncaught`, also returned for
+`level: "error"`). The first request on a page only starts recording, answering
+`{"started": true, "entries": []}`, because wrapping `console` everywhere from the
+start would change stack locations on pages nobody is debugging. At most 500 entries
+are kept, and the recording ends when the page navigates.
+
+```json
+{"action": "content.console", "data": {"tabId": 123, "level": null, "pattern": null, "limit": 50, "clear": false}}
+{"type": "response", "data": {"started": false, "entries": [{"level": "error", "message": "boom"}, {"level": "uncaught", "message": "x is not defined (https://example.org/:1:9)"}]}}
+```
+
+`level` is one of `log`, `info`, `warn`, `error` or `debug`, `pattern` is a case-sensitive
+substring of the message, `limit` (1 to 500) keeps the newest entries, and `clear` empties the
+whole buffer, not only the entries returned; it is ignored when `started` is true. A value of
+the wrong type or range is a `PAGE_ERROR`. Entries hold whatever the page logged, which can
+include secrets or personal data, and are returned unchanged.
+
 #### Execute Script
 **Request:**
 ```json
@@ -1709,6 +1728,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+| `PAGE_ERROR` | The content script reported an error for an action on the page; the message describes it. |
 
 ### Script execution and consent errors
 
