@@ -6,6 +6,19 @@ For the full, entry-by-entry record of every release, see
 [CHANGELOG.md](CHANGELOG.md) — that is the file a release's GitHub notes are
 generated from.
 
+## Unreleased compatibility requirements
+
+Before releasing the monitoring-option repairs, increase the checked protocol
+ID from released v1.7.0's 3 to 4, shared with all other incompatible unreleased
+changes. Monitoring now rejects unknown/invalid options, honors request-body
+suppression and isolates each monitor's retained bodies and content lookup.
+These change existing extension/server behavior. The current development ID
+remains 3 pending the release-preparation step, as agreed with the maintainer.
+Update both peers, compatibility tests and the final release review before
+rehearsing, tagging or publishing. See the
+[protocol policy](docs/protocol.md#protocol-id-compatibility-policy) and
+[release checklist](docs/development.md#release-process).
+
 ## v1.7.0 - Optional script approval (2026-11-07)
 
 ### Publication status

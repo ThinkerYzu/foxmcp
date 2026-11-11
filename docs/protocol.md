@@ -1424,6 +1424,7 @@ format only.
   "data": {
     "url_patterns": ["https://example.org/*"],
     "options": {
+      "capture_request_bodies": true,
       "capture_response_bodies": true,
       "max_body_size": 50000,
       "content_types_to_capture": ["application/json", "text/plain"]
@@ -1446,6 +1447,7 @@ format only.
     "started_at": "2026-08-14T12:00:00.000Z",
     "url_patterns": ["https://example.org/*"],
     "options": {
+      "capture_request_bodies": true,
       "capture_response_bodies": true,
       "max_body_size": 50000,
       "content_types_to_capture": ["application/json", "text/plain"]
@@ -1455,10 +1457,18 @@ format only.
 }
 ```
 
-`tab_id` is optional; without it the monitor watches every tab. The `options` echoed
-back are the ones the server sent, including any the extension does not read.
-The FoxMCP server fills in its defaults before sending, so its own requests also
-carry `capture_request_bodies` and `sensitive_headers`.
+`tab_id` is optional; without it the monitor watches every tab. The server and
+extension normalize omitted options to the defaults above. Both body toggles must
+be booleans, `max_body_size` must be a positive integer, and content-type patterns
+must be an array of nonempty strings (an empty array selects all supported text).
+Unknown fields, including `sensitive_headers`, and invalid values are rejected;
+the extension returns `INVALID_PARAMETER` before starting a monitor.
+
+Request bodies and retained response prefixes obey each monitor's own policy,
+including overlapping and stopped monitors. `requests.get_content` returns
+`MONITOR_NOT_FOUND` for an unknown monitor and `REQUEST_NOT_FOUND` if the request
+was not captured by that monitor. The global response-body cache retains up to
+200 monitor/request projections; each uses its own size and content-type rules.
 
 #### List Captured
 **Request:**

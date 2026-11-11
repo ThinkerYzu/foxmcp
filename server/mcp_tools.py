@@ -21,12 +21,25 @@ import time
 import json
 import base64
 from datetime import datetime
-from typing import Dict, Any, Optional, List, TypedDict, Union
+from typing import Annotated, Dict, Any, Optional, List, TypedDict, Union
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class MonitorOptions(BaseModel):
+    """Validated capture policy, separate from filters used when listing requests."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    capture_request_bodies: bool = True
+    capture_response_bodies: bool = True
+    max_body_size: int = Field(default=50000, gt=0)
+    content_types_to_capture: List[Annotated[str, Field(min_length=1)]] = Field(
+        default_factory=lambda: ["application/json", "text/plain"])
 
 # Longest a single script argument may appear in the log before being cut short.
 #
@@ -2685,7 +2698,7 @@ class FoxMCPTools:
         async def requests_start_monitoring(
             profile_id: int,
             url_patterns: List[str],
-            options: Optional[Dict[str, Any]] = None,
+            options: Optional[MonitorOptions] = None,
             tab_id: Optional[int] = None
         ) -> str:
             """
@@ -2704,10 +2717,12 @@ class FoxMCPTools:
 
             Args:
                 url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
-                options: Optional configuration for monitoring:
+                options: Strict capture settings; unknown fields are rejected.
+                    Listing filters belong to requests_list_captured, not here.
+                    - capture_request_bodies: bool (default: True)
                     - capture_response_bodies: bool (default: True)
-                    - max_body_size: int (default: 50000) — bytes kept per body; the
-                      full size is reported either way
+                    - max_body_size: positive int (default: 50000), bytes retained
+                      per response body; the full size is reported either way
                     - content_types_to_capture: List[str] (default: ["application/json", "text/plain"])
                       — a body comes back as text only if its content type matches one
                       of these and is text to begin with
@@ -2719,17 +2734,11 @@ class FoxMCPTools:
             if not url_patterns:
                 return json.dumps({"error": "url_patterns is required"})
 
-            # Set default options
-            default_options = {
-                "capture_request_bodies": True,
-                "capture_response_bodies": True,
-                "max_body_size": 50000,
-                "content_types_to_capture": ["application/json", "text/plain"],
-                "sensitive_headers": ["Authorization", "Cookie"]
-            }
-
-            if options:
-                default_options.update(options)
+            try:
+                default_options = MonitorOptions.model_validate(
+                    options if options is not None else {}).model_dump()
+            except ValidationError as error:
+                return json.dumps({"error": f"Invalid monitoring options: {error}"})
 
             request_data = {
                 "url_patterns": url_patterns,
