@@ -171,7 +171,13 @@ for the complete input-assignment example and transfer details.
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests
   - `url_patterns`: List of URL patterns to monitor (e.g., `["https://api.example.com/*", "*/api/*"]`)
-  - `options`: Optional configuration dict with capture settings
+  - `options`: Optional strict capture settings: `capture_request_bodies` and
+    `capture_response_bodies` (booleans, default `true`), `max_body_size` (positive
+    integer response bytes, default `50000`) and `content_types_to_capture` (list
+    of nonempty strings, default JSON/plain text; empty list selects all supported
+    text types). Unknown fields, including `sensitive_headers`, are rejected.
+    Overlapping monitors apply their own body policies. See
+    [capture options](web-request-monitoring.md#options).
   - `tab_id`: Optional tab ID to monitor (if not provided, monitors all tabs)
   - Returns JSON with `monitor_id` and monitoring status
 - `requests_stop_monitoring(profile_id, monitor_id, drain_timeout=5)` - Stop monitoring
@@ -189,8 +195,11 @@ for the complete input-assignment example and transfer details.
 - `requests_get_content(profile_id, monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
   - `include_binary`: **ignored** — non-text bodies never come back as content, only as a size
   - `save_request_body_to`, `save_response_body_to`: **ignored** — `saved_to_file` is always `null`
-  - Returns JSON with response headers and both bodies. `request_headers` is always
-    empty: no listener collects them
+  - Returns JSON with response headers and bodies allowed by the selected monitor's
+    capture policy. `request_headers` is always empty: no listener collects them
+  - The request must have been captured by that monitor (`REQUEST_NOT_FOUND`
+    otherwise); an unknown monitor returns `MONITOR_NOT_FOUND`. Stopped monitors
+    remain readable under their original policies
 
 See [web-request-monitoring.md](web-request-monitoring.md) for the options, the
 pattern syntax, where captured data lives, and the full list of parameters that are

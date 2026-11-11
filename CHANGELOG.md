@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rehearsals and tagged releases, while ordinary CI keeps functional checks
   running without blocking tool additions on catalog totals.
 
+### Fixed
+
+- Validate monitoring capture options, reject unsupported fields, honor the
+  request-body toggle and isolate body policies across overlapping monitors.
+  Content reads now require the request to belong to the selected monitor.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added
