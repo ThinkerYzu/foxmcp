@@ -263,7 +263,7 @@ async def test_shared_stdio_containers_survive_disconnect_and_worker_restart(sha
             names = await client.list_tool_names()
             assert names, "No tools advertised"
             if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
-                assert len(names) == 46, names
+                assert len(names) == 47, names
             created = json.loads(await client.call_tool('containers_create', {'name':'Persistent test'}))
             stores.append(created['container']['cookie_store_id'])
         for index, client in enumerate((first, second)):

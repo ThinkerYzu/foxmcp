@@ -316,7 +316,7 @@ async def exercise(client, url, source, work, transport, receipts):
         names = {tool.name for tool in await client.list_tools()}
         assert names, "No tools advertised"
         if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
-            assert len(names) == 46, names
+            assert len(names) == 47, names
         called = {call["tool"] for call in recorded.report["calls"]}
         missing = sorted(names - called)
         recorded.report["uncovered_tools"] = missing

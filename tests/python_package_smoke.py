@@ -107,7 +107,7 @@ async def check_client(client: Client, port: int, script_name: str | None) -> No
         tools = {tool.name: tool for tool in await client.list_tools()}
         assert tools, "No tools advertised"
         if os.environ.get("FOXMCP_RELEASE_CHECKS", "1") != "0":
-            assert len(tools) == 46, sorted(tools)
+            assert len(tools) == 47, sorted(tools)
         description = tools["content_execute_predefined"].description
         if script_name == "dom-summarize.sh":
             assert all(name in description for name in EXAMPLES), description

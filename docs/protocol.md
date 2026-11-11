@@ -807,6 +807,22 @@ during [release preparation](development.md#release-process).
 }
 ```
 
+#### Dialogs
+A native `alert`, `confirm` or `prompt` blocks a page and cannot be answered from an
+extension, so `content.dialogs` replaces the page's own functions. `mode` is `accept` (OK),
+`dismiss` (Cancel) or `off` (restore the native dialogs); `log` changes nothing and only
+returns the log, so it lists dialogs only after accept or dismiss was on. Any other value is a
+`PAGE_ERROR`. `accept` answers OK to every `confirm`, including destructive ones. The answer
+lists the dialogs shown since the last call (the last 100 at most, each message cut to 1,000
+characters), and is discarded when the page navigates. Only the top frame is covered, and not
+dialogs opened before the call or by `beforeunload`; `accepted` is not meaningful for `alert`.
+
+```json
+{"action": "content.dialogs", "data": {"tabId": 123, "mode": "accept", "promptText": null}}
+```
+
+It answers `{"mode": "accept", "dialogs": [{"type": "confirm", "message": "...", "accepted": true}]}`.
+
 #### Execute Script
 **Request:**
 ```json
@@ -1709,6 +1725,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+| `PAGE_ERROR` | The content script reported an error for an action on the page; the message describes it. |
 
 ### Script execution and consent errors
 

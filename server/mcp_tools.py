@@ -22,7 +22,7 @@ import json
 import math
 import base64
 from datetime import datetime
-from typing import Annotated, Dict, Any, Optional, List, TypedDict, Union
+from typing import Annotated, Dict, Any, Literal, Optional, List, TypedDict, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -2318,6 +2318,64 @@ class FoxMCPTools:
             finally:
                 if token is not None:
                     service.revoke(token)
+
+        # Dialog Handling Tool
+        @self._tool()
+        async def content_handle_dialogs(
+            profile_id: int,
+            tab_id: int,
+            mode: Literal["accept", "dismiss", "off", "log"],
+            prompt_text: Optional[str] = None
+        ) -> str:
+            """Answer the page's alert, confirm and prompt dialogs, which otherwise block it
+            and cannot be closed from outside. Turn this on before the action that opens one.
+
+            The page's own functions are replaced, so it lasts until the tab navigates
+            and needs turning on again after that. Only the top frame is covered, and not
+            dialogs opened before this call or by beforeunload.
+
+            Careful: accept answers OK to every confirm, including ones such as
+            "Delete this account?". Prefer dismiss, or accept for one known step and
+            then off.
+
+            Args:
+                tab_id: ID of the tab
+                mode: accept (OK, and prompts get prompt_text), dismiss (Cancel), off
+                    (restore the native dialogs) or log (only list the dialogs shown while
+                    accept or dismiss was on; it changes nothing on the page)
+                prompt_text: (optional, a string, only with accept) Text a prompt answers
+                    with; by default a prompt answers with its own default value
+            """
+            if mode not in ("accept", "dismiss", "off", "log"):
+                raise ValueError("mode must be accept, dismiss, off or log")
+            if prompt_text is not None:
+                if not isinstance(prompt_text, str):
+                    raise ValueError("prompt_text must be a string")
+                if mode != "accept":
+                    raise ValueError("prompt_text only applies to mode accept")
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()),
+                "type": "request",
+                "action": "content.dialogs",
+                "data": {"tabId": tab_id, "mode": mode, "promptText": prompt_text},
+                "timestamp": datetime.now().isoformat()
+            })
+            if "error" in response:
+                return f"Failed to handle dialogs: {response['error']}"
+            if response.get("type") != "response" or "data" not in response:
+                return f"Failed to handle dialogs: {response.get('data', {}).get('message', 'Unknown error')}"
+            data = response["data"]
+            shown = data.get("dialogs", [])
+            lines = [f"Dialog handling: {data.get('mode')}"]
+            for dialog in shown:
+                if dialog.get("type") == "alert":
+                    answer = "shown"
+                else:
+                    answer = "accepted" if dialog.get("accepted") else "dismissed"
+                lines.append(f"- {dialog.get('type')} ({answer}): {dialog.get('message')}")
+            if not shown:
+                lines.append("No dialog was shown since the last call")
+            return "\n".join(lines)
 
         # Get Page Text Tool
         @self._tool()

@@ -1520,6 +1520,16 @@ async function handleContentAction(id, action, data) {
         break;
       }
 
+      case 'content.dialogs': {
+        const dialogResult = await sendMessageWithRetry(data.tabId, { action: 'dialogs', data });
+        if (dialogResult && dialogResult.error) {
+          sendError(id, 'PAGE_ERROR', dialogResult.error);
+        } else {
+          sendResponse(id, action, dialogResult);
+        }
+        break;
+      }
+
       case 'content.get_text':
         const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'
