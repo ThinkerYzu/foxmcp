@@ -137,14 +137,15 @@ class TestScreenshotRegion:
             "x": 0, "y": 0, "width": 400, "height": 200}
 
 
-class TestImageTooLarge:
+class TestRefusedByTheExtension:
 
     @pytest.mark.asyncio
     async def test_the_extension_refusal_reaches_the_client(self, capture, stub_server):
         message = ("The screenshot is 1500000 characters as a data URL, over the 1000000 "
                    "the connection to the server can carry; use jpeg, a lower quality or "
                    "scale, or a smaller region")
-        stub_server.response = {"type": "error", "data": {"code": "CAPTURE_ERROR", "message": message}}
+        stub_server.response = {"type": "error", "data": {
+            "code": "CAPTURE_ERROR", "message": message}}
 
         result = await capture(profile_id=1, tab_id=4, x=0, y=0, width=1470, height=3000, scale=4)
 
