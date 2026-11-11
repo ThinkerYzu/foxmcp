@@ -2296,8 +2296,9 @@ class FoxMCPTools:
             The script is run again and again, every interval, until it returns
             something other than null or undefined (false and 0 count as values).
             Use it to wait for an element, text, a URL, an animation, a video or an
-            event after a click or a navigation. A script that throws ends the wait
-            with its error; a tab that is loading or navigating is tried again.
+            event after a click or a navigation. A script that throws, or returns a
+            value that cannot be cloned (a DOM node, a function), ends the wait with
+            its error; a tab that is loading or navigating is tried again.
             The script must not change the page, since it runs repeatedly. It goes
             through the same per-tab approval as content_execute_script, asked once.
 

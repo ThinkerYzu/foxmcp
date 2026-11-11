@@ -1480,7 +1480,8 @@ async function handleContentAction(id, action, data) {
         let finished = false;
         while (!finished) {
           const remaining = deadline === null ? 90000 : deadline - Date.now();
-          if (remaining <= 0) break;
+          // Timers can fire a little early, so a sliver of time left is no time to run again.
+          if (remaining <= 0 || (deadline !== null && remaining < 20)) break;
           attempts++;
           let timer;
           try {
