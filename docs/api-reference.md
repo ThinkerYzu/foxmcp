@@ -84,25 +84,51 @@ does not rely on an extension-supplied name or a user-entered label.
 - `tabs_ungroup(profile_id, tab_ids)` - Take tabs out of their group
 - `tabs_groups_update(profile_id, group_id, title=None, color=None, collapsed=None)` - Change a group's title, colour or collapsed state
 - `tabs_groups_query(profile_id, window_id=None, title=None, color=None, collapsed=None)` - List tab groups and their IDs
-- `tabs_capture_screenshot(profile_id, filename=None, window_id=None, format="png", quality=90, tab_id=None, x=None, y=None, width=None, height=None, scale=None)` - Capture screenshot of the visible tab, or of one given tab
-  - If `filename` provided: saves screenshot to file and returns success message
-  - If `filename` omitted: returns base64 encoded image data URL
-  - Automatically adds file extension (.png/.jpeg) if not provided
-  - Without `tab_id`, it is the tab a window is showing (`window_id`, or the current window)
-  - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
-    not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
-    has `tabs.captureTab`; an older one answers that it is too old
-  - `x`, `y`, `width`, `height` (optional, all four together, integer CSS pixels from the top-left
-    of the whole page, not of what is visible, so scrolling does not change the region; `x` and `y`
-    at least 0, `width` and `height` above 0) capture only that region
-  - `scale` (optional, a finite number above 0 and at most 4) is the number of output pixels per
-    CSS pixel: `0.5` halves the image and `2` gives a sharper one. The image is the region (or the
-    visible area) in CSS pixels times `scale`, whatever the display: a region with no `scale` is
-    captured at `scale` 1, so `400 x 200` gives `400 x 200` pixels, while a request with neither a
-    region nor a `scale` keeps the display pixel density, as before
-  - An image whose data URL is over 1,000,000 characters is refused with a `CAPTURE_ERROR` that says
-    to use `jpeg`, a lower `quality` or `scale`, or a smaller region: the connection to the server
-    carries at most 1 MiB per message. A large region with a high `scale` can reach that
+
+#### Screenshots
+
+```python
+tabs_capture_screenshot(
+    profile_id, filename=None, window_id=None, format="png", quality=90,
+    tab_id=None, x=None, y=None, width=None, height=None, scale=None
+)
+```
+
+Use `tab_id` to capture a specific tab, including a background tab, without
+activating it. Otherwise, capture the active tab in `window_id`, or the current
+window when `window_id` is omitted. `tab_id` and `window_id` cannot be combined.
+
+Provide `filename` to save the complete image through the MCP server and return
+a save confirmation and path. A missing image extension is added automatically.
+Without `filename`, the result contains a preview of the first 100 data-URL
+characters and the base64 character count. It does not contain the complete image.
+`format` is `"png"` or `"jpeg"`; `quality` controls JPEG quality from 1 to 100.
+
+To crop, provide all four of `x`, `y`, `width` and `height` as integer CSS pixels.
+The origin is the **top-left corner of the document**: scrolling does not change
+the selected region, and regions below the viewport can be captured. `x` and `y`
+must be at least 0; `width` and `height` must be greater than 0.
+
+`scale` is the number of output pixels per CSS pixel. It must be finite and
+satisfy `0 < scale <= 4`. For a 400 x 200 CSS-pixel crop:
+
+| Scale | Output dimensions in pixels |
+|---|---|
+| Omitted or `1` | 400 x 200 |
+| `0.5` | 200 x 100 |
+| `2` | 800 x 400 |
+
+Cropped requests default to scale 1 on every display. Requests without a crop or
+an explicit scale retain the target tab's device pixel ratio (DPR).
+
+The extension refuses screenshots whose data URL exceeds **1,000,000 characters**,
+returning `CAPTURE_ERROR` to protect the connection's 1 MiB message limit. This
+also applies when saving to a file. Reduce image size with `format="jpeg"`, lower
+JPEG `quality`, a smaller `scale` or a smaller crop.
+
+Use matching server and extension builds: older extensions may ignore crop and
+scale options, and extensions without `tabs.captureTab` cannot capture a specified
+background tab. See the [screenshot protocol](protocol.md#capture-screenshot-of-one-tab).
 
 ### Firefox Containers
 

@@ -1493,42 +1493,42 @@ class FoxMCPTools:
             height: Optional[int] = None,
             scale: Optional[float] = None
         ) -> str:
-            """Capture a screenshot of the visible tab, or of the tab given by tab_id
+            """Capture a tab screenshot, optionally cropping or scaling the image
 
-            To save tokens, capture only a region (x, y, width, height; all four together)
-            and/or shrink the image with scale (e.g. 0.5). The region is in CSS pixels from
-            the top-left of the whole page, not of what is visible, so scrolling does not
-            change it. The image has the size of the region (or of the visible area) in CSS
-            pixels times scale: with a region and no scale it is the size of the region on
-            any display (400 x 200 gives 400 x 200 pixels), and scale 2 gives 800 x 400.
-            Without a region and without scale the image keeps the display pixel density.
-            An image over about 1 MB as a data URL is refused (the connection carries at most
-            1 MiB per message): use jpeg, a lower quality or scale, or a smaller region.
+            Use tab_id to capture a specific tab without activating it. Otherwise capture
+            the active tab in window_id, or the current window if window_id is omitted.
+            Do not combine tab_id and window_id. Provide filename to save the complete
+            image; without it, the result contains only a data-URL preview and size count.
 
-            What comes back depends on whether you pass a filename: with one, the image is
-            written to disk and you get a success message and the path; without one, you get
-            the image inline as a base64 data URL, which for a full window is large.
+            For a crop, supply x, y, width and height together as integer CSS pixels from
+            the document's top-left corner. Scrolling does not change these coordinates.
+            x and y must be non-negative; width and height must be positive.
+
+            scale is output pixels per CSS pixel, with 0 < scale <= 4. It defaults to 1
+            for a crop and to the target tab's device pixel ratio (DPR) without a crop.
+            A 400 x 200 crop produces 400 x 200 output pixels by default, 200 x 100 at
+            scale 0.5, or 800 x 400 at scale 2, independent of DPR.
+
+            Data URLs longer than 1,000,000 characters are refused with CAPTURE_ERROR
+            to protect the connection. This also applies when saving to a file. Use jpeg,
+            lower JPEG quality, a smaller scale or a smaller crop to reduce image size.
 
             Args:
-                filename: Name of the file to save the screenshot (optional, if not provided returns base64)
-                window_id: ID of the window to capture (optional, defaults to current window)
+                filename: Output path for the complete image; omitted returns a preview and size
+                window_id: Window whose active tab to capture; defaults to the current window
                 format: Image format ('png' or 'jpeg', default: 'png')
                 quality: Image quality for JPEG format (1-100, default: 90)
                 tab_id: Capture this tab, even in the background (not with window_id)
-                x: Left edge of the region to capture (optional, integer CSS pixels from the left of
-                    the page, 0 or more; give x, y, width and height together)
-                y: Top edge of the region (optional, integer CSS pixels from the top of the
-                    page, 0 or more)
-                width: Width of the region (optional, integer CSS pixels, more than 0)
-                height: Height of the region (optional, integer CSS pixels, more than 0)
-                scale: Output pixels per CSS pixel (optional, a finite number above 0 and up to 4,
-                    for example 0.5 for half size or 2 for a sharper image; default: 1 with a
-                    region, the display pixel density without one)
+                x: Crop's left edge in document CSS pixels, integer >= 0; requires y, width, height
+                y: Crop's top edge in document CSS pixels, integer >= 0; requires x, width, height
+                width: Crop width in CSS pixels, positive integer; requires x, y, height
+                height: Crop height in CSS pixels, positive integer; requires x, y, width
+                scale: Finite output pixels per CSS pixel, 0 < scale <= 4; defaults to 1
+                    with a crop, otherwise the target tab's DPR
 
             Returns:
-                Success message with file path if filename provided, otherwise base64 encoded image data URL
-
-                Not exposed to clients — see the description above.
+                With filename: a save confirmation and path. Without filename: the first
+                100 data-URL characters and the base64 character count. Errors return text.
             """
             if tab_id is not None and window_id is not None:
                 return "Error capturing screenshot: pass tab_id or window_id, not both"

@@ -10,6 +10,12 @@ import json
 import os
 import sys
 import re
+import struct
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from threading import Thread
+
+from fastmcp import Client
 
 import test_imports  # Automatic path setup
 from test_config import profile_connection
@@ -22,7 +28,6 @@ from mcp_client_harness import DirectMCPTestClient
 
 def png_pixel(png: bytes, x: int, y: int) -> tuple[int, int, int]:
     """(r, g, b) of one pixel of an 8-bit RGB or RGBA PNG: enough to tell red from blue"""
-    import struct
     import zlib
 
     assert png.startswith(b"\x89PNG\r\n\x1a\n"), "not a PNG"
@@ -68,6 +73,181 @@ def png_pixel(png: bytes, x: int, y: int) -> tuple[int, int, int]:
                 line[i] = (line[i] + pick) & 255
         previous = line
     return tuple(line[x * bpp:x * bpp + 3])
+
+
+@pytest.fixture
+def screenshot_site():
+    """Local bands distinguish document coordinates from scrolled viewport coordinates."""
+    page = b'''<!doctype html><title>Screenshot regions</title>
+<style>
+html,body { margin:0; padding:0; scroll-behavior:auto }
+.band { width:2000px; height:700px }
+#top { background:linear-gradient(to right,#f00 300px,#ff0 300px) }
+#middle { background:linear-gradient(to right,#0f0 300px,#0ff 300px) }
+#bottom { background:linear-gradient(to right,#00f 300px,#f0f 300px) }
+</style><div id="top" class="band"></div>
+<div id="middle" class="band"></div><div id="bottom" class="band"></div>'''
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *args):
+            pass
+
+    website = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=website.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{website.server_port}/"
+    finally:
+        website.shutdown()
+        website.server_close()
+        thread.join(timeout=5)
+
+
+@pytest_asyncio.fixture
+async def screenshot_tools(server_with_extension):
+    """Use real MCP HTTP calls, rediscovering the profile after a disposable restart."""
+    setup = server_with_extension
+    async with Client(f"http://127.0.0.1:{setup['mcp_port']}/mcp/") as client:
+        async def call(name, **args):
+            profile_id = next(iter(setup["server"].profiles))
+            result = await client.call_tool(name, {"profile_id": profile_id, **args})
+            assert not result.is_error, result
+            return result.content[0].text
+
+        async def script(tab_id, code):
+            text = await call("content_execute_script", tab_id=tab_id, code=code)
+            assert text.startswith("Script result from tab "), text
+            return text.partition("\n")[2]
+
+        async def open_page(url):
+            created = await call("tabs_create", url=url, active=False)
+            match = re.search(r"ID (\d+)", created)
+            assert match, created
+            tab_id = int(match[1])
+            for _ in range(100):
+                ready = await script(tab_id,
+                                     "document.querySelector('#bottom') ? 'ready' : 'loading'")
+                if ready == "ready":
+                    return tab_id
+                await asyncio.sleep(.1)
+            pytest.fail("Local screenshot fixture did not finish loading")
+
+        yield setup, call, script, open_page
+
+
+async def capture_png(call, tmp_path, label, **args):
+    path = tmp_path / f"{label}.png"
+    result = await call("tabs_capture_screenshot", filename=str(path), **args)
+    assert result.startswith("Screenshot saved to"), result
+    png = path.read_bytes()
+    assert png.startswith(b"\x89PNG\r\n\x1a\n"), result
+    return struct.unpack(">II", png[16:24]), png
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dpr", [1, 2])
+async def test_screenshot_regions_with_scrolling_and_dpr(screenshot_tools, screenshot_site,
+                                                        tmp_path, dpr):
+    """Crops select document pixels and output CSS dimensions times scale at either DPR."""
+    setup, call, script, open_page = screenshot_tools
+    firefox, server = setup["firefox"], setup["server"]
+    previous_profiles = set(server.profiles)
+    # Set an actual Firefox display preference, not a page mock of devicePixelRatio.
+    with (Path(firefox.profile_dir) / "user.js").open("a") as settings:
+        settings.write(f'\nuser_pref("layout.css.devPixelsPerPx", "{dpr}.0");\n')
+    assert await asyncio.to_thread(firefox.restart_firefox, headless=True)
+    for _ in range(100):
+        if set(server.profiles) - previous_profiles:
+            break
+        await asyncio.sleep(.1)
+    else:
+        pytest.fail("Firefox did not reconnect after changing display density")
+
+    tab = await open_page(screenshot_site)
+    metrics = json.loads(await script(
+        tab, "JSON.stringify({devicePixelRatio,innerWidth,innerHeight})"))
+    assert metrics["devicePixelRatio"] == dpr, metrics
+
+    size, png = await capture_png(call, tmp_path, "before-scroll", tab_id=tab,
+                                 x=0, y=0, width=160, height=80)
+    assert size == (160, 80)
+    assert png_pixel(png, 10, 10) == (255, 0, 0)
+
+    await script(tab, "window.scrollTo(350,700); 'scroll requested'")
+    for _ in range(100):
+        position = json.loads(await script(tab, "JSON.stringify([scrollX,scrollY])"))
+        if position == [350, 700]:
+            break
+        await asyncio.sleep(.05)
+    assert position == [350, 700], position
+
+    size, png = await capture_png(call, tmp_path, "document-origin", tab_id=tab,
+                                 x=0, y=0, width=160, height=80)
+    assert size == (160, 80)
+    assert png_pixel(png, 10, 10) == (255, 0, 0), "scrolling must not move the crop origin"
+
+    for scale, expected in [(None, (160, 80)), (.5, (80, 40)), (1, (160, 80)),
+                            (2, (320, 160)), (4, (640, 320))]:
+        args = {} if scale is None else {"scale": scale}
+        size, png = await capture_png(call, tmp_path, f"scrolled-{scale}", tab_id=tab,
+                                     x=350, y=700, width=160, height=80, **args)
+        assert size == expected, (dpr, scale, size)
+        assert png_pixel(png, 10, 10) == (0, 255, 255), (dpr, scale)
+
+    # Capture below the viewport too, without scrolling or activating the target tab.
+    size, png = await capture_png(call, tmp_path, "below-viewport", tab_id=tab,
+                                 x=0, y=1400, width=160, height=80)
+    assert size == (160, 80)
+    assert png_pixel(png, 10, 10) == (0, 0, 255)
+    assert json.loads(await script(tab, "JSON.stringify([scrollX,scrollY])")) == [350, 700]
+
+    size, _ = await capture_png(call, tmp_path, "legacy-full-tab", tab_id=tab)
+    assert size == (metrics["innerWidth"] * dpr, metrics["innerHeight"] * dpr)
+
+
+@pytest.mark.asyncio
+async def test_screenshot_regions_oversize_error_keeps_profile(screenshot_tools, screenshot_site,
+                                                             tmp_path):
+    """Real noisy pixels exceed the transport budget; the next small capture still works."""
+    setup, call, script, open_page = screenshot_tools
+    tab = await open_page(screenshot_site)
+    profile_id = next(iter(setup["server"].profiles))
+    await script(tab, """(() => {
+      document.body.innerHTML = '';
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1000;
+      document.body.append(canvas);
+      const ctx = canvas.getContext('2d');
+      const image = ctx.createImageData(1000, 1000);
+      let seed = 123456789;
+      for (let i = 0; i < image.data.length; i += 4) {
+        for (let k = 0; k < 3; k++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+          image.data[i + k] = seed >>> 24;
+        }
+        image.data[i + 3] = 255;
+      }
+      ctx.putImageData(image, 0, 0);
+      return 'painted';
+    })()""")
+    refused_path = tmp_path / "oversized.png"
+    error = await call("tabs_capture_screenshot", tab_id=tab, filename=str(refused_path),
+                       x=0, y=0, width=800, height=800, scale=1)
+    assert error.startswith("Failed to capture screenshot: The screenshot is "), error
+    assert "use jpeg" in error, error
+    assert not refused_path.exists()
+    assert profile_id in setup["server"].profiles
+    size, png = await capture_png(call, tmp_path, "recovered", tab_id=tab,
+                                 x=0, y=0, width=32, height=32, scale=1)
+    assert size == (32, 32)
+    assert png_pixel(png, 10, 10) == (207, 250, 18)
 
 
 class TestBrowserFunctionality:

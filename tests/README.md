@@ -96,6 +96,15 @@ The probe treats network transport failures as temporary unavailability while
 continuing to reject completed incompatible responses. Existing shared-instance
 and container lifecycle integration tests cover normal worker shutdown/restart.
 
+### Screenshot crop, scrolling and display density
+
+`integration/test_browser_functionality.py` exercises screenshot regions through
+the real MCP HTTP transport and Firefox extension using a local fixture. It
+checks document-relative pixels after scrolling, cropped dimensions at DPR 1
+and 2 with omitted/explicit scales, and legacy uncropped dimensions. It also
+checks that an oversized screenshot returns an error and a smaller capture
+succeeds on the same profile. DPR changes affect only disposable test profiles.
+
 ## Source-installation smoke checks
 
 CI tests source installation separately on Python 3.10 and 3.14, including HTTP

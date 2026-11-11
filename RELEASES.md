@@ -8,12 +8,17 @@ generated from.
 
 ## Unreleased compatibility requirements
 
-Before releasing the monitoring-option repairs, increase the checked protocol
-ID from released v1.7.0's 3 to 4, shared with all other incompatible unreleased
-changes. Monitoring now rejects unknown/invalid options, honors request-body
-suppression and isolates each monitor's retained bodies and content lookup.
-These change existing extension/server behavior. The current development ID
-remains 3 pending the release-preparation step, as agreed with the maintainer.
+Before releasing the changes below, increase the checked protocol ID from
+released v1.7.0's 3 to 4. All incompatible unreleased changes share this single
+increment. The development ID remains 3 until release preparation, as agreed
+with the maintainer.
+
+- Monitoring rejects unknown/invalid options, honors request-body suppression
+  and isolates each monitor's retained bodies and content lookup.
+- Screenshots from PR #30 support crop/scale options that older extensions
+  ignore. Crops default to one output pixel per CSS pixel, and oversized
+  captures return `CAPTURE_ERROR` instead of disconnecting the profile.
+
 Update both peers, compatibility tests and the final release review before
 rehearsing, tagging or publishing. See the
 [protocol policy](docs/protocol.md#protocol-id-compatibility-policy) and

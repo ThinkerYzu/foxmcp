@@ -704,29 +704,65 @@ answers `UNKNOWN_ACTION`.
 }
 ```
 
-Both capture actions accept an optional `rect` (`{"x", "y", "width", "height"}`) to capture
-only a region and an optional `scale` (a finite number above 0 and at most 4) for the image size.
-The rect is in CSS pixels from the top-left of the document, not of the visible area, so the
-scroll position does not change what it selects:
+#### Screenshot regions, scale and size limits
+
+Both `tabs.captureTab` and `tabs.captureVisibleTab` accept `rect` and `scale` in
+the request's `data` object. `rect` contains integer `x`, `y`, `width` and `height`
+in CSS pixels from the document's top-left corner. Scrolling does not change the
+selected region. `x` and `y` must be at least 0; `width` and `height` must be
+greater than 0. `scale` must be finite and satisfy `0 < scale <= 4`. Invalid
+rectangles or scales return `INVALID_PARAMETER`.
+
+These action/data excerpts request a 400 x 200 CSS-pixel crop at scale 0.5,
+producing a 200 x 100 pixel image:
 
 ```json
-{"action": "tabs.captureVisibleTab", "data": {"format": "png", "quality": 90, "rect": {"x": 0, "y": 0, "width": 400, "height": 200}, "scale": 0.5}}
-{"action": "tabs.captureTab", "data": {"tabId": 123, "format": "png", "quality": 90, "rect": {"x": 0, "y": 0, "width": 400, "height": 200}, "scale": 0.5}}
+{
+  "action": "tabs.captureTab",
+  "data": {
+    "tabId": 123,
+    "format": "png",
+    "quality": 90,
+    "rect": {"x": 0, "y": 0, "width": 400, "height": 200},
+    "scale": 0.5
+  }
+}
 ```
 
-`x`, `y`, `width` and `height` must be integers, `x` and `y` at least 0 and `width` and `height`
-above 0. A `rect` or `scale` that breaks these rules is an `INVALID_PARAMETER` error, not a
-full-size capture. The image is the region (or the visible area) in CSS pixels times `scale`,
-whatever the display: a `rect` with no `scale` is captured at `scale` 1 (Firefox itself would use
-the device pixel ratio), and a request with neither is left to Firefox as before. An extension
-older than this change ignores both fields and returns the whole image, so a client that needs the
-region should check the extension version.
+```json
+{
+  "action": "tabs.captureVisibleTab",
+  "data": {
+    "windowId": 1,
+    "format": "png",
+    "quality": 90,
+    "rect": {"x": 0, "y": 0, "width": 400, "height": 200},
+    "scale": 0.5
+  }
+}
+```
 
-`tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
-that does not exist or cannot be captured is a `CAPTURE_ERROR`. So is an image whose data URL is
-longer than 1,000,000 characters: the server accepts one message of 1 MiB from the extension and
-closes the connection on a larger one (see Known Limits in `architecture.md`), so the extension
-refuses to send it and the message says to use jpeg, a lower quality or scale, or a smaller region.
+| Request | Default scale when omitted |
+|---|---|
+| With `rect` | `1`, independent of display density |
+| Without `rect` | The target tab's device pixel ratio (DPR) |
+
+Responses carry the complete image in `dataUrl`. This differs from the MCP tool's
+text output: without `filename`, that tool returns only a data-URL preview and
+size count. See the [MCP screenshot tool](api-reference.md#screenshots).
+
+For `tabs.captureTab`, `tabId` must be a non-negative integer
+(`INVALID_PARAMETER` otherwise). A tab that does not exist or cannot be captured
+returns `CAPTURE_ERROR`. The extension
+also returns `CAPTURE_ERROR` if the data URL exceeds 1,000,000 characters. This
+conservative threshold leaves room for response metadata within the server's
+1 MiB incoming-message limit and applies even when the MCP tool saves to a file.
+The error suggests JPEG, lower JPEG quality, a smaller scale or a smaller crop.
+See [Known Limits](architecture.md#3-known-limits).
+
+Use matching server and extension builds. An older extension may ignore `rect`
+and `scale` and return an uncropped image. Protocol compatibility is reviewed
+during [release preparation](development.md#release-process).
 
 ### 3. Tab Content
 
