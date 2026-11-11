@@ -112,16 +112,27 @@ a request that matches more than one is captured by each.
 
 ## Options
 
-`options` is a dict passed to `requests_start_monitoring`. Three settings do
-something:
+`options` is a dict passed to `requests_start_monitoring`. Four settings control capture:
 
 | Option | Default | Effect |
 |---|---|---|
-| `capture_response_bodies` | `true` | Set `false` and no response body is read at all |
-| `max_body_size` | `50000` | Bytes kept per body. The rest is dropped and `truncated` is `true`, but the full size is still counted |
+| `capture_request_bodies` | `true` | Retain request bodies reported by Firefox; `false` omits them for this monitor |
+| `capture_response_bodies` | `true` | Retain response bodies for this monitor; `false` omits them |
+| `max_body_size` | `50000` | Positive integer bytes kept per response body. The rest is dropped and `truncated` is `true`, but the full size is still counted |
 | `content_types_to_capture` | `["application/json", "text/plain"]` | A body is returned as text only if its `Content-Type` **contains** one of these — `application/json` matches `application/json; charset=utf-8`, and the bare string `json` would match it too. An entry with a `*`, such as `text/*`, matches on the major type. An empty list means every type. Whatever does not match is still counted, and comes back with `content: null` |
 
-Three settings are accepted and ignored — see [Not implemented](#not-implemented).
+The MCP schema exposes these fields and rejects unknown fields and wrong types.
+`max_body_size=0` is invalid; disable response capture with
+`capture_response_bodies=false` instead. Content-type patterns must be nonempty
+strings; an empty list still selects every supported text type.
+`sensitive_headers` is unsupported and rejected because request headers are not
+captured. Listing filters belong to `requests_list_captured`, not `options`.
+
+Overlapping monitors retain independent request/response-body policies, byte
+limits and content-type selections. Firefox's response stream is intercepted
+once; each monitor receives only its own permitted prefix. A disabled monitor
+cannot read a body captured by another monitor. Already captured data remains
+readable after stopping, under the original monitor's policy.
 
 ## What a summary looks like
 
@@ -185,7 +196,8 @@ really is text — `text/*`, `application/json`, `application/xml`,
 `content: null` with the size filled in.
 
 `request_headers` is always `{}` — the extension registers no listener that
-collects them. `request_body` is populated only for requests that carried one, from
+collects them. `request_body` is populated only when the selected monitor enabled
+request-body capture and the request carried one, from
 what `webRequest` reports at `onBeforeRequest`; a form post arrives as the parsed
 `formData` structure rather than the raw bytes.
 
@@ -195,7 +207,9 @@ Everything is held in memory in the extension's background page. Nothing is writ
 to disk. The server keeps ownership metadata per profile connection, but does not
 store the captured bodies or request records.
 
-- **Response bodies:** the most recent 200 across all monitors. A monitor on `*`
+- **Response bodies:** the most recent 200 monitor/request projections across all
+  monitors. Capturing one response for several monitors consumes one entry per
+  enabled monitor, each with its own byte/type policy. A monitor on `*`
   sees every request the browser makes, so older bodies are evicted to keep memory
   bounded. The size recorded on the request survives eviction, so an evicted request
   still reports how large its body was.
@@ -215,8 +229,6 @@ caller does not conclude the feature is broken.
 | `save_request_body_to`, `save_response_body_to` on `requests_get_content` | Forwarded to the extension and ignored. `saved_to_file` is always `null`. A WebExtension cannot write to an arbitrary path, so this needs a design decision — the `downloads` API, or having the server write the bytes it already receives — rather than a patch |
 | `include_binary` on `requests_get_content` | Ignored. Non-text bodies are never returned; their size is |
 | `drain_timeout` on `requests_stop_monitoring` | Ignored. The monitor stops immediately |
-| `capture_request_bodies` in `options` | Ignored. Request bodies are captured whenever `webRequest` reports one |
-| `sensitive_headers` in `options` | Ignored, and moot: no request headers are captured to redact |
 
 ## Permissions
 
