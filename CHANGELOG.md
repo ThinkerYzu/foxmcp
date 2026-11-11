@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `content_get_text` and `content_get_html` failed with "Content script not available" on tabs Firefox had restored or unloaded. The extension now reloads such a tab and waits for it first, and reports a tab that does not load in time without retrying.
-
 ### Changed
 
 - Enforce fixed tool counts and complete archive tool coverage during release

@@ -156,7 +156,8 @@ subsequent user disabling is respected. History and bookmarks remain shared.
 `content_get_text` and `content_get_html` read the page of a tab. A tab Firefox restored after a
 restart or unloaded to save memory (a discarded tab) has no page, so the extension reloads it
 and waits up to 15 seconds for it to finish loading before reading it. That runs the page, as
-opening the tab would; a tab that cannot be loaded in time is an error, not a retry.
+opening the tab would; concurrent requests on the same tab share one reload, and a tab that
+cannot be loaded in time is an error, not a retry.
 
 `content_load_file` includes a short handle-lookup snippet and Firefox page-cloning guidance
 in its MCP description. See [Loading local files](scripts.md#loading-local-files)
