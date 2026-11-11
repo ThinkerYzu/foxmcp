@@ -937,8 +937,14 @@ function isBrowserId(value) {
   return Number.isInteger(value) && value >= 0;
 }
 
-// Optional crop (rect, in CSS pixels of the page) and scale for a screenshot,
-// so a request can ask for a small part of the page instead of all of it.
+// Optional crop (rect) and scale for a screenshot, so a request can ask for a small part of the
+// page instead of all of it. The rect is in CSS pixels from the top-left of the document, not of
+// the visible area, so the scroll position does not change what it selects.
+//
+// The output is the region in CSS pixels times the scale, whatever the display: Firefox's own
+// default scale is the device pixel ratio, so a cropped request that gives no scale gets 1. A
+// request with neither a rect nor a scale is left to Firefox, as before.
+//
 // A malformed rect or scale is an error, not a full-size screenshot: the caller
 // asked for something smaller and would otherwise not notice it did not get it.
 function captureRegionOptions(data) {
@@ -955,10 +961,12 @@ function captureRegionOptions(data) {
     result.rect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   }
   if (data.scale !== undefined && data.scale !== null) {
-    if (!Number.isFinite(data.scale) || data.scale <= 0 || data.scale > 1) {
-      throw new Error('scale needs a finite number above 0 and at most 1');
+    if (!Number.isFinite(data.scale) || data.scale <= 0 || data.scale > 4) {
+      throw new Error('scale needs a finite number above 0 and at most 4');
     }
     result.scale = data.scale;
+  } else if (result.rect) {
+    result.scale = 1;
   }
   return result;
 }

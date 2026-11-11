@@ -704,9 +704,10 @@ answers `UNKNOWN_ACTION`.
 }
 ```
 
-Both capture actions accept an optional `rect` (`{"x", "y", "width", "height"}`, CSS pixels) to
-capture only a region and an optional `scale` (a finite number above 0 and up to 1) for the
-image size:
+Both capture actions accept an optional `rect` (`{"x", "y", "width", "height"}`) to capture
+only a region and an optional `scale` (a finite number above 0 and at most 4) for the image size.
+The rect is in CSS pixels from the top-left of the document, not of the visible area, so the
+scroll position does not change what it selects:
 
 ```json
 {"action": "tabs.captureVisibleTab", "data": {"format": "png", "quality": 90, "rect": {"x": 0, "y": 0, "width": 400, "height": 200}, "scale": 0.5}}
@@ -715,7 +716,9 @@ image size:
 
 `x`, `y`, `width` and `height` must be integers, `x` and `y` at least 0 and `width` and `height`
 above 0. A `rect` or `scale` that breaks these rules is an `INVALID_PARAMETER` error, not a
-full-size capture. An extension older than this change ignores both fields and returns the whole
+full-size capture. The image is the region (or the visible area) in CSS pixels times `scale`,
+whatever the display: a `rect` with no `scale` is captured at `scale` 1 (Firefox itself would use
+the device pixel ratio), and a request with neither is left to Firefox as before. An extension older than this change ignores both fields and returns the whole
 image, so a client that needs the region should check the extension version.
 
 `tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab

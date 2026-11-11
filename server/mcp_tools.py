@@ -1495,9 +1495,13 @@ class FoxMCPTools:
         ) -> str:
             """Capture a screenshot of the visible tab, or of the tab given by tab_id
 
-            To save tokens, capture only a region (x, y, width, height, in CSS pixels from
-            the top-left of the visible page; all four together) and/or shrink it with scale
-            (e.g. 0.5).
+            To save tokens, capture only a region (x, y, width, height; all four together)
+            and/or shrink the image with scale (e.g. 0.5). The region is in CSS pixels from
+            the top-left of the whole page, not of what is visible, so scrolling does not
+            change it. The image has the size of the region (or of the visible area) in CSS
+            pixels times scale: with a region and no scale it is the size of the region on
+            any display (400 x 200 gives 400 x 200 pixels), and scale 2 gives 800 x 400.
+            Without a region and without scale the image keeps the display pixel density.
 
             What comes back depends on whether you pass a filename: with one, the image is
             written to disk and you get a success message and the path; without one, you get
@@ -1510,12 +1514,14 @@ class FoxMCPTools:
                 quality: Image quality for JPEG format (1-100, default: 90)
                 tab_id: Capture this tab, even in the background (not with window_id)
                 x: Left edge of the region to capture (optional, integer CSS pixels from the left of
-                    the visible page, 0 or more; give x, y, width and height together)
-                y: Top edge of the region (optional, integer CSS pixels from the top, 0 or more)
+                    the page, 0 or more; give x, y, width and height together)
+                y: Top edge of the region (optional, integer CSS pixels from the top of the
+                    page, 0 or more)
                 width: Width of the region (optional, integer CSS pixels, more than 0)
                 height: Height of the region (optional, integer CSS pixels, more than 0)
-                scale: Scale factor for the image (optional, a finite number above 0 and up to 1.0,
-                    for example 0.5 for half size; default: full size)
+                scale: Output pixels per CSS pixel (optional, a finite number above 0 and up to 4,
+                    for example 0.5 for half size or 2 for a sharper image; default: 1 with a
+                    region, the display pixel density without one)
 
             Returns:
                 Success message with file path if filename provided, otherwise base64 encoded image data URL
@@ -1540,8 +1546,8 @@ class FoxMCPTools:
             if scale is not None:
                 if isinstance(scale, bool) or not isinstance(scale, (int, float)):
                     return "Error capturing screenshot: scale must be a number"
-                if not math.isfinite(scale) or not 0 < scale <= 1.0:
-                    return "Error capturing screenshot: scale must be above 0 and at most 1.0"
+                if not math.isfinite(scale) or not 0 < scale <= 4:
+                    return "Error capturing screenshot: scale must be above 0 and at most 4"
                 region["scale"] = float(scale)
 
             if tab_id is not None:

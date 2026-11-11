@@ -106,11 +106,11 @@ class TestScreenshotRegion:
         assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("bad", [0, -0.5, 1.5, float("nan"), float("inf")])
-    async def test_scale_must_be_above_zero_and_at_most_one(self, capture, stub_server, bad):
+    @pytest.mark.parametrize("bad", [0, -0.5, 4.5, float("nan"), float("inf")])
+    async def test_scale_must_be_above_zero_and_at_most_four(self, capture, stub_server, bad):
         result = await capture(profile_id=1, scale=bad)
 
-        assert "above 0 and at most 1.0" in result
+        assert "above 0 and at most 4" in result
         assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
@@ -122,7 +122,17 @@ class TestScreenshotRegion:
         assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
-    async def test_scale_of_one_is_allowed(self, capture, stub_server):
-        await capture(profile_id=1, scale=1)
+    @pytest.mark.parametrize("good", [0.25, 1, 2, 4])
+    async def test_scales_up_to_four_are_allowed(self, capture, stub_server, good):
+        await capture(profile_id=1, scale=good)
 
-        assert stub_server.sent_request["data"]["scale"] == 1.0
+        assert stub_server.sent_request["data"]["scale"] == float(good)
+
+    @pytest.mark.asyncio
+    async def test_a_region_without_scale_sends_none_for_the_extension_to_default(
+            self, capture, stub_server):
+        await capture(profile_id=1, x=0, y=0, width=400, height=200)
+
+        assert "scale" not in stub_server.sent_request["data"]
+        assert stub_server.sent_request["data"]["rect"] == {
+            "x": 0, "y": 0, "width": 400, "height": 200}
