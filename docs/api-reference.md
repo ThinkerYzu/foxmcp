@@ -92,6 +92,38 @@ does not rely on an extension-supplied name or a user-entered label.
   - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
     not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
     has `tabs.captureTab`; an older one answers that it is too old
+- `tabs_record_start(profile_id, tab_id, url, interval_ms=500, max_frames=60, scale=0.5, quality=50)` - Record a tab by sending small JPEG screenshots to a receiver on this machine that you run. `url` is an `http://` or `https://` address that takes a POST of each frame, or a `ws://` or `wss://` address that gets a text message and then a binary message per frame (see [receiving frames](#receiving-recording-frames)); only `127.0.0.1`, `localhost` and `[::1]` are accepted. `interval_ms` is an integer from 100 to 5000, `max_frames` from 1 to 300 (it stops there), `scale` a number above 0 and at most 1, `quality` an integer from 1 to 100. The first frame is sent before the call returns, so a receiver that is not there is an error. Starting again on the same tab replaces the earlier recording, and it is dropped when the tab closes or the connection ends
+- `tabs_record_stop(profile_id, recording_id)` - Stop a recording and report how many frames reached the receiver, how many were skipped because it was slow, and why it ended early, if it did
+
+#### Receiving recording frames
+The extension keeps no frames: each one goes to the receiver as soon as it is taken, so the receiver
+builds whatever it wants (a GIF, a video). Over HTTP, every frame is a `POST` with
+`Content-Type: image/jpeg`, the JPEG as the body, and the headers `X-FoxMCP-Recording` (the
+recording ID), `X-FoxMCP-Frame` (the frame number, from 0) and `X-FoxMCP-Time` (an ISO time); the
+receiver answers any 2xx status within 10 seconds, and anything else (a redirect, a timeout, another
+status) ends the recording; no cookies are sent. Over a websocket, every frame is a text message
+`{"recording": "rec-12", "frame": 0, "time": "..."}` followed by a binary message with the JPEG, and
+the receiver closing the connection ends the recording. A frame is skipped, and counted by
+`tabs_record_stop`, while the previous one is still on its way. A recording that ends by itself
+stays until `tabs_record_stop` reports and removes it. A minimal receiver that saves the frames to a
+folder:
+
+```python
+import http.server, pathlib
+
+folder = pathlib.Path("frames"); folder.mkdir(exist_ok=True)
+
+class Receiver(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        frame = int(self.headers["X-FoxMCP-Frame"])
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        (folder / f"frame-{frame:04d}.jpg").write_bytes(body)
+        self.send_response(204); self.end_headers()
+
+http.server.HTTPServer(("127.0.0.1", 8099), Receiver).serve_forever()
+```
+
+Pass `http://127.0.0.1:8099/` as `url`; Pillow can turn the saved frames into a GIF afterwards.
 
 ### Firefox Containers
 

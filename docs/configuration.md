@@ -319,7 +319,7 @@ token, so treat them as proportions rather than exact counts:
 | Group | Tools | ~Tokens |
 |---|---|---|
 | `profiles` | list | 202 |
-| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query | 2,872 |
+| `tabs` | list, create, close, switch, move, capture_screenshot, group, ungroup, groups_update, groups_query, record_start, record_stop | 2,872 |
 | `containers` | list, create, update, remove | 625 |
 | `bookmarks` | list, search, create, create_folder, update, move, delete | 1,438 |
 | `windows` | list, get, get_current, create, close, focus, update | 1,413 |

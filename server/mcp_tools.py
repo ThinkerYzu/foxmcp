@@ -19,8 +19,10 @@ import shlex
 import sys
 import time
 import json
+import math
 import base64
 from datetime import datetime
+from urllib.parse import urlsplit
 from typing import Annotated, Dict, Any, Optional, List, TypedDict, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -1600,6 +1602,106 @@ class FoxMCPTools:
                 return f"Failed to capture screenshot: {error_msg}"
 
             return "Unable to capture screenshot"
+
+        # Screen Recording Tools
+        async def tab_request(profile_id: int, message: Dict[str, Any]):
+            """Send a request; returns (data, None), or (None, error message) on failure"""
+            response = await self._send(profile_id, {
+                "id": str(uuid.uuid4()), "type": "request", **message,
+                "timestamp": datetime.now().isoformat()
+            }, timeout=60.0)
+            if "error" in response:
+                return None, response["error"]
+            if response.get("type") == "response" and "data" in response:
+                return response["data"], None
+            return None, response.get("data", {}).get("message", "Unknown error")
+
+        @self._tool()
+        async def tabs_record_start(
+            profile_id: int,
+            tab_id: int,
+            url: str,
+            interval_ms: int = 500,
+            max_frames: int = 60,
+            scale: float = 0.5,
+            quality: int = 50
+        ) -> str:
+            """Start recording a tab by sending small screenshots, as they are taken, to a
+            receiver on this machine that you run, until tabs_record_stop or max_frames
+
+            url is where the frames go: an http:// or https:// address that takes a POST
+            of each JPEG (headers X-FoxMCP-Recording, X-FoxMCP-Frame from 0 and
+            X-FoxMCP-Time), or a ws:// or wss:// address that gets, per frame, a text
+            message {"recording", "frame", "time"} and then a binary message with the
+            JPEG. Only 127.0.0.1, localhost and [::1] are accepted. The receiver builds
+            whatever it wants from the frames (a GIF, a video). The first frame is sent
+            before this returns, so a receiver that is not there is an error now. One
+            recording per tab: starting again replaces the earlier one. It is dropped
+            when the tab closes or the connection to the server ends.
+
+            Args:
+                tab_id: ID of the tab to record (it may be in the background)
+                url: Local address of the receiver, such as http://127.0.0.1:8099/frames
+                interval_ms: (optional, an integer from 100 to 5000, default: 500)
+                    Milliseconds between frames
+                max_frames: (optional, an integer from 1 to 300, default: 60) Most frames
+                    to send
+                scale: (optional, a finite number above 0 and at most 1, default: 0.5)
+                    Image scale
+                quality: (optional, an integer from 1 to 100, default: 50) JPEG quality
+                    of each frame
+            """
+            if not isinstance(url, str) or not url.strip():
+                return "Failed to start recording: url must be a nonempty string"
+            try:
+                parts = urlsplit(url)
+                host = parts.hostname
+                parts.port  # raises ValueError for a bad port
+            except ValueError:
+                return "Failed to start recording: url must be a valid URL"
+            failed = "Failed to start recording: "
+            if parts.scheme not in ("http", "https", "ws", "wss"):
+                return failed + "url must start with http://, https://, ws:// or wss://"
+            if host not in ("127.0.0.1", "localhost", "::1"):
+                return failed + "url must point to this machine: 127.0.0.1, localhost or [::1]"
+            if parts.username or parts.password:
+                return failed + "url must not carry credentials"
+            for name, value, low, high in (("interval_ms", interval_ms, 100, 5000),
+                                           ("max_frames", max_frames, 1, 300),
+                                           ("quality", quality, 1, 100)):
+                if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+                    return f"{failed}{name} must be an integer from {low} to {high}"
+            if (isinstance(scale, bool) or not isinstance(scale, (int, float))
+                    or not math.isfinite(scale) or not 0 < scale <= 1):
+                return failed + "scale must be a finite number above 0 and at most 1"
+            data, error = await tab_request(profile_id, {
+                "action": "tabs.record_start",
+                "data": {"tabId": tab_id, "url": url, "intervalMs": interval_ms,
+                         "maxFrames": max_frames, "scale": scale, "quality": quality}})
+            if error:
+                return f"Failed to start recording: {error}"
+            return (f"Recording tab {tab_id} as {data.get('recordingId')} to "
+                    f"{data.get('url')}: a frame every {data.get('intervalMs')} ms, "
+                    f"up to {data.get('maxFrames')} frames")
+
+        @self._tool()
+        async def tabs_record_stop(profile_id: int, recording_id: str) -> str:
+            """Stop a recording and report how many frames reached the receiver
+
+            Args:
+                recording_id: ID returned by tabs_record_start
+            """
+            data, error = await tab_request(profile_id, {
+                "action": "tabs.record_stop", "data": {"recordingId": recording_id}})
+            if error:
+                return f"Failed to stop recording: {error}"
+            text = (f"Recording {recording_id} stopped: {data.get('frames', 0)} frame(s) sent "
+                    f"in {data.get('durationMs', 0)} ms")
+            if data.get("skipped"):
+                text += f", {data['skipped']} skipped because the receiver was slow"
+            if data.get("error"):
+                text += f"; it ended early: {data['error']}"
+            return text
 
     def _setup_history_tools(self):
         """Setup history management tools"""
