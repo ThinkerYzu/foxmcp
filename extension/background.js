@@ -1464,8 +1464,8 @@ async function handleContentAction(id, action, data) {
           sendError(id, 'INVALID_PARAMETER', 'intervalMs must be an integer from 100 to 5000');
           break;
         }
-        // The script runs as an indirect eval, so in the page's global scope and not in the scope of
-        // this wrapper: it cannot collide with, or see, anything the wrapper declares. The wrapper
+        // The script runs as an indirect eval, so in the global scope of the content script and not in
+        // the scope of this wrapper: it cannot collide with, or see, anything the wrapper declares. The wrapper
         // answers {value} or {error}, so an error of the script is told apart from the errors of
         // a tab that cannot be scripted yet (still loading, navigating), and a returned object
         // cannot be mistaken for an error. The value is cloned once in the page, so one that cannot

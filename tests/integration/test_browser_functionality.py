@@ -305,22 +305,23 @@ class TestBrowserFunctionality:
         tab_id = ids[0]
 
         try:
+            # A global named `value`, made the way a script of the same tab makes it, must be
+            # read as that global, not shadowed by a binding of the wrapper
+            await mcp_client.call_tool("content_execute_script", {
+                "tab_id": tab_id, "code": "var value = 'existing global'; value"
+            })
+            read = await mcp_client.call_tool("content_wait", {
+                "tab_id": tab_id, "script": "value", "timeout": 5.0
+            })
+            assert not read.get('isError', False), read
+            assert "existing global" in read['content'], read
+
             # A statement list that declares `value` must not collide with the wrapper
             declared = await mcp_client.call_tool("content_wait", {
                 "tab_id": tab_id, "script": "var value = 42; value", "timeout": 5.0
             })
             assert not declared.get('isError', False), declared
             assert declared['content'].rstrip().endswith("42"), declared
-
-            # A global named `value` must be read as the page's, not shadowed by the wrapper
-            await mcp_client.call_tool("content_execute_script", {
-                "tab_id": tab_id, "code": "window.value = 'from the page'"
-            })
-            read = await mcp_client.call_tool("content_wait", {
-                "tab_id": tab_id, "script": "value", "timeout": 5.0
-            })
-            assert not read.get('isError', False), read
-            assert "from the page" in read['content'], read
         finally:
             await mcp_client.call_tool("tabs_close", {"tab_id": tab_id})
 
