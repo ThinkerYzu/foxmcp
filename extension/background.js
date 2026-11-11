@@ -1799,8 +1799,45 @@ async function handleWindowsAction(id, action, data) {
 const activeMonitors = new Map(); // monitor_id -> monitor config
 const capturedRequests = new Map(); // monitor_id -> array of requests
 const requestDetails = new Map(); // request_id -> full request details
-const capturedResponseBodies = new Map(); // request_id -> response body data
+const capturedResponseBodies = new Map(); // [monitor_id, request_id] -> body projection
+const monitorCaptureOptions = new Map(); // kept after stop while captured data is readable
 const MAX_STORED_RESPONSE_BODIES = 200;
+
+// Validate raw protocol requests too; MCP schema validation is only one entry point.
+function normalizeMonitorOptions(options) {
+  if (options === undefined || options === null) options = {};
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new Error('options must be an object');
+  }
+  const defaults = {
+    capture_request_bodies: true,
+    capture_response_bodies: true,
+    max_body_size: 50000,
+    content_types_to_capture: ['application/json', 'text/plain']
+  };
+  for (const key of Object.keys(options)) {
+    if (!Object.prototype.hasOwnProperty.call(defaults, key)) {
+      throw new Error(`Unsupported monitoring option: ${key}`);
+    }
+  }
+  const result = { ...defaults, ...options };
+  for (const key of ['capture_request_bodies', 'capture_response_bodies']) {
+    if (typeof result[key] !== 'boolean') throw new Error(`${key} must be a boolean`);
+  }
+  if (!Number.isInteger(result.max_body_size) || result.max_body_size <= 0) {
+    throw new Error('max_body_size must be a positive integer');
+  }
+  if (!Array.isArray(result.content_types_to_capture) ||
+      !result.content_types_to_capture.every(type => typeof type === 'string' && type.length > 0)) {
+    throw new Error('content_types_to_capture must be an array of nonempty strings');
+  }
+  result.content_types_to_capture = Object.freeze([...result.content_types_to_capture]);
+  return Object.freeze(result);
+}
+
+function responseBodyKey(monitorId, requestId) {
+  return JSON.stringify([monitorId, requestId]);
+}
 
 // WebRequest listener functions
 let onBeforeRequestListener = null;
@@ -1893,6 +1930,7 @@ function clearAllMonitors(reason) {
   capturedRequests.clear();
   requestDetails.clear();
   capturedResponseBodies.clear();
+  monitorCaptureOptions.clear();
 
   if (monitorCount > 0) {
     stopWebRequestMonitoring();
@@ -2009,7 +2047,9 @@ function captureRequestEvent(monitorId, eventType, details) {
     case 'onBeforeRequest':
       event.url = details.url;
       event.method = details.method;
-      event.requestBody = details.requestBody;
+      if (monitorCaptureOptions.get(monitorId)?.capture_request_bodies) {
+        event.requestBody = details.requestBody;
+      }
       break;
 
     case 'onHeadersReceived':
@@ -2078,30 +2118,20 @@ function captureRequestEvent(monitorId, eventType, details) {
 // Call from onBeforeRequest only; the response stream can no longer be tapped
 // once it has started. Does nothing unless an active monitor matches the
 // request and asked for response bodies. What it keeps lands in
-// capturedResponseBodies under details.requestId, the same id
-// requests.list_captured reports.
+// capturedResponseBodies under a monitor/request key. Request ids are the same
+// ones requests.list_captured reports.
 //
 // browser.webRequest.filterResponseData puts this code in the path of the bytes
 // on their way to the page, so every byte read here has to be written back or
 // the page gets a truncated response. That is why write() comes first and the
 // bookkeeping cannot throw past it. Firefox has already undone any
 // Content-Encoding by this point, so the bytes are the real body. Only the
-// first max_body_size of them are kept, but all of them are counted, so a body
-// kept in part -- or not at all, for its content type -- still reports its
-// full size.
+// largest prefix requested by a matching monitor is buffered. Each monitor's
+// own size/type projection is retained, while every body reports its full size.
 function captureResponseBody(details) {
-  let monitor = null;
-  for (const activeMonitor of activeMonitors.values()) {
-    if (activeMonitor.options?.capture_response_bodies &&
-        shouldCaptureRequest(activeMonitor, details)) {
-      monitor = activeMonitor;
-      break;
-    }
-  }
-
-  if (!monitor) {
-    return;
-  }
+  const monitors = Array.from(activeMonitors.values()).filter(monitor =>
+    monitor.options.capture_response_bodies && shouldCaptureRequest(monitor, details));
+  if (monitors.length === 0) return;
 
   let filter;
   try {
@@ -2113,11 +2143,11 @@ function captureResponseBody(details) {
     return;
   }
 
-  const maxSize = monitor.options.max_body_size || 50000;
+  // Intercept once and buffer the largest prefix needed by any interested monitor.
+  const maxSize = Math.max(...monitors.map(monitor => monitor.options.max_body_size));
   const kept = [];
   let totalBytes = 0;
   let keptBytes = 0;
-  let truncated = false;
 
   filter.ondata = (event) => {
     filter.write(event.data);
@@ -2127,14 +2157,10 @@ function captureResponseBody(details) {
 
       const room = maxSize - keptBytes;
       if (room <= 0) {
-        truncated = true;
         return;
       }
 
       const chunk = event.data.byteLength > room ? event.data.slice(0, room) : event.data;
-      if (chunk.byteLength < event.data.byteLength) {
-        truncated = true;
-      }
       kept.push(chunk);
       keptBytes += chunk.byteLength;
     } catch (error) {
@@ -2146,7 +2172,12 @@ function captureResponseBody(details) {
     filter.close();
 
     try {
-      storeResponseBody(details.requestId, monitor, kept, totalBytes, truncated);
+      for (const monitor of monitors) {
+        // A disconnected profile must not repopulate storage from a stale stream.
+        if (monitorCaptureOptions.get(monitor.id) === monitor.options) {
+          storeResponseBody(details.requestId, monitor, kept, totalBytes);
+        }
+      }
     } catch (error) {
       console.error(`Error storing response body for ${details.url}: ${error.message}`);
     }
@@ -2167,7 +2198,7 @@ function captureResponseBody(details) {
 // would grow without limit for as long as monitoring runs. The size recorded on
 // the request itself survives eviction, so an evicted request still reports how
 // large its body was.
-function storeResponseBody(requestId, monitor, chunks, totalBytes, truncated) {
+function storeResponseBody(requestId, monitor, chunks, totalBytes) {
   const requestDetail = requestDetails.get(requestId);
   const contentType = requestDetail?.response_content_type || '';
 
@@ -2177,11 +2208,18 @@ function storeResponseBody(requestId, monitor, chunks, totalBytes, truncated) {
 
   const wanted = shouldCaptureContentType(contentType, monitor.options.content_types_to_capture);
 
-  capturedResponseBodies.set(requestId, {
-    content: wanted ? decodeResponseText(chunks, contentType) : null,
+  let remaining = monitor.options.max_body_size;
+  const prefix = [];
+  for (const chunk of chunks) {
+    if (remaining <= 0) break;
+    prefix.push(chunk.byteLength > remaining ? chunk.slice(0, remaining) : chunk);
+    remaining -= prefix[prefix.length - 1].byteLength;
+  }
+  capturedResponseBodies.set(responseBodyKey(monitor.id, requestId), {
+    content: wanted ? decodeResponseText(prefix, contentType) : null,
     content_type: contentType || null,
     size_bytes: totalBytes,
-    truncated: truncated
+    truncated: totalBytes > monitor.options.max_body_size
   });
 
   while (capturedResponseBodies.size > MAX_STORED_RESPONSE_BODIES) {
@@ -2242,11 +2280,18 @@ async function handleRequestsAction(id, action, data) {
         // Always send debug message to test if WebSocket works
         console.log('📡 ALWAYS: requests.start_monitoring called');
 
+        let captureOptions;
+        try {
+          captureOptions = normalizeMonitorOptions(data.options);
+        } catch (error) {
+          sendError(id, 'INVALID_PARAMETER', error.message);
+          break;
+        }
         const monitor_id = `mon_${Date.now()}`;
         const monitor = {
           id: monitor_id,
           url_patterns: data.url_patterns || [],
-          options: data.options || {},
+          options: captureOptions,
           tab_id: data.tab_id || null,
           started_at: new Date().toISOString(),
           status: 'active'
@@ -2257,6 +2302,7 @@ async function handleRequestsAction(id, action, data) {
 
         // Register the monitor before the listeners go up, so the first request
         // through onBeforeRequest can already find it and tap its body.
+        monitorCaptureOptions.set(monitor_id, captureOptions);
         activeMonitors.set(monitor_id, monitor);
         capturedRequests.set(monitor_id, []);
         startWebRequestMonitoring(monitor);
@@ -2335,6 +2381,14 @@ async function handleRequestsAction(id, action, data) {
         break;
 
       case 'requests.get_content':
+        if (!capturedRequests.has(data.monitor_id)) {
+          sendError(id, 'MONITOR_NOT_FOUND', `Monitor ${data.monitor_id} not found`);
+          break;
+        }
+        if (!capturedRequests.get(data.monitor_id).some(item => item.request_id === data.request_id)) {
+          sendError(id, 'REQUEST_NOT_FOUND', `Request ${data.request_id} was not captured by this monitor`);
+          break;
+        }
         const requestDetail = requestDetails.get(data.request_id);
         if (!requestDetail) {
           sendError(id, 'REQUEST_NOT_FOUND', `Request ${data.request_id} not found`);
@@ -2347,7 +2401,8 @@ async function handleRequestsAction(id, action, data) {
         let requestBody = null;
 
         for (const event of requestDetail.events) {
-          if (event.type === 'onBeforeRequest' && event.requestBody) {
+          if (monitorCaptureOptions.get(data.monitor_id)?.capture_request_bodies &&
+              event.type === 'onBeforeRequest' && event.requestBody) {
             requestBody = event.requestBody;
           }
           if (event.type === 'onHeadersReceived' && event.responseHeaders) {
@@ -2373,7 +2428,7 @@ async function handleRequestsAction(id, action, data) {
             saved_to_file: null
           },
           response_body: (() => {
-            const capturedBody = capturedResponseBodies.get(data.request_id);
+            const capturedBody = capturedResponseBodies.get(responseBodyKey(data.monitor_id, data.request_id));
 
             if (capturedBody && capturedBody.content !== null) {
               return {
