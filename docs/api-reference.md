@@ -100,10 +100,13 @@ The extension keeps no frames: each one goes to the receiver as soon as it is ta
 builds whatever it wants (a GIF, a video). Over HTTP, every frame is a `POST` with
 `Content-Type: image/jpeg`, the JPEG as the body, and the headers `X-FoxMCP-Recording` (the
 recording ID), `X-FoxMCP-Frame` (the frame number, from 0) and `X-FoxMCP-Time` (an ISO time); the
-receiver answers any 2xx status, and anything else ends the recording. Over a websocket, every frame
-is a text message `{"recording": "rec-12", "frame": 0, "time": "..."}` followed by a binary message
-with the JPEG, and the receiver closing the connection ends the recording. A minimal receiver that
-saves the frames to a folder:
+receiver answers any 2xx status within 10 seconds, and anything else (a redirect, a timeout, another
+status) ends the recording; no cookies are sent. Over a websocket, every frame is a text message
+`{"recording": "rec-12", "frame": 0, "time": "..."}` followed by a binary message with the JPEG, and
+the receiver closing the connection ends the recording. A frame is skipped, and counted by
+`tabs_record_stop`, while the previous one is still on its way. A recording that ends by itself
+stays until `tabs_record_stop` reports and removes it. A minimal receiver that saves the frames to a
+folder:
 
 ```python
 import http.server, pathlib

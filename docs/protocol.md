@@ -728,14 +728,21 @@ its tab closes or the connection to the server ends.
 
 Over HTTP every frame is a `POST` of the JPEG (`Content-Type: image/jpeg`) with the headers
 `X-FoxMCP-Recording`, `X-FoxMCP-Frame` (from 0) and `X-FoxMCP-Time` (an ISO time); any 2xx
-status is accepted. Over a websocket every frame is a text message
-`{"recording": "rec-123", "frame": 0, "time": "..."}` followed by a binary message with the JPEG.
-A frame that is still on its way when the next one is due makes the extension skip that one. A
-failed send (a status other than 2xx, a closed websocket) ends the recording.
+status is accepted. The request carries no cookies, redirects are not followed (a 3xx answer ends
+the recording as an error), and a frame that is not answered within 10 seconds fails. Over a
+websocket every frame is a text message `{"recording": "rec-123", "frame": 0, "time": "..."}`
+followed by a binary message with the JPEG, and the socket is closed after the last frame.
+A frame that is still on its way when the next one is due makes the extension skip that one, and so
+does a websocket that still has data waiting to be sent; both count in `skipped`. A failed send (a
+status other than 2xx, a refused redirect, a timeout, a closed websocket) ends the recording.
+`tabs.record_start` answers `API_ERROR` if another start on the same tab replaces the recording, or
+its tab closes, before the first frame has been delivered.
 
 `tabs.record_stop` answers `{"frames", "skipped", "durationMs", "error"}`: the frames delivered,
 the ticks skipped because the receiver was slow, how long the recording ran and why it ended early,
-or `null`. An unknown recording is `RECORDING_NOT_FOUND`.
+or `null`. An unknown recording is `RECORDING_NOT_FOUND`. A recording that ends by itself (at
+`maxFrames`, or after an error) stays until `tabs.record_stop` reports it and removes it, its tab
+closes or the connection ends.
 
 ### 3. Tab Content
 
