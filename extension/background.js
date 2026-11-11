@@ -1477,6 +1477,14 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5, delayMs = 20
   }
 }
 
+function describeDownload(item) {
+  return {
+    id: item.id, filename: item.filename, url: item.url, state: item.state,
+    bytes: item.fileSize >= 0 ? item.fileSize : item.bytesReceived, mime: item.mime,
+    startTime: item.startTime, error: item.error || null
+  };
+}
+
 // Content handlers
 async function handleContentAction(id, action, data) {
   try {
@@ -1517,6 +1525,50 @@ async function handleContentAction(id, action, data) {
         });
         if (!result || result.error) throw new Error(result?.error || 'Content script unavailable');
         sendResponse(id, action, result);
+        break;
+      }
+
+      // Files the browser has downloaded, newest first
+      case 'content.list_downloads': {
+        if (!Number.isInteger(data.limit) || data.limit < 1 || data.limit > 100) {
+          sendError(id, 'INVALID_PARAMETER', 'limit must be an integer from 1 to 100');
+          break;
+        }
+        // Private-browsing downloads are left out, as Firefox itself does not keep them.
+        const items = (await browser.downloads.search({
+          orderBy: ['-startTime'], limit: data.limit + 20
+        })).filter(item => !item.incognito).slice(0, data.limit);
+        sendResponse(id, action, { downloads: items.map(describeDownload) });
+        break;
+      }
+
+      // Waits for a download that starts now (or started up to 3 seconds ago) to end. Every
+      // download in that window must have ended: one still in progress keeps the wait going,
+      // and the newest one that ended is the answer. An interrupted download ends too, and
+      // its error is in the result.
+      case 'content.wait_download': {
+        if (!Number.isInteger(data.timeoutMs) || data.timeoutMs < 1 || data.timeoutMs > 300000) {
+          sendError(id, 'INVALID_PARAMETER', 'timeoutMs must be an integer from 1 to 300000');
+          break;
+        }
+        const timeoutMs = data.timeoutMs;
+        const since = Date.now() - 3000;
+        const deadline = Date.now() + timeoutMs;
+        let found = null;
+        while (Date.now() < deadline) {
+          const recent = (await browser.downloads.search({ orderBy: ['-startTime'], limit: 10 }))
+            .filter(item => !item.incognito && Date.parse(item.startTime) >= since);
+          if (recent.length && recent.every(item => item.state !== 'in_progress')) {
+            found = recent[0];
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        if (found) {
+          sendResponse(id, action, { download: describeDownload(found) });
+        } else {
+          sendError(id, 'WAIT_TIMEOUT', `No download finished within ${timeoutMs} ms`);
+        }
         break;
       }
 

@@ -807,6 +807,24 @@ during [release preparation](development.md#release-process).
 }
 ```
 
+#### Downloads
+`content.list_downloads` and `content.wait_download` use the `downloads` permission
+to report files the browser saved, so a client can tell whether an export worked.
+
+```json
+{"action": "content.list_downloads", "data": {"limit": 10}}
+{"action": "content.wait_download", "data": {"timeoutMs": 30000}}
+```
+
+They answer `{"downloads": [...]}` and `{"download": {...}}`, where each item has `id`,
+`filename` (the absolute saved path), `url`, `state`, `bytes` (the file size, or the bytes
+received so far when it is unknown), `mime`, `startTime` and `error`. Downloads made in
+private browsing are left out. `limit` must be an integer from 1 to 100 and `timeoutMs` an
+integer from 1 to 300000, otherwise the answer is an `INVALID_PARAMETER` error.
+`content.wait_download` considers the downloads that started up to 3 seconds before the
+request: it waits while any of them is in progress and then answers the newest, finished or
+interrupted (with its `error`), or `WAIT_TIMEOUT`.
+
 #### Execute Script
 **Request:**
 ```json
@@ -1709,6 +1727,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+| `WAIT_TIMEOUT` | A wait ended before any download finished; the message says how long it waited. |
 
 ### Script execution and consent errors
 

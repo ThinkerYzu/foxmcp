@@ -4,7 +4,7 @@ Complete reference for all MCP tools and browser functions available through Fox
 
 ## Available MCP Tools
 
-All 46 tools are offered by default. Each section below corresponds to a *group*
+All 48 tools are offered by default. Each section below corresponds to a *group*
 that `--disable-tools` can leave unregistered, which is how you shrink what an MCP
 client carries in its context. The group name is the tool-name prefix, not the
 heading: Tab Management is `tabs`, Web Request Monitoring is `requests`, Debugging
@@ -204,6 +204,8 @@ for the complete input-assignment example and transfer details.
   when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
+- `content_list_downloads(profile_id, limit=10)` - List recent downloads, newest first, with the absolute saved path, URL, state and size. `limit` is an integer from 1 to 100. Private-browsing downloads are left out. `bytes` is the file size, or the bytes received so far when the size is unknown
+- `content_wait_download(profile_id, timeout=30)` - Wait for a download to finish, e.g. after an export button, and return where it was saved; includes the time Firefox waits for the person to confirm it. `timeout` is a number of seconds above 0 and at most 300. Downloads that started up to 3 seconds before the call count, one still in progress keeps the wait going, and an interrupted one ends it with its error. Private-browsing downloads are ignored
 
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests
