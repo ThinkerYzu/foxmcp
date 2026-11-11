@@ -110,7 +110,8 @@ class TestRecordStart:
     async def test_scale_must_be_above_zero_and_at_most_one(self, call, stub_server, scale):
         result = await call("tabs_record_start", profile_id=1, tab_id=4, url=URL, scale=scale)
 
-        assert result == "Failed to start recording: scale must be a number above 0 and at most 1"
+        assert result == ("Failed to start recording: "
+                          "scale must be a finite number above 0 and at most 1")
         assert stub_server.sent_request is None
 
     @pytest.mark.asyncio

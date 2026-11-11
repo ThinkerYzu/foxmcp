@@ -20,9 +20,9 @@ import sys
 import time
 import json
 import math
-from urllib.parse import urlsplit
 import base64
 from datetime import datetime
+from urllib.parse import urlsplit
 from typing import Annotated, Dict, Any, Optional, List, TypedDict, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -1605,7 +1605,7 @@ class FoxMCPTools:
 
         # Screen Recording Tools
         async def tab_request(profile_id: int, message: Dict[str, Any]):
-            """Send a request; returns (data, None) on success and (None, error message) on failure"""
+            """Send a request; returns (data, None), or (None, error message) on failure"""
             response = await self._send(profile_id, {
                 "id": str(uuid.uuid4()), "type": "request", **message,
                 "timestamp": datetime.now().isoformat()
@@ -1659,28 +1659,30 @@ class FoxMCPTools:
                 parts.port  # raises ValueError for a bad port
             except ValueError:
                 return "Failed to start recording: url must be a valid URL"
+            failed = "Failed to start recording: "
             if parts.scheme not in ("http", "https", "ws", "wss"):
-                return "Failed to start recording: url must start with http://, https://, ws:// or wss://"
+                return failed + "url must start with http://, https://, ws:// or wss://"
             if host not in ("127.0.0.1", "localhost", "::1"):
-                return "Failed to start recording: url must point to this machine: 127.0.0.1, localhost or [::1]"
+                return failed + "url must point to this machine: 127.0.0.1, localhost or [::1]"
             if parts.username or parts.password:
-                return "Failed to start recording: url must not carry credentials"
+                return failed + "url must not carry credentials"
             for name, value, low, high in (("interval_ms", interval_ms, 100, 5000),
                                            ("max_frames", max_frames, 1, 300),
                                            ("quality", quality, 1, 100)):
                 if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
-                    return f"Failed to start recording: {name} must be an integer from {low} to {high}"
+                    return f"{failed}{name} must be an integer from {low} to {high}"
             if (isinstance(scale, bool) or not isinstance(scale, (int, float))
                     or not math.isfinite(scale) or not 0 < scale <= 1):
-                return "Failed to start recording: scale must be a number above 0 and at most 1"
+                return failed + "scale must be a finite number above 0 and at most 1"
             data, error = await tab_request(profile_id, {
                 "action": "tabs.record_start",
                 "data": {"tabId": tab_id, "url": url, "intervalMs": interval_ms,
                          "maxFrames": max_frames, "scale": scale, "quality": quality}})
             if error:
                 return f"Failed to start recording: {error}"
-            return (f"Recording tab {tab_id} as {data.get('recordingId')} to {data.get('url')}: "
-                    f"a frame every {data.get('intervalMs')} ms, up to {data.get('maxFrames')} frames")
+            return (f"Recording tab {tab_id} as {data.get('recordingId')} to "
+                    f"{data.get('url')}: a frame every {data.get('intervalMs')} ms, "
+                    f"up to {data.get('maxFrames')} frames")
 
         @self._tool()
         async def tabs_record_stop(profile_id: int, recording_id: str) -> str:

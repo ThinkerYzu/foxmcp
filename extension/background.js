@@ -950,6 +950,8 @@ function stopRecordingTimer(recording) {
 
 function closeRecording(recording) {
   if (!recording) return;
+  // A frame still under way when a recording is stopped, replaced or dropped must not be sent.
+  recording.closed = true;
   stopRecordingTimer(recording);
   if (recording.socket) {
     try {
@@ -1015,12 +1017,23 @@ async function sendRecordingFrame(recording, bytes, frame, time) {
     if (recording.socket.readyState !== WebSocket.OPEN) {
       throw new Error('the receiver closed the connection');
     }
+    // A receiver that does not keep up would otherwise queue frames in memory.
+    if (recording.socket.bufferedAmount > 0) {
+      recording.skipped++;
+      return false;
+    }
     recording.socket.send(JSON.stringify({ recording: recording.id, frame, time }));
     recording.socket.send(bytes);
-    return;
+    return true;
   }
+  // No redirects (a receiver on this machine must not pass the frames on to another host),
+  // no cookies, and a time limit, so a receiver that never answers cannot hang a recording.
   const response = await fetch(recording.url.href, {
     method: 'POST',
+    redirect: 'error',
+    credentials: 'omit',
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10000),
     headers: {
       'Content-Type': 'image/jpeg',
       'X-FoxMCP-Recording': recording.id,
@@ -1032,13 +1045,17 @@ async function sendRecordingFrame(recording, bytes, frame, time) {
   if (!response.ok) {
     throw new Error(`the receiver answered HTTP ${response.status}`);
   }
+  return true;
 }
 
 async function captureRecordingFrame(recording) {
   const dataUrl = await browser.tabs.captureTab(recording.tabId, recording.options);
+  // The recording may have been stopped, replaced or dropped while the capture was under way.
+  if (recording.closed) return;
   const frame = recording.sent;
-  await sendRecordingFrame(recording, dataUrlToBytes(dataUrl), frame, new Date().toISOString());
-  recording.sent++;
+  const delivered = await sendRecordingFrame(
+    recording, dataUrlToBytes(dataUrl), frame, new Date().toISOString());
+  if (delivered) recording.sent++;
 }
 
 // One tick of the timer. A tick that finds the previous frame still on its way is skipped, so a
@@ -1060,6 +1077,9 @@ async function tickRecording(recording) {
     stopRecordingTimer(recording);
   } finally {
     recording.busy = false;
+  }
+  if (recording.sent >= recording.maxFrames) {
+    closeRecording(recording);
   }
 }
 
@@ -1464,14 +1484,24 @@ async function handleTabsAction(id, action, data) {
           await captureRecordingFrame(recording);
         } catch (startError) {
           closeRecording(recording);
-          recordings.delete(recordingId);
+          if (recordings.get(recordingId) === recording) recordings.delete(recordingId);
           sendError(id, 'API_ERROR',
             `Cannot record tab ${recordTabId} to ${target.href}: ${startError.message}`);
+          break;
+        }
+        // Another start on this tab, or the tab closing, may have taken the recording over
+        // while the first frame was on its way.
+        if (recordings.get(recordingId) !== recording || recording.closed) {
+          closeRecording(recording);
+          sendError(id, 'API_ERROR',
+            `The recording of tab ${recordTabId} was replaced or its tab closed before it started`);
           break;
         }
         recording.busy = false;
         if (recording.sent < maxFrames) {
           recording.timer = setInterval(() => tickRecording(recording), intervalMs);
+        } else {
+          closeRecording(recording);
         }
         sendResponse(id, action, { recordingId, url: target.href, intervalMs, maxFrames });
         break;
