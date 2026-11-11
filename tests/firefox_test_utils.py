@@ -62,13 +62,16 @@ class FirefoxTestManager:
     _cache_dir = None
     _max_cache_size = 10
 
-    def __init__(self, firefox_path=None, test_port=None, coordination_file=None, cache_profiles=True):
+    def __init__(self, firefox_path=None, test_port=None, coordination_file=None, cache_profiles=True,
+                 extension_path=None):
         self.firefox_path = firefox_path or os.environ.get('FIREFOX_PATH', 'firefox')
         self.test_port = test_port or get_firefox_test_port()
         self.coordination_file = coordination_file
         self.profile_dir = None
         self.firefox_process = None
-        self.cache_profiles = cache_profiles
+        self.extension_path = extension_path
+        # Custom test extensions must neither reuse nor populate the shared cache.
+        self.cache_profiles = cache_profiles and extension_path is None
 
     @classmethod
     def _get_cache_dir(cls):
@@ -397,7 +400,7 @@ user_pref("extensions.foxmcp.testPort", ''' + str(self.test_port) + ''');
             self._setup_extension_test_config()
 
             # Install extension as part of profile creation
-            extension_path = _get_extension_xpi_path()
+            extension_path = self.extension_path or _get_extension_xpi_path()
             if not extension_path or not os.path.exists(extension_path):
                 raise FileNotFoundError("Extension XPI not found. Run 'make package' first.")
 

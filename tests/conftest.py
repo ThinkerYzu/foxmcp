@@ -92,8 +92,14 @@ def firefox_with_test_ports():
         return None
 
 
+@pytest.fixture
+def firefox_extension():
+    """Override with a custom test XPI; the default uses the packaged extension."""
+    return None
+
+
 @pytest_asyncio.fixture
-async def server_with_extension():
+async def server_with_extension(firefox_extension):
     """
     Shared fixture for starting server and Firefox extension for integration testing.
 
@@ -132,7 +138,8 @@ async def server_with_extension():
         firefox = FirefoxTestManager(
             firefox_path=firefox_path,
             test_port=test_port,
-            coordination_file=coord_file
+            coordination_file=coord_file,
+            extension_path=firefox_extension
         )
 
         try:

@@ -23,6 +23,12 @@ with the maintainer.
   status/destination at the top level, and selects chains by initial URL/method/
   resource type, fixing method-filter dependence on other monitors.
 
+- Content text/HTML reads from PR #33 now reload discarded tabs and execute
+  their pages before reading. Concurrent readers share a reload; a tab that
+  does not finish loading within 15 seconds returns an `API_ERROR`. This is an
+  observable change to existing content actions, covered by the same next
+  protocol-ID increment rather than a separate increment for this PR.
+
 Update both peers, compatibility tests and the final release review before
 rehearsing, tagging or publishing. See the
 [protocol policy](docs/protocol.md#protocol-id-compatibility-policy) and
