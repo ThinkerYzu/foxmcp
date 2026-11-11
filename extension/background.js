@@ -971,6 +971,20 @@ function captureRegionOptions(data) {
   return result;
 }
 
+// The server accepts one message of at most 1 MiB from the extension (see Known Limits in
+// docs/architecture.md) and closes the connection on a larger one, which would drop the whole
+// profile. A screenshot that large is refused here with a message that says how to shrink it.
+const MAX_SCREENSHOT_DATA_URL_LENGTH = 1000000;
+
+function screenshotTooLarge(dataUrl) {
+  if (dataUrl.length <= MAX_SCREENSHOT_DATA_URL_LENGTH) {
+    return null;
+  }
+  return `The screenshot is ${dataUrl.length} characters as a data URL, over the `
+    + `${MAX_SCREENSHOT_DATA_URL_LENGTH} the connection to the server can carry; use jpeg, a lower `
+    + 'quality or scale, or a smaller region';
+}
+
 // The tab group properties a request sets, out of title, color and collapsed
 //
 // Fields the request leaves out are left out here too, so Firefox keeps the
@@ -1307,6 +1321,11 @@ async function handleTabsAction(id, action, data) {
 
         try {
           const dataUrl = await browser.tabs.captureVisibleTab(windowId, options);
+          const visibleTooLarge = screenshotTooLarge(dataUrl);
+          if (visibleTooLarge) {
+            sendError(id, 'CAPTURE_ERROR', visibleTooLarge);
+            break;
+          }
           sendResponse(id, action, {
             dataUrl: dataUrl,
             format: options.format,
@@ -1341,6 +1360,11 @@ async function handleTabsAction(id, action, data) {
 
         try {
           const dataUrl = await browser.tabs.captureTab(captureTabId, captureOptions);
+          const tabTooLarge = screenshotTooLarge(dataUrl);
+          if (tabTooLarge) {
+            sendError(id, 'CAPTURE_ERROR', tabTooLarge);
+            break;
+          }
           sendResponse(id, action, {
             dataUrl: dataUrl,
             format: captureOptions.format,

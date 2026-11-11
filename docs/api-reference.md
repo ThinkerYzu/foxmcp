@@ -100,6 +100,9 @@ does not rely on an extension-supplied name or a user-entered label.
     visible area) in CSS pixels times `scale`, whatever the display: a region with no `scale` is
     captured at `scale` 1, so `400 x 200` gives `400 x 200` pixels, while a request with neither a
     region nor a `scale` keeps the display pixel density, as before
+  - An image whose data URL is over 1,000,000 characters is refused with a `CAPTURE_ERROR` that says
+    to use `jpeg`, a lower `quality` or `scale`, or a smaller region: the connection to the server
+    carries at most 1 MiB per message. A large region with a high `scale` can reach that
 
 ### Firefox Containers
 

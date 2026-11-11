@@ -723,7 +723,10 @@ older than this change ignores both fields and returns the whole image, so a cli
 region should check the extension version.
 
 `tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
-that does not exist or cannot be captured is a `CAPTURE_ERROR`.
+that does not exist or cannot be captured is a `CAPTURE_ERROR`. So is an image whose data URL is
+longer than 1,000,000 characters: the server accepts one message of 1 MiB from the extension and
+closes the connection on a larger one (see Known Limits in `architecture.md`), so the extension
+refuses to send it and the message says to use jpeg, a lower quality or scale, or a smaller region.
 
 ### 3. Tab Content
 
@@ -1654,7 +1657,7 @@ request-error envelope.
 | `UNKNOWN_ACTION` | The action namespace or operation is unsupported. |
 | `INVALID_PARAMETER` | An action field is missing or has an invalid type/value. |
 | `UNSUPPORTED_API` | This Firefox lacks the API or permission required for the action. |
-| `CAPTURE_ERROR` | The screenshot API rejected capture of the visible or specified tab. |
+| `CAPTURE_ERROR` | The screenshot API rejected capture of the visible or specified tab, or the image is too large for the connection. |
 | `WINDOW_NOT_FOUND` | Firefox rejected a window ID as invalid. |
 | `INVALID_WINDOW_STATE` | Firefox rejected a requested window state. |
 | `INVALID_WINDOW_TYPE` | Firefox rejected a requested window type. |

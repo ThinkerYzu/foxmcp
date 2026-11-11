@@ -1502,6 +1502,8 @@ class FoxMCPTools:
             pixels times scale: with a region and no scale it is the size of the region on
             any display (400 x 200 gives 400 x 200 pixels), and scale 2 gives 800 x 400.
             Without a region and without scale the image keeps the display pixel density.
+            An image over about 1 MB as a data URL is refused (the connection carries at most
+            1 MiB per message): use jpeg, a lower quality or scale, or a smaller region.
 
             What comes back depends on whether you pass a filename: with one, the image is
             written to disk and you get a success message and the path; without one, you get
