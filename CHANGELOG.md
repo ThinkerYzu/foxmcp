@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- `content_read_console` returns what a page logged to its console and its uncaught errors, filtered by level and text.
-
 ### Changed
 
 - Enforce fixed tool counts and complete archive tool coverage during release
