@@ -85,6 +85,13 @@ WebSocket to `/` on that port. MCP clients discover connected profiles and
 address every browser call with a `profile_id`; there is no active-profile
 default. See [profile discovery](api-reference.md#firefox-profiles).
 
+The extension owns per-monitor capture options and stored request/response body
+projections. Overlapping monitors share one intercepted network stream, while
+retaining separate body policies and byte limits. The server's `FoxMCPTools`
+validates the typed capture options before forwarding them; the extension also
+validates raw protocol requests. These responsibilities use the existing diagram
+components and connections. See [capture options](web-request-monitoring.md#options).
+
 ## Component Architecture
 
 ### 1. Firefox Extension
