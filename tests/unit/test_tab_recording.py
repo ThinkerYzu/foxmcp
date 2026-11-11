@@ -1,19 +1,9 @@
-"""Tests for recording a tab and assembling the frames into a GIF"""
-
-import base64
-import io
+"""Tests for recording a tab to a receiver on this machine"""
 
 import pytest
-from PIL import Image
 
 import test_imports  # Automatic path setup
-from server.mcp_tools import FoxMCPTools, assemble_recording
-
-
-def jpeg(color):
-    out = io.BytesIO()
-    Image.new("RGB", (8, 6), color).save(out, "JPEG")
-    return out.getvalue()
+from server.mcp_tools import FoxMCPTools
 
 
 class StubWebSocketServer:
@@ -28,55 +18,74 @@ class StubWebSocketServer:
         return self.response
 
 
-class FrameServer:
-    """Plays the extension's recording requests with canned frames"""
-
-    def __init__(self, frames):
-        self.frames = frames
-        self.actions = []
-
-    async def send_request_and_wait(self, request, timeout=30.0):
-        action = request["action"]
-        self.actions.append(action)
-        if action == "tabs.record_stop":
-            return {"type": "response", "data": {"frames": len(self.frames), "error": None}}
-        if action == "tabs.record_frame":
-            data = self.frames[request["data"]["index"]]
-            url = "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii")
-            return {"type": "response", "data": {"dataUrl": url, "delayMs": 500}}
-        return {"type": "response", "data": {"discarded": True}}
+@pytest.fixture
+def stub_server():
+    return StubWebSocketServer()
 
 
-async def call(server, name, **kwargs):
-    tool = await FoxMCPTools(server).mcp.get_tool(name)
-    return await tool.fn(**kwargs)
+@pytest.fixture
+def call(stub_server):
+    tools = FoxMCPTools(stub_server)
+
+    async def run(name, **kwargs):
+        tool = await tools.mcp.get_tool(name)
+        return await tool.fn(**kwargs)
+
+    return run
+
+
+URL = "http://127.0.0.1:8099/frames"
 
 
 class TestRecordStart:
 
     @pytest.mark.asyncio
-    async def test_sends_the_settings(self):
-        stub = StubWebSocketServer()
-        stub.response = {"type": "response", "data": {
-            "recordingId": "rec-4", "intervalMs": 250, "maxFrames": 10}}
+    async def test_sends_the_url_and_the_settings(self, call, stub_server):
+        stub_server.response = {"type": "response", "data": {
+            "recordingId": "rec-4", "url": URL, "intervalMs": 250, "maxFrames": 10}}
 
-        result = await call(stub, "tabs_record_start", profile_id=1, tab_id=4,
+        result = await call("tabs_record_start", profile_id=1, tab_id=4, url=URL,
                             interval_ms=250, max_frames=10)
 
-        assert stub.sent_request["action"] == "tabs.record_start"
-        assert stub.sent_request["data"] == {
-            "tabId": 4, "intervalMs": 250, "maxFrames": 10, "scale": 0.5, "quality": 50}
-        assert result == "Recording tab 4 as rec-4: a frame every 250 ms, up to 10 frames"
+        assert stub_server.sent_request["action"] == "tabs.record_start"
+        assert stub_server.sent_request["data"] == {
+            "tabId": 4, "url": URL, "intervalMs": 250, "maxFrames": 10, "scale": 0.5, "quality": 50}
+        assert result == (f"Recording tab 4 as rec-4 to {URL}: a frame every 250 ms, "
+                          "up to 10 frames")
 
     @pytest.mark.asyncio
-    async def test_reports_a_tab_that_cannot_be_captured(self):
-        stub = StubWebSocketServer()
-        stub.response = {"type": "error", "data": {"message": "Cannot record tab 4"}}
+    @pytest.mark.parametrize("url", [
+        "http://127.0.0.1:8099/", "https://localhost:8443/frames", "ws://[::1]:9000/",
+        "wss://127.0.0.1/stream", "ws://localhost:9000"])
+    async def test_local_addresses_are_accepted(self, call, stub_server, url):
+        stub_server.response = {"type": "response", "data": {"recordingId": "rec-4", "url": url}}
 
-        result = await call(stub, "tabs_record_start", profile_id=1, tab_id=4)
+        await call("tabs_record_start", profile_id=1, tab_id=4, url=url)
 
-        assert result == "Failed to start recording: Cannot record tab 4"
+        assert stub_server.sent_request["data"]["url"] == url
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("url, message", [
+        ("http://example.org/frames", "must point to this machine"),
+        ("http://192.168.1.5:8099/", "must point to this machine"),
+        ("http://127.0.0.1.example.org/", "must point to this machine"),
+        ("http://0.0.0.0:8099/", "must point to this machine"),
+        ("ftp://127.0.0.1/", "must start with"),
+        ("file:///tmp/frames", "must start with"),
+        ("127.0.0.1:8099", "must start with"),
+        ("http://user:secret@127.0.0.1:8099/", "must not carry credentials"),
+        ("http://127.0.0.1:notaport/", "must be a valid URL"),
+        ("", "nonempty string"),
+        ("   ", "nonempty string"),
+        (None, "nonempty string"),
+        (8099, "nonempty string"),
+    ])
+    async def test_other_addresses_are_refused_before_anything_is_sent(
+            self, call, stub_server, url, message):
+        result = await call("tabs_record_start", profile_id=1, tab_id=4, url=url)
+
+        assert result.startswith("Failed to start recording: ") and message in result
+        assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("arguments, name", [
@@ -90,93 +99,62 @@ class TestRecordStart:
         ({"quality": 101}, "quality"),
         ({"quality": "50"}, "quality"),
     ])
-    async def test_integer_arguments_are_checked(self, arguments, name):
-        stub = StubWebSocketServer()
-
-        result = await call(stub, "tabs_record_start", profile_id=1, tab_id=4, **arguments)
+    async def test_integer_arguments_are_checked(self, call, stub_server, arguments, name):
+        result = await call("tabs_record_start", profile_id=1, tab_id=4, url=URL, **arguments)
 
         assert result.startswith(f"Failed to start recording: {name} must be an integer")
-        assert stub.sent_request is None
+        assert stub_server.sent_request is None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("scale", [0, -0.5, 1.5, float("nan"), float("inf"), True, "0.5"])
-    async def test_scale_must_be_above_zero_and_at_most_one(self, scale):
-        stub = StubWebSocketServer()
-
-        result = await call(stub, "tabs_record_start", profile_id=1, tab_id=4, scale=scale)
+    async def test_scale_must_be_above_zero_and_at_most_one(self, call, stub_server, scale):
+        result = await call("tabs_record_start", profile_id=1, tab_id=4, url=URL, scale=scale)
 
         assert result == "Failed to start recording: scale must be a number above 0 and at most 1"
-        assert stub.sent_request is None
+        assert stub_server.sent_request is None
+
+    @pytest.mark.asyncio
+    async def test_reports_a_receiver_that_is_not_there(self, call, stub_server):
+        stub_server.response = {"type": "error", "data": {
+            "code": "API_ERROR",
+            "message": f"Cannot record tab 4 to {URL}: the receiver answered HTTP 500"}}
+
+        result = await call("tabs_record_start", profile_id=1, tab_id=4, url=URL)
+
+        assert result == ("Failed to start recording: "
+                          f"Cannot record tab 4 to {URL}: the receiver answered HTTP 500")
 
 
 class TestRecordStop:
 
     @pytest.mark.asyncio
-    async def test_builds_a_gif_and_merges_repeats(self, tmp_path):
-        red, blue = jpeg("red"), jpeg("blue")
-        server = FrameServer([red, red, blue])
+    async def test_reports_the_frames_that_were_sent(self, call, stub_server):
+        stub_server.response = {"type": "response", "data": {
+            "frames": 12, "skipped": 0, "durationMs": 6100, "error": None}}
 
-        result = await call(server, "tabs_record_stop", profile_id=1, recording_id="rec-4",
-                            filename=str(tmp_path / "out" / "demo"))
+        result = await call("tabs_record_stop", profile_id=1, recording_id="rec-4")
 
-        gif = tmp_path / "out" / "demo.gif"
-        assert gif.exists()
-        assert "3 frame(s) (2 distinct)" in result
-        with Image.open(gif) as image:
-            assert image.n_frames == 2
-        assert server.actions == ["tabs.record_stop", "tabs.record_frame", "tabs.record_frame",
-                                  "tabs.record_frame", "tabs.record_discard"]
+        assert stub_server.sent_request["action"] == "tabs.record_stop"
+        assert stub_server.sent_request["data"] == {"recordingId": "rec-4"}
+        assert result == "Recording rec-4 stopped: 12 frame(s) sent in 6100 ms"
 
     @pytest.mark.asyncio
-    async def test_reports_an_unknown_recording(self):
-        stub = StubWebSocketServer()
-        stub.response = {"type": "error", "data": {"message": "No recording rec-9"}}
+    async def test_reports_skipped_frames_and_an_early_end(self, call, stub_server):
+        stub_server.response = {"type": "response", "data": {
+            "frames": 3, "skipped": 2, "durationMs": 900,
+            "error": "the receiver closed the connection"}}
 
-        result = await call(stub, "tabs_record_stop", profile_id=1, recording_id="rec-9",
-                            filename="x.gif")
+        result = await call("tabs_record_stop", profile_id=1, recording_id="rec-4")
+
+        assert result == ("Recording rec-4 stopped: 3 frame(s) sent in 900 ms, "
+                          "2 skipped because the receiver was slow; "
+                          "it ended early: the receiver closed the connection")
+
+    @pytest.mark.asyncio
+    async def test_reports_an_unknown_recording(self, call, stub_server):
+        stub_server.response = {"type": "error", "data": {
+            "code": "RECORDING_NOT_FOUND", "message": "No recording rec-9"}}
+
+        result = await call("tabs_record_stop", profile_id=1, recording_id="rec-9")
 
         assert result == "Failed to stop recording: No recording rec-9"
-
-
-    @pytest.mark.asyncio
-    async def test_a_failed_frame_read_still_discards_the_recording(self, tmp_path):
-        class FailingFrames(FrameServer):
-            async def send_request_and_wait(self, request, timeout=30.0):
-                if request["action"] == "tabs.record_frame":
-                    self.actions.append(request["action"])
-                    return {"type": "error", "data": {"message": "No frame 0 in recording rec-4"}}
-                return await super().send_request_and_wait(request, timeout)
-
-        server = FailingFrames([jpeg("red")])
-
-        result = await call(server, "tabs_record_stop", profile_id=1, recording_id="rec-4",
-                            filename=str(tmp_path / "demo.gif"))
-
-        assert result == "Failed to read frame 0: No frame 0 in recording rec-4"
-        assert server.actions[-1] == "tabs.record_discard"
-
-    @pytest.mark.asyncio
-    async def test_filename_must_not_be_empty(self):
-        stub = StubWebSocketServer()
-
-        result = await call(stub, "tabs_record_stop", profile_id=1, recording_id="rec-4", filename=" ")
-
-        assert result == "Failed to save the recording: filename must be a non-empty string"
-        assert stub.sent_request is None
-
-
-class TestAssemble:
-
-    def test_without_pillow_frames_are_saved_as_files(self, tmp_path, monkeypatch):
-        import sys
-        monkeypatch.setitem(sys.modules, "PIL", None)
-
-        result = assemble_recording([(b"one", 500), (b"two", 500), (b"two", 500)],
-                                    str(tmp_path / "demo.gif"))
-
-        assert "Pillow is not installed" in result
-        assert sorted(p.name for p in (tmp_path / "demo").iterdir()) == ["frame-000.jpg", "frame-001.jpg"]
-
-    def test_no_frames_is_an_error(self, tmp_path):
-        with pytest.raises(ValueError, match="no frames"):
-            assemble_recording([], str(tmp_path / "demo.gif"))

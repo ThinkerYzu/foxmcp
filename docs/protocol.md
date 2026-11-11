@@ -708,26 +708,34 @@ answers `UNKNOWN_ACTION`.
 that does not exist or cannot be captured is a `CAPTURE_ERROR`.
 
 #### Record a Tab
-A recording is a series of JPEG captures of one tab, kept in the extension; no encoder
-runs in the browser. The server fetches the frames one request at a time and builds the
-GIF, so no message carries more than one frame.
+A recording sends small JPEG captures of one tab to a receiver on this machine as they are taken,
+and keeps none of them. The receiver is a web server or a websocket the client runs; the extension
+sends only to `127.0.0.1`, `localhost` or `[::1]`, and refuses any other address.
 
 ```json
-{"action": "tabs.record_start", "data": {"tabId": 123, "intervalMs": 500, "maxFrames": 60, "scale": 0.5, "quality": 50}}
+{"action": "tabs.record_start", "data": {"tabId": 123, "url": "http://127.0.0.1:8099/", "intervalMs": 500, "maxFrames": 60, "scale": 0.5, "quality": 50}}
 {"action": "tabs.record_stop", "data": {"recordingId": "rec-123"}}
-{"action": "tabs.record_frame", "data": {"recordingId": "rec-123", "index": 0}}
-{"action": "tabs.record_discard", "data": {"recordingId": "rec-123"}}
 ```
 
-`tabs.record_start` answers `{"recordingId", "intervalMs", "maxFrames"}` after the first
-frame is taken (a tab that cannot be captured is a `CAPTURE_ERROR`). `intervalMs` is
-an integer from 100 to 5000, `maxFrames` from 1 to 300, `quality` from 1 to 100 and `scale` a finite
-number above 0 and at most 1, otherwise the answer is an `INVALID_PARAMETER` error (all four are
-required). Capturing stops at `maxFrames`. There is one recording per tab, and starting again
-replaces it. Frames are dropped when the tab closes or the connection to the server ends. `tabs.record_stop` answers
-`{"frames", "intervalMs", "durationMs", "error"}`, `tabs.record_frame` answers
-`{"dataUrl", "delayMs"}` with the time since the previous frame, and an unknown recording
-or frame is `RECORDING_NOT_FOUND`.
+`tabs.record_start` answers `{"recordingId", "url", "intervalMs", "maxFrames"}` after the first
+frame has been delivered, so a receiver that is not there, or that refuses the frame, is an
+`API_ERROR`. All six fields are required: `url` must start with `http://`, `https://`, `ws://` or
+`wss://`, point to this machine and carry no credentials, `intervalMs` is an integer from 100 to
+5000, `maxFrames` from 1 to 300, `quality` from 1 to 100 and `scale` a finite number above 0 and at
+most 1, otherwise the answer is an `INVALID_PARAMETER` error. There is one recording per tab, and
+starting again replaces it. Capturing stops by itself at `maxFrames`. A recording is dropped when
+its tab closes or the connection to the server ends.
+
+Over HTTP every frame is a `POST` of the JPEG (`Content-Type: image/jpeg`) with the headers
+`X-FoxMCP-Recording`, `X-FoxMCP-Frame` (from 0) and `X-FoxMCP-Time` (an ISO time); any 2xx
+status is accepted. Over a websocket every frame is a text message
+`{"recording": "rec-123", "frame": 0, "time": "..."}` followed by a binary message with the JPEG.
+A frame that is still on its way when the next one is due makes the extension skip that one. A
+failed send (a status other than 2xx, a closed websocket) ends the recording.
+
+`tabs.record_stop` answers `{"frames", "skipped", "durationMs", "error"}`: the frames delivered,
+the ticks skipped because the receiver was slow, how long the recording ran and why it ended early,
+or `null`. An unknown recording is `RECORDING_NOT_FOUND`.
 
 ### 3. Tab Content
 
@@ -1665,7 +1673,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
-| `RECORDING_NOT_FOUND` | No screen recording, or no such frame in it, exists with the supplied ID. |
+| `RECORDING_NOT_FOUND` | No screen recording exists with the supplied ID. |
 
 ### Script execution and consent errors
 
