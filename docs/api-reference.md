@@ -92,8 +92,9 @@ does not rely on an extension-supplied name or a user-entered label.
   - With `tab_id`, that tab is captured wherever it is: a background tab, or one in a window that is
     not in front, and nothing is switched. Not together with `window_id`. Needs an extension that
     has `tabs.captureTab`; an older one answers that it is too old
-  - `x`, `y`, `width`, `height` (optional, all four together, integer CSS pixels from the top-left of the whole page, not of what is visible, so scrolling does not change the region; `x` and `y` at
-    least 0, `width` and `height` above 0) capture only that region
+  - `x`, `y`, `width`, `height` (optional, all four together, integer CSS pixels from the top-left
+    of the whole page, not of what is visible, so scrolling does not change the region; `x` and `y`
+    at least 0, `width` and `height` above 0) capture only that region
   - `scale` (optional, a finite number above 0 and at most 4) is the number of output pixels per
     CSS pixel: `0.5` halves the image and `2` gives a sharper one. The image is the region (or the
     visible area) in CSS pixels times `scale`, whatever the display: a region with no `scale` is

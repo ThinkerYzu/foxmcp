@@ -718,8 +718,9 @@ scroll position does not change what it selects:
 above 0. A `rect` or `scale` that breaks these rules is an `INVALID_PARAMETER` error, not a
 full-size capture. The image is the region (or the visible area) in CSS pixels times `scale`,
 whatever the display: a `rect` with no `scale` is captured at `scale` 1 (Firefox itself would use
-the device pixel ratio), and a request with neither is left to Firefox as before. An extension older than this change ignores both fields and returns the whole
-image, so a client that needs the region should check the extension version.
+the device pixel ratio), and a request with neither is left to Firefox as before. An extension
+older than this change ignores both fields and returns the whole image, so a client that needs the
+region should check the extension version.
 
 `tabId` must be a non-negative integer (`INVALID_PARAMETER` otherwise). A tab
 that does not exist or cannot be captured is a `CAPTURE_ERROR`.

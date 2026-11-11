@@ -129,8 +129,7 @@ class TestScreenshotRegion:
         assert stub_server.sent_request["data"]["scale"] == float(good)
 
     @pytest.mark.asyncio
-    async def test_a_region_without_scale_sends_none_for_the_extension_to_default(
-            self, capture, stub_server):
+    async def test_a_region_without_scale_omits_scale(self, capture, stub_server):
         await capture(profile_id=1, x=0, y=0, width=400, height=200)
 
         assert "scale" not in stub_server.sent_request["data"]
