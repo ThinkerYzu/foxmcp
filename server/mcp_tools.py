@@ -1493,25 +1493,11 @@ class FoxMCPTools:
             height: Optional[int] = None,
             scale: Optional[float] = None
         ) -> str:
-            """Capture a tab screenshot, optionally cropping or scaling the image
+            """Capture a tab screenshot with optional crop and scale
 
-            Use tab_id to capture a specific tab without activating it. Otherwise capture
-            the active tab in window_id, or the current window if window_id is omitted.
-            Do not combine tab_id and window_id. Provide filename to save the complete
-            image; without it, the result contains only a data-URL preview and size count.
-
-            For a crop, supply x, y, width and height together as integer CSS pixels from
-            the document's top-left corner. Scrolling does not change these coordinates.
-            x and y must be non-negative; width and height must be positive.
-
-            scale is output pixels per CSS pixel, with 0 < scale <= 4. It defaults to 1
-            for a crop and to the target tab's device pixel ratio (DPR) without a crop.
-            A 400 x 200 crop produces 400 x 200 output pixels by default, 200 x 100 at
-            scale 0.5, or 800 x 400 at scale 2, independent of DPR.
-
-            Data URLs longer than 1,000,000 characters are refused with CAPTURE_ERROR
-            to protect the connection. This also applies when saving to a file. Use jpeg,
-            lower JPEG quality, a smaller scale or a smaller crop to reduce image size.
+            Use filename for the complete image; otherwise return a preview and size.
+            Crops use document-relative CSS pixels. Data URLs over 1,000,000 characters
+            are refused; use a smaller crop/scale or JPEG.
 
             Args:
                 filename: Output path for the complete image; omitted returns a preview and size

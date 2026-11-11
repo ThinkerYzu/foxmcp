@@ -282,7 +282,10 @@ async def tabs_list(profile_id: int) -> str:
     ...
 ```
 
-The docstring becomes the tool description that MCP clients see, so write it for them.
+The text before `Args:` becomes the model-visible tool summary; `Args:` supplies
+parameter descriptions. Keep the summary concise and put longer guidance in the
+API reference. Follow the
+[tool-description guidelines](../CONTRIBUTING.md#tool-descriptions).
 
 **3. Add a test** in `tests/integration/`, using the `server_with_extension` fixture.
 

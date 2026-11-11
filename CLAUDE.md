@@ -25,6 +25,10 @@ include that explanation in the commit-message body. Follow the
 [architecture-review requirements](CONTRIBUTING.md#architecture-review),
 including design discussion and diagram updates before merge.
 
+Keep model-visible tool descriptions concise. Follow the
+[tool-description guidelines](CONTRIBUTING.md#tool-descriptions); put parameter
+details in argument help and longer guidance in the API reference.
+
 Before finishing, review the diff, run checks appropriate to the change, and
 report what changed, validation performed and any remaining limitations.
 

@@ -97,6 +97,17 @@ and explain complex logic.
   references when behavior changes; link to existing references rather than
   repeating them.
 
+### Tool Descriptions
+
+Keep model-visible tool descriptions concise, preferably one brief paragraph
+covering the purpose and essential usage constraints. Put parameter details in
+argument descriptions and longer explanations or examples in the API reference.
+Avoid repeating the signature, parameter list or documentation in the summary.
+
+Review the actual MCP `tools/list` output, including automatically appended
+guidance, when adding or expanding a description. Remove repetition while
+preserving information needed to call the tool correctly.
+
 ### Testing
 
 Use descriptive test names and test the behavior affected by your change.
