@@ -1564,6 +1564,95 @@ async function handleContentAction(id, action, data) {
         break;
       }
 
+      // Runs a script in the tab again and again until it returns something other than null
+      // (or undefined), then answers that value. The script goes through the same consent
+      // gate as content.execute_script, so a tab that needs approval is asked once and the
+      // later runs reuse the answer. The first run may wait for the person to approve, so
+      // the time limit starts after it; every later run has to end within what is left.
+      case 'content.wait': {
+        if (typeof data.script !== 'string' || data.script.trim() === '') {
+          sendError(id, 'INVALID_PARAMETER', 'script must be a nonempty string');
+          break;
+        }
+        if (!Number.isInteger(data.timeoutMs) || data.timeoutMs < 1 || data.timeoutMs > 120000) {
+          sendError(id, 'INVALID_PARAMETER', 'timeoutMs must be an integer from 1 to 120000');
+          break;
+        }
+        if (!Number.isInteger(data.intervalMs) || data.intervalMs < 100 || data.intervalMs > 5000) {
+          sendError(id, 'INVALID_PARAMETER', 'intervalMs must be an integer from 100 to 5000');
+          break;
+        }
+        // The script runs as an indirect eval, so in the global scope of the content script and not in
+        // the scope of this wrapper: it cannot collide with, or see, anything the wrapper declares. The wrapper
+        // answers {value} or {error}, so an error of the script is told apart from the errors of
+        // a tab that cannot be scripted yet (still loading, navigating), and a returned object
+        // cannot be mistaken for an error. The value is cloned once in the page, so one that cannot
+        // be returned (a DOM node, a function) is an error of the script, not a failure to retry.
+        const wrapped = '(async () => { try { return await Promise.resolve((0, eval)(' +
+          JSON.stringify(data.script) + ')).then(result => { structuredClone(result);' +
+          ' return { value: result }; }); } catch (error) {' +
+          ' return { error: String((error && error.message) || error) }; } })()';
+        const started = Date.now();
+        let deadline = null;
+        let attempts = 0;
+        let lastProblem = null;
+        let finished = false;
+        while (!finished) {
+          const remaining = deadline === null ? 90000 : deadline - Date.now();
+          // Timers can fire a little early, so a sliver of time left is no time to run again.
+          if (remaining <= 0 || (deadline !== null && remaining < 20)) break;
+          attempts++;
+          let timer;
+          try {
+            const results = await Promise.race([
+              scriptConsent.run(id, data.tabId, wrapped),
+              new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('attempt timed out')), remaining); })
+            ]);
+            const outcome = results && results.length > 0 ? results[0] : null;
+            if (outcome && typeof outcome === 'object' && 'error' in outcome) {
+              sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${outcome.error}`);
+              finished = true;
+            } else if (outcome && outcome.value !== null && outcome.value !== undefined) {
+              sendResponse(id, action, {
+                result: outcome.value, waitedMs: Date.now() - started, attempts,
+                url: await getCurrentTabUrl(data.tabId)
+              });
+              finished = true;
+            }
+            lastProblem = null;
+          } catch (waitError) {
+            if (typeof waitError.code === 'string' && waitError.code) {
+              // Consent was denied or cancelled, or the origin changed: not worth another run.
+              sendError(id, waitError.code, `Wait script not run: ${waitError.message}`);
+              finished = true;
+            } else if (waitError.message === 'attempt timed out') {
+              lastProblem = 'a run of the script did not finish';
+              break;
+            } else {
+              // The tab cannot be scripted right now (loading, navigating): look again, unless
+              // it is gone.
+              try {
+                await browser.tabs.get(data.tabId);
+              } catch (tabError) {
+                sendError(id, 'API_ERROR', `Tab ${data.tabId} not found: ${tabError.message}`);
+                finished = true;
+              }
+              lastProblem = `the tab could not be scripted (${waitError.message})`;
+            }
+          } finally {
+            clearTimeout(timer);
+          }
+          if (finished) break;
+          if (deadline === null) deadline = Date.now() + data.timeoutMs;
+          // Sleep no longer than the time left, so the wait does not overshoot its limit.
+          await new Promise(resolve => setTimeout(resolve, Math.min(data.intervalMs, Math.max(0, deadline - Date.now()))));
+        }
+        if (!finished) {
+          sendError(id, 'WAIT_TIMEOUT', `Timed out after ${data.timeoutMs} ms: ${lastProblem || 'the script kept returning null'}`);
+        }
+        break;
+      }
+
       case 'content.get_text':
         const textResult = await sendMessageWithRetry(data.tabId, {
           action: 'extractText'

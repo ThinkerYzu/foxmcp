@@ -812,6 +812,26 @@ opened the tab. If it does not finish loading in time the request fails with an 
 }
 ```
 
+#### Wait
+`content.wait` runs a script in the tab every `intervalMs` until it returns something other than
+`null` or `undefined`, then answers that value. A returned promise is awaited, `false` and `0`
+count as values, and the value must be JSON-compatible. The script goes through the same consent
+gate as `content.execute_script`, so with script consent on the first run may wait for the
+person to approve, the later runs reuse the answer, and the time limit starts after the first run
+(a single run, the first included, is cut off after 90 seconds at most). A script that throws, or
+returns a value that cannot be cloned (a DOM node, a function), ends the wait with
+`SCRIPT_ERROR`; a tab that no longer exists is an `API_ERROR`; a tab that cannot be scripted yet (loading, navigating) is tried
+again until the limit; consent errors are the ones `content.execute_script` gives.
+
+```json
+{"action": "content.wait", "data": {"tabId": 123, "script": "document.querySelector('#done') ? true : null", "timeoutMs": 10000, "intervalMs": 200}}
+{"type": "response", "data": {"result": true, "waitedMs": 420, "attempts": 3, "url": "https://example.org/done"}}
+```
+
+`timeoutMs` is an integer from 1 to 120000 and `intervalMs` from 100 to 5000, otherwise the answer
+is an `INVALID_PARAMETER` error. `WAIT_TIMEOUT` says whether the script kept returning `null`, a
+run did not finish, or the tab could not be scripted.
+
 #### Execute Script
 **Request:**
 ```json
@@ -1745,6 +1765,7 @@ request-error envelope.
 | `INVALID_FOLDER_ID` | The bookmark-list folder lookup failed. |
 | `MONITOR_NOT_FOUND` | No request monitor exists with the supplied ID. |
 | `REQUEST_NOT_FOUND` | No captured request exists with the supplied ID. |
+| `WAIT_TIMEOUT` | A wait ended before its script returned a value; the message says why. |
 
 ### Script execution and consent errors
 

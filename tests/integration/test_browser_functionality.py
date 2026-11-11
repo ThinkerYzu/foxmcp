@@ -466,6 +466,46 @@ class TestBrowserFunctionality:
         print("✅ End-to-end JavaScript execution test successful!")
 
     @pytest.mark.asyncio
+    async def test_end_to_end_content_wait_keeps_the_script_scope_apart(self, full_mcp_system):
+        """content_wait evaluates the caller's script without the wrapper's bindings"""
+        mcp_client = full_mcp_system['mcp_client']
+        await mcp_client.connect()
+
+        create_result = await mcp_client.call_tool("tabs_create", {
+            "url": "https://example.org/", "active": True
+        })
+        if create_result.get('isError', False):
+            pytest.skip(f"Tab creation failed: {create_result.get('content', '')}")
+        await asyncio.sleep(3.0)
+        tabs_content = (await mcp_client.call_tool("tabs_list")).get('content', '')
+        ids = [int(m) for line in tabs_content.splitlines() if 'example.org' in line
+               for m in re.findall(r'ID (\d+):', line)]
+        if not ids:
+            pytest.skip("Could not find the example.org tab")
+        tab_id = ids[0]
+
+        try:
+            # A global named `value`, made the way a script of the same tab makes it, must be
+            # read as that global, not shadowed by a binding of the wrapper
+            await mcp_client.call_tool("content_execute_script", {
+                "tab_id": tab_id, "code": "var value = 'existing global'; value"
+            })
+            read = await mcp_client.call_tool("content_wait", {
+                "tab_id": tab_id, "script": "value", "timeout": 5.0
+            })
+            assert not read.get('isError', False), read
+            assert "existing global" in read['content'], read
+
+            # A statement list that declares `value` must not collide with the wrapper
+            declared = await mcp_client.call_tool("content_wait", {
+                "tab_id": tab_id, "script": "var value = 42; value", "timeout": 5.0
+            })
+            assert not declared.get('isError', False), declared
+            assert declared['content'].rstrip().endswith("42"), declared
+        finally:
+            await mcp_client.call_tool("tabs_close", {"tab_id": tab_id})
+
+    @pytest.mark.asyncio
     async def test_end_to_end_navigation_reload(self, full_mcp_system):
         """Test complete end-to-end page reload functionality via MCP"""
         system = full_mcp_system

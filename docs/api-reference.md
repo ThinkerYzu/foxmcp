@@ -210,6 +210,7 @@ for the complete input-assignment example and transfer details.
   when longer. Neither content reader includes iframe documents.
 - `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts
+- `content_wait(profile_id, tab_id, script, timeout=10.0, interval=0.2)` - Run `script` in the tab every `interval` seconds until it returns something other than `null` or `undefined`, and return that value (`false` and `0` are values). Use it to wait for an element, text, a URL, an animation, a video or an event; for example `document.querySelector('#done') ? true : null`. `script` is a nonempty string whose last value is the result, and a promise is awaited. `timeout` is a number of seconds above 0 and at most 120, counted after the first run, and `interval` is from 0.1 to 5. A script that throws ends the wait with its error (`SCRIPT_ERROR`); a tab that is loading or navigating is tried again; the wait fails with `WAIT_TIMEOUT` when time runs out. The script runs repeatedly, so it must not change the page. It is subject to the same per-tab approval as `content_execute_script`, asked once
 
 ### Web Request Monitoring
 - `requests_start_monitoring(profile_id, url_patterns, options=None, tab_id=None)` - Start monitoring web requests
