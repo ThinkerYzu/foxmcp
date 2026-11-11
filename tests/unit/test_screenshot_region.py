@@ -51,7 +51,8 @@ class TestScreenshotRegion:
         await capture(profile_id=1, x=0, y=0, width=50, height=40)
 
         assert stub_server.sent_request["action"] == "tabs.captureVisibleTab"
-        assert stub_server.sent_request["data"]["rect"] == {"x": 0, "y": 0, "width": 50, "height": 40}
+        assert stub_server.sent_request["data"]["rect"] == {
+            "x": 0, "y": 0, "width": 50, "height": 40}
 
     @pytest.mark.asyncio
     async def test_region_with_window_id(self, capture, stub_server):
