@@ -121,8 +121,8 @@ four filters narrow what is captured:
 | `capture_response_bodies` | `true` | Retain response bodies for this monitor; `false` omits them |
 | `max_body_size` | `50000` | Positive integer bytes kept per response body. The rest is dropped and `truncated` is `true`, but the full size is still counted |
 | `content_types_to_capture` | `["application/json", "text/plain"]` | A body is returned as text only if its `Content-Type` **contains** one of these — `application/json` matches `application/json; charset=utf-8`, and the bare string `json` would match it too. An entry with a `*`, such as `text/*`, matches on the major type. An empty list means every type. Whatever does not match is still counted, and comes back with `content: null` |
-| `methods` | `[]` | HTTP methods to capture, such as `["POST"]`; case-insensitive, and an empty list means every method. Decided when the request starts |
-| `resource_types` | `[]` | Firefox resource types to capture, such as `["xmlhttprequest", "script"]`; an empty list means every type. Decided when the request starts |
+| `methods` | `[]` | HTTP methods to capture, such as `["POST"]`; case-insensitive, and an empty list means every method. Matched against the initial hop of a redirect chain |
+| `resource_types` | `[]` | Firefox resource types to capture, such as `["xmlhttprequest", "script"]`; an empty list means every type. Matched against the initial hop of a redirect chain |
 | `min_status` | `null` | An integer from 100 to 599: only requests whose response status is at least this are listed. A request that failed before any response arrived has no status, so it is not listed |
 | `failed_only` | `false` | `true` lists only requests that failed, meaning an error or a status of 400 and above. A request aborted by navigating away counts as an error |
 
@@ -264,3 +264,45 @@ The full permission list is in [`configuration.md`](configuration.md).
 search, retention policies, storage quotas, session save and load, roughly twenty
 tools in all. Only the four above were ever built. The plan was replaced by this
 reference on 2026-08-14; the unbuilt parts are not planned work.*
+
+
+## Redirect chains
+
+A captured entry represents one Firefox request ID, including its redirects.
+`requests_list_captured` and `requests_get_content` expose `redirects`, an ordered
+array of requests after the original. Each entry has `url` and `method`, plus
+`status_code` when a response arrives, `redirect_url` when it redirects again,
+and `error` on failure. Three redirects produce three array entries; a request
+without redirects has `redirects: []`. Repeated URLs remain separate entries,
+so redirect loops are visible too.
+
+The original request stays at the top level: `url` and `method` identify it,
+`initial_status_code` records its response status and `initial_redirect_url`
+records its redirect destination. The two initial response fields are omitted
+when unavailable. Existing top-level `status_code` and `error` still describe the
+terminal result of the chain. This preserves both original and final response
+information without repeating the original request inside the array.
+
+For example, POST `/submit` answered with 302, followed by GET `/next` answered
+with 301 and GET `/final` answered with 200, produces two `redirects` entries
+(`/next` and `/final`). The top-level URL/method remain POST `/submit`,
+`initial_status_code` is 302, `initial_redirect_url` points to `/next`, and the
+terminal `status_code` is 200.
+
+All configured filters combine with AND. URL patterns, methods, resource types
+and tab selection match the chain's
+initial hop for its entire lifetime. A pattern matching only the redirect
+destination does not select a chain whose initial URL does not match. A GET-only
+monitor excludes a POST-to-GET chain, whether alone or overlapping other monitors.
+Outcome filters (`min_status` and `failed_only`) use the terminal result; a 302
+followed by 200 does not match `failed_only`. Start monitoring before triggering
+the request: a monitor cannot recover events from before capture was active.
+
+Content reads return the same original-request and redirect metadata. Response headers and retained body
+belong to the final observed hop, subject to the normal capture/type/size rules;
+intermediate response bodies are not retained. Request content is the last
+observed request body in the chain, subject to the monitor's request-body toggle.
+Stopped monitors keep their completed chains; disconnect clears captured data.
+The listing `limit` counts chains, not redirect entries, and applies after capture in the
+server. The extension still sends all captured summaries over WebSocket, so
+`limit` reduces client output but does not bound that transport payload.

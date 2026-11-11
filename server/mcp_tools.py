@@ -2696,7 +2696,8 @@ class FoxMCPTools:
             its monitors; profile disconnection clears monitors and captured data.
 
             Args:
-                url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
+                url_patterns: Patterns matched against each chain's initial URL
+                    (e.g., ["https://example.org/api/*", "*/api/*"])
                 options: Strict capture settings; unknown fields are rejected.
                     - capture_request_bodies: bool (default: True)
                     - capture_response_bodies: bool (default: True)
@@ -2827,22 +2828,14 @@ class FoxMCPTools:
             limit: Annotated[Optional[int], Field(strict=True, ge=1)] = None
         ) -> str:
             """
-            List captured request summaries from a monitoring session
-
-            Without limit every summary is returned, which on a busy page can be a
-            great many. Pass limit to keep the answer short: it returns the last
-            requests captured, and total_requests still counts everything.
-
-            A request appears here once it has completed, so a page navigation
-            started a moment ago will not be in the list yet. Start with
-            requests_start_monitoring, then reuse its monitor_id here. This reads
-            stored summaries without starting or stopping capture. Use a returned
-            request_id with requests_get_content to inspect its stored body.
+            List completed request chains with ordered redirected requests. Start monitoring
+            before triggering traffic; use limit to return only the last captured chains.
+            Reads remain available after stop until the profile disconnects.
 
             Args:
                 monitor_id: ID of the monitoring session
-                limit: (optional, an integer of 1 or more) Return only this many of the
-                    last requests captured; the answer then has returned_requests
+                limit: Positive integer cap on returned chains; total_requests remains
+                    the full count and returned_requests counts the limited result
 
             Returns:
                 JSON string with captured request summaries

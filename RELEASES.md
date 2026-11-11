@@ -19,6 +19,10 @@ with the maintainer.
   ignore. Crops default to one output pixel per CSS pixel, and oversized
   captures return `CAPTURE_ERROR` instead of disconnecting the profile.
 
+- Redirect capture exposes follow-on requests in `redirects`, original response
+  status/destination at the top level, and selects chains by initial URL/method/
+  resource type, fixing method-filter dependence on other monitors.
+
 Update both peers, compatibility tests and the final release review before
 rehearsing, tagging or publishing. See the
 [protocol policy](docs/protocol.md#protocol-id-compatibility-policy) and

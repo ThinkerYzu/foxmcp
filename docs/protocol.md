@@ -1488,7 +1488,11 @@ format only.
       "capture_request_bodies": true,
       "capture_response_bodies": true,
       "max_body_size": 50000,
-      "content_types_to_capture": ["application/json", "text/plain"]
+      "content_types_to_capture": ["application/json", "text/plain"],
+      "methods": [],
+      "resource_types": [],
+      "min_status": null,
+      "failed_only": false
     }
   },
   "timestamp": "2026-08-14T12:00:00.100Z"
@@ -1507,7 +1511,11 @@ the answer's `options` always lists all of them. The server sends a filter only 
 because an extension from before the filters rejects options it does not know with
 `INVALID_PARAMETER`. A request that does not match `methods` or `resource_types` is not captured;
 `min_status` and `failed_only` are checked when the request completes, and a request that fails
-them is not listed. The protocol ID stays 3: the options are additive and omitted when unset.
+them is not listed. Development ID remains 3 until the agreed release-preparation
+step; the next release requires ID 4 for the accumulated API changes, including
+redirect-chain responses (including the redirects-only array and separate
+original response metadata) and initial-hop selection. See
+[unreleased compatibility requirements](../RELEASES.md#unreleased-compatibility-requirements).
 Unknown fields, including `sensitive_headers`, and invalid values are rejected;
 the extension returns `INVALID_PARAMETER` before starting a monitor.
 
@@ -1516,6 +1524,22 @@ including overlapping and stopped monitors. `requests.get_content` returns
 `MONITOR_NOT_FOUND` for an unknown monitor and `REQUEST_NOT_FOUND` if the request
 was not captured by that monitor. The global response-body cache retains up to
 200 monitor/request projections; each uses its own size and content-type rules.
+
+#### Redirect metadata
+
+Both list entries and `requests.get_content` data contain `redirects`, ordered
+follow-on requests excluding the original. Each object has `url`, `method` and
+optional `status_code`, `redirect_url` and `error`. A request without redirects
+has an empty array. Three redirects produce three array entries.
+
+Top-level `url` and `method` identify the original request; `initial_status_code`
+and `initial_redirect_url` expose its observed response status and destination.
+Unavailable initial response fields are omitted. Top-level `status_code` and
+`error` reflect the terminal result. Initial metadata used for URL/method/type/tab
+selection is retained independently of capture acceptance until completion or
+failure. Internal hop tracking includes the original, while the public array
+contains only follow-on requests. Completed metadata follows existing retention.
+See [redirect semantics and content association](web-request-monitoring.md#redirect-chains).
 
 #### List Captured
 **Request:**
@@ -1549,7 +1573,9 @@ was not captured by that monitor. The global response-body cache retains up to
         "duration_ms": 118,
         "timestamp": "2026-08-14T12:00:31.221Z",
         "tab_id": 7,
-        "type": "xmlhttprequest"
+        "type": "xmlhttprequest",
+        "initial_status_code": 200,
+        "redirects": []
       }
     ]
   },
@@ -1583,6 +1609,11 @@ A request that failed also carries `error`, Firefox's network error string.
   "action": "requests.get_content",
   "data": {
     "request_id": "1234",
+    "url": "https://example.org/api/items",
+    "method": "GET",
+    "status_code": 200,
+    "initial_status_code": 200,
+    "redirects": [],
     "request_headers": {},
     "response_headers": {"content-type": "application/json"},
     "request_body": {

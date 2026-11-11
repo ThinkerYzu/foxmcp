@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Capture filters for HTTP methods, resource types, minimum status and failures,
+  plus a strict `requests_list_captured` limit and returned-request count.
+- A `redirects` array of follow-on requests in captured summaries and content
+  reads, with URL, method, status, destination and failure. Original URL/method
+  and initial response status/destination stay at the top level.
+
 ### Changed
 
 - Enforce fixed tool counts and complete archive tool coverage during release
@@ -14,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   running without blocking tool additions on catalog totals.
 
 ### Fixed
+
+- Select redirected request chains by their initial URL, method and resource
+  type, independently of other monitors. Capture network events once and keep
+  response content associated with the final observed hop.
 
 - Validate monitoring capture options, reject unsupported fields, honor the
   request-body toggle and isolate body policies across overlapping monitors.

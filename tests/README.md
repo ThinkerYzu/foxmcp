@@ -61,6 +61,12 @@ through MCP, checking overlapping monitors with different byte/type policies,
 disabled request/response capture, complete page delivery, raw-protocol
 validation, monitor membership and reads after stop.
 
+`integration/test_request_capture_filters.py` verifies capture selection and
+listing limits through real Firefox and MCP. It checks original response
+metadata, empty and one/two/three-entry `redirects` arrays, 302/303 method rewriting, 307/308 preservation, final content, redirect failures
+and loops, initial-URL matching, stopped reads, raw option rejection and method
+selection independent of overlapping monitors.
+
 #### Startup composition coverage
 
 `unit/test_server_composition.py` checks the source roles documented in the

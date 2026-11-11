@@ -1842,6 +1842,8 @@ async function handleWindowsAction(id, action, data) {
 const activeMonitors = new Map(); // monitor_id -> monitor config
 const capturedRequests = new Map(); // monitor_id -> array of requests
 const requestDetails = new Map(); // request_id -> full request details
+// Initial metadata survives rejected hops, but only while the chain is in flight.
+const requestStarts = new Map();
 const capturedResponseBodies = new Map(); // [monitor_id, request_id] -> body projection
 const monitorCaptureOptions = new Map(); // kept after stop while captured data is readable
 const MAX_STORED_RESPONSE_BODIES = 200;
@@ -1901,12 +1903,24 @@ function responseBodyKey(monitorId, requestId) {
   return JSON.stringify([monitorId, requestId]);
 }
 
+// Public results keep the original request at the top level. Internally the
+// complete hop list is still needed to correlate response streams and filters.
+function redirectMetadata(request) {
+  const hops = request?.hops || [];
+  return {
+    initial_status_code: hops[0]?.status_code,
+    initial_redirect_url: hops[0]?.redirect_url,
+    redirects: hops.slice(1)
+  };
+}
+
 // WebRequest listener functions
 let onBeforeRequestListener = null;
 let onBeforeSendHeadersListener = null;
 let onSendHeadersListener = null;
 let onHeadersReceivedListener = null;
 let onResponseStartedListener = null;
+let onBeforeRedirectListener = null;
 let onCompletedListener = null;
 let onErrorOccurredListener = null;
 
@@ -1934,6 +1948,8 @@ function setupWebRequestListeners() {
   onHeadersReceivedListener = function(details) {
     handleWebRequestEvent('onHeadersReceived', details);
   };
+
+  onBeforeRedirectListener = details => handleWebRequestEvent('onBeforeRedirect', details);
 
   // Completed - captures final timing and status
   onCompletedListener = function(details) {
@@ -1964,6 +1980,10 @@ function setupWebRequestListeners() {
     ["responseHeaders", "blocking"]
   );
 
+  browser.webRequest.onBeforeRedirect.addListener(
+    onBeforeRedirectListener, { urls: ["<all_urls>"] }
+  );
+
   browser.webRequest.onCompleted.addListener(
     onCompletedListener,
     { urls: ["<all_urls>"] }
@@ -1991,6 +2011,7 @@ function clearAllMonitors(reason) {
   activeMonitors.clear();
   capturedRequests.clear();
   requestDetails.clear();
+  requestStarts.clear();
   capturedResponseBodies.clear();
   monitorCaptureOptions.clear();
 
@@ -2006,6 +2027,7 @@ function stopWebRequestMonitoring() {
     return;
   }
 
+  requestStarts.clear();
   console.log('🛑 Stopping WebRequest monitoring - removing listeners');
 
   if (onBeforeRequestListener) {
@@ -2016,6 +2038,11 @@ function stopWebRequestMonitoring() {
   if (onHeadersReceivedListener) {
     browser.webRequest.onHeadersReceived.removeListener(onHeadersReceivedListener);
     onHeadersReceivedListener = null;
+  }
+
+  if (onBeforeRedirectListener) {
+    browser.webRequest.onBeforeRedirect.removeListener(onBeforeRedirectListener);
+    onBeforeRedirectListener = null;
   }
 
   if (onCompletedListener) {
@@ -2032,36 +2059,33 @@ function stopWebRequestMonitoring() {
 }
 
 function handleWebRequestEvent(eventType, details) {
-  // Check if any monitor should capture this request
-  for (const [monitorId, monitor] of activeMonitors) {
-    if (shouldCaptureRequest(monitor, details)) {
-      captureRequestEvent(monitorId, eventType, details);
-    }
+  if (!requestStarts.has(details.requestId)) {
+    requestStarts.set(details.requestId, {
+      url: details.url, method: details.method || 'GET',
+      type: details.type, tabId: details.tabId
+    });
+  }
+  const monitors = Array.from(activeMonitors.values()).filter(monitor =>
+    shouldCaptureRequest(monitor, details));
+  if (monitors.length > 0) captureRequestEvent(monitors, eventType, details);
+  if (eventType === 'onCompleted' || eventType === 'onErrorOccurred') {
+    requestStarts.delete(details.requestId);
   }
 }
 
 function shouldCaptureRequest(monitor, details) {
-  // Check tab filter
-  if (monitor.tab_id && details.tabId !== monitor.tab_id) {
-    return false;
-  }
-
-  // Check the method and resource type filters, which are known as soon as the request starts.
-  // A redirect keeps the request id but can change the method (a POST answered with 302
-  // is followed as a GET), so a request already recorded keeps the method it started with.
+  // Select the chain by its initial metadata, including chains rejected by all
+  // monitors. Redirects reuse requestId and may change both method and URL.
+  const initial = requestStarts.get(details.requestId) || details;
+  if (monitor.tab_id && initial.tabId !== monitor.tab_id) return false;
   const filters = monitor.options;
-  const known = requestDetails.get(details.requestId);
-  const method = (known ? known.method : (details.method || 'GET')).toUpperCase();
-  if (filters && filters.methods.length > 0 && !filters.methods.includes(method)) {
-    return false;
-  }
-  if (filters && filters.resource_types.length > 0 && !filters.resource_types.includes(details.type)) {
-    return false;
-  }
+  const method = (initial.method || 'GET').toUpperCase();
+  if (filters.methods.length > 0 && !filters.methods.includes(method)) return false;
+  if (filters.resource_types.length > 0 && !filters.resource_types.includes(initial.type)) return false;
 
   // Check URL patterns
   if (monitor.url_patterns && monitor.url_patterns.length > 0) {
-    const url = details.url;
+    const url = initial.url;
     return monitor.url_patterns.some(pattern => {
       // <all_urls> is not glob syntax, but it is what a WebExtensions caller
       // reaches for, and as a glob it matches nothing at all.
@@ -2094,7 +2118,7 @@ function passesOutcomeFilters(options, request) {
   return true;
 }
 
-function captureRequestEvent(monitorId, eventType, details) {
+function captureRequestEvent(monitors, eventType, details) {
   const requestId = details.requestId;
   const timestamp = new Date().toISOString();
 
@@ -2116,12 +2140,25 @@ function captureRequestEvent(monitorId, eventType, details) {
       type: details.type,
       timestamp: timestamp,
       events: [],
+      hops: [],
       listed_by: new Set()
     };
     requestDetails.set(requestId, request);
   }
 
-  // Add event data
+  // One event/hop update per Firefox notification, regardless of monitor count.
+  if (eventType === 'onBeforeRequest' || request.hops.length === 0) {
+    request.hops.push({ url: details.url, method: details.method || 'GET' });
+    delete request.status_code;
+    delete request.response_headers;
+    delete request.response_content_type;
+    delete request.response_content_length;
+    delete request.response_body_size;
+    for (const monitor of monitors) {
+      capturedResponseBodies.delete(responseBodyKey(monitor.id, requestId));
+    }
+  }
+  const hop = request.hops[request.hops.length - 1];
   const event = {
     type: eventType,
     timestamp: timestamp,
@@ -2132,7 +2169,7 @@ function captureRequestEvent(monitorId, eventType, details) {
     case 'onBeforeRequest':
       event.url = details.url;
       event.method = details.method;
-      if (monitorCaptureOptions.get(monitorId)?.capture_request_bodies) {
+      if (monitors.some(monitor => monitor.options.capture_request_bodies)) {
         event.requestBody = details.requestBody;
       }
       break;
@@ -2142,6 +2179,7 @@ function captureRequestEvent(monitorId, eventType, details) {
       event.statusCode = details.statusCode;
       event.statusLine = details.statusLine;
       request.status_code = details.statusCode;
+      hop.status_code = details.statusCode;
       request.response_headers = details.responseHeaders;
 
       // Extract content length and type from headers
@@ -2157,7 +2195,14 @@ function captureRequestEvent(monitorId, eventType, details) {
       }
       break;
 
+    case 'onBeforeRedirect':
+      hop.status_code = details.statusCode;
+      hop.redirect_url = details.redirectUrl;
+      event.redirectUrl = details.redirectUrl;
+      break;
+
     case 'onCompleted':
+      hop.status_code = details.statusCode;
       event.statusCode = details.statusCode;
       request.status_code = details.statusCode;
       request.completed = true;
@@ -2168,34 +2213,37 @@ function captureRequestEvent(monitorId, eventType, details) {
     case 'onErrorOccurred':
       event.error = details.error;
       request.error = details.error;
+      hop.error = details.error;
       request.completed = true;
       break;
   }
 
   request.events.push(event);
 
-  // If request is complete, add to captured list
-  if (request.completed && !request.listed_by.has(monitorId) &&
-      passesOutcomeFilters(monitorCaptureOptions.get(monitorId), request)) {
-    const captured = capturedRequests.get(monitorId) || [];
-    captured.push({
-      request_id: requestId,
-      url: request.url,
-      method: request.method,
-      status_code: request.status_code,
-      duration_ms: request.duration_ms || 0,
-      timestamp: request.timestamp,
-      tab_id: request.tab_id,
-      type: request.type,
-      error: request.error,
-      response_size_bytes: request.response_content_length || 0,
-      response_content_type: request.response_content_type || null
-    });
-    capturedRequests.set(monitorId, captured);
-    request.listed_by.add(monitorId);
+  // Completion is projected independently into every matching monitor.
+  for (const { id: monitorId } of monitors) {
+    if (request.completed && !request.listed_by.has(monitorId) &&
+        passesOutcomeFilters(monitorCaptureOptions.get(monitorId), request)) {
+      const captured = capturedRequests.get(monitorId) || [];
+      captured.push({
+        request_id: requestId,
+        url: request.url,
+        method: request.method,
+        status_code: request.status_code,
+        duration_ms: request.duration_ms || 0,
+        timestamp: request.timestamp,
+        tab_id: request.tab_id,
+        type: request.type,
+        error: request.error,
+        response_size_bytes: request.response_content_length || 0,
+        response_content_type: request.response_content_type || null
+      });
+      capturedRequests.set(monitorId, captured);
+      request.listed_by.add(monitorId);
 
-    const sizeInfo = request.response_content_length ? ` (${request.response_content_length} bytes)` : '';
-    console.log(`📋 Captured request: ${request.method} ${request.url} -> ${request.status_code || 'ERROR'}${sizeInfo}`);
+      const sizeInfo = request.response_content_length ? ` (${request.response_content_length} bytes)` : '';
+      console.log(`📋 Captured request: ${request.method} ${request.url} -> ${request.status_code || 'ERROR'}${sizeInfo}`);
+    }
   }
 }
 
@@ -2230,6 +2278,7 @@ function captureResponseBody(details) {
   }
 
   // Intercept once and buffer the largest prefix needed by any interested monitor.
+  const hop = requestDetails.get(details.requestId)?.hops.at(-1);
   const maxSize = Math.max(...monitors.map(monitor => monitor.options.max_body_size));
   const kept = [];
   let totalBytes = 0;
@@ -2259,8 +2308,10 @@ function captureResponseBody(details) {
 
     try {
       for (const monitor of monitors) {
-        // A disconnected profile must not repopulate storage from a stale stream.
-        if (monitorCaptureOptions.get(monitor.id) === monitor.options) {
+        // Neither a disconnected profile nor an earlier redirect hop may
+        // repopulate the final response cache from a stale stream.
+        if (monitorCaptureOptions.get(monitor.id) === monitor.options &&
+            requestDetails.get(details.requestId)?.hops.at(-1) === hop) {
           storeResponseBody(details.requestId, monitor, kept, totalBytes);
         }
       }
@@ -2461,7 +2512,8 @@ async function handleRequestsAction(id, action, data) {
             timestamp: req.timestamp,
             tab_id: req.tab_id,
             type: req.type,
-            error: req.error
+            error: req.error,
+            ...redirectMetadata(requestDetails.get(req.request_id))
           }))
         });
         break;
@@ -2502,6 +2554,11 @@ async function handleRequestsAction(id, action, data) {
 
         sendResponse(id, action, {
           request_id: data.request_id,
+          url: requestDetail.url,
+          method: requestDetail.method,
+          status_code: requestDetail.status_code,
+          error: requestDetail.error,
+          ...redirectMetadata(requestDetail),
           request_headers: requestHeaders,
           response_headers: responseHeaders,
           request_body: {

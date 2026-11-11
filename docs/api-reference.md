@@ -228,7 +228,14 @@ for the complete input-assignment example and transfer details.
   - Returns JSON with stop status and statistics
   - Captured data outlives the monitor: the two tools below still answer afterwards
 - `requests_list_captured(profile_id, monitor_id, limit=None)` - List captured request summaries
-  - Returns JSON with array of request summaries (metadata only, no full content)
+  - Returns JSON with array of request summaries (metadata only, no full content).
+    Each entry represents a request chain. `redirects` lists only requests after
+    the original, with URL, method and observed status, destination or error.
+    Original URL/method stay at the top level; `initial_status_code` and
+    `initial_redirect_url` preserve its response. Top-level status/error describe
+    the final outcome. Capture selection
+    uses the initial URL/method/resource type; outcome filters use the final result.
+    See [redirect chains](web-request-monitoring.md#redirect-chains).
   - A request appears once it has completed, so a navigation started a moment ago
     is not in the list yet
   - `MONITOR_NOT_FOUND` for an id that never existed or has been cleared. Monitors
@@ -237,9 +244,13 @@ for the complete input-assignment example and transfer details.
   - `limit` (optional, an integer of 1 or more) returns only that many of the last requests
     captured, to keep the answer short on a busy page; the JSON then also has
     `returned_requests`, and `total_requests` still counts everything captured. Anything
-    else is refused with `{"error": ...}` without contacting the extension. To capture less in
+    else is rejected by MCP validation before contacting the extension (direct Python
+    calls return `{"error": ...}`). To capture less in
     the first place, use the capture filters of `requests_start_monitoring`
 - `requests_get_content(profile_id, monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
+  - Includes original URL/method and response metadata plus the chain's ordered
+    `redirects`, excluding the original. Retained response content belongs to the
+    final observed request.
   - `include_binary`: **ignored** — non-text bodies never come back as content, only as a size
   - `save_request_body_to`, `save_response_body_to`: **ignored** — `saved_to_file` is always `null`
   - Returns JSON with response headers and bodies allowed by the selected monitor's
