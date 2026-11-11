@@ -40,6 +40,13 @@ class MonitorOptions(BaseModel):
     max_body_size: int = Field(default=50000, gt=0)
     content_types_to_capture: List[Annotated[str, Field(min_length=1)]] = Field(
         default_factory=lambda: ["application/json", "text/plain"])
+    # Capture filters. An empty list or None selects everything. They are sent to the
+    # extension only when set (see requests_start_monitoring), so an extension that
+    # does not know them keeps working with the defaults.
+    methods: List[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    resource_types: List[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    min_status: Optional[int] = Field(default=None, ge=100, le=599)
+    failed_only: bool = False
 
 # Longest a single script argument may appear in the log before being cut short.
 #
@@ -2660,7 +2667,6 @@ class FoxMCPTools:
             Args:
                 url_patterns: List of URL patterns to monitor (e.g., ["https://api.example.com/*", "*/api/*"])
                 options: Strict capture settings; unknown fields are rejected.
-                    Listing filters belong to requests_list_captured, not here.
                     - capture_request_bodies: bool (default: True)
                     - capture_response_bodies: bool (default: True)
                     - max_body_size: positive int (default: 50000), bytes retained
@@ -2668,6 +2674,17 @@ class FoxMCPTools:
                     - content_types_to_capture: List[str] (default: ["application/json", "text/plain"])
                       — a body comes back as text only if its content type matches one
                       of these and is text to begin with
+                    - methods: (optional) List[str] of HTTP methods to capture, such as
+                      ["POST"], case-insensitive (default: all methods)
+                    - resource_types: (optional) List[str] of Firefox resource types to
+                      capture, such as ["xmlhttprequest", "script"] (default: all types)
+                    - min_status: (optional) int from 100 to 599; list only requests whose
+                      response status is at least this, such as 400
+                    - failed_only: (optional) bool (default: False); list only requests that
+                      failed, meaning an error or a status of 400 and above
+                    methods and resource_types decide what is captured at all. min_status
+                    and failed_only are checked when a request completes, so a response
+                    body can be held for a request that is then not listed.
                 tab_id: Optional tab ID to monitor (if not provided, monitors all tabs)
 
             Returns:
@@ -2681,6 +2698,16 @@ class FoxMCPTools:
                     options if options is not None else {}).model_dump()
             except ValidationError as error:
                 return json.dumps({"error": f"Invalid monitoring options: {error}"})
+
+            # Send a capture filter only when it is set: an extension from before the
+            # filters rejects options it does not know, and must keep working without them.
+            for name in ("methods", "resource_types"):
+                if not default_options[name]:
+                    del default_options[name]
+            if default_options["min_status"] is None:
+                del default_options["min_status"]
+            if default_options["failed_only"] is False:
+                del default_options["failed_only"]
 
             request_data = {
                 "url_patterns": url_patterns,
@@ -2766,19 +2793,14 @@ class FoxMCPTools:
         async def requests_list_captured(
             profile_id: int,
             monitor_id: str,
-            url_contains: Optional[str] = None,
-            method: Optional[str] = None,
-            resource_type: Optional[str] = None,
-            min_status: Optional[int] = None,
-            failed_only: bool = False,
             limit: Optional[int] = None
         ) -> str:
             """
             List captured request summaries from a monitoring session
 
-            Without filters every summary is returned. Filters keep the list short
-            on busy pages: only requests matching all of them are listed, and
-            total_requests still counts everything captured.
+            Without limit every summary is returned, which on a busy page can be a
+            great many. Pass limit to keep the answer short: it returns the last
+            requests captured, and total_requests still counts everything.
 
             A request appears here once it has completed, so a page navigation
             started a moment ago will not be in the list yet. Start with
@@ -2788,35 +2810,15 @@ class FoxMCPTools:
 
             Args:
                 monitor_id: ID of the monitoring session
-                url_contains: (optional, a string) Only URLs containing this text,
-                    case-sensitive
-                method: (optional, a string) Only this HTTP method, such as POST,
-                    case-insensitive
-                resource_type: (optional, a string) Only this type, such as
-                    xmlhttprequest, script or image, case-sensitive
-                min_status: (optional, an integer from 100 to 599) Only responses with at
-                    least this status code, such as 400
-                failed_only: (optional, default: False) Only requests that failed, meaning
-                    they have an error or a status of 400 and above
-                limit: (optional, an integer of 1 or more) Keep only this many of the
-                    newest matches, the last ones captured
+                limit: (optional, an integer of 1 or more) Return only this many of the
+                    last requests captured; the answer then has returned_requests
 
             Returns:
                 JSON string with captured request summaries
             """
-            for name, value in (("url_contains", url_contains), ("method", method),
-                                ("resource_type", resource_type)):
-                if value is not None and not isinstance(value, str):
-                    return json.dumps({"error": f"{name} must be a string"})
-            if min_status is not None and (
-                    isinstance(min_status, bool) or not isinstance(min_status, int)
-                    or not 100 <= min_status <= 599):
-                return json.dumps({"error": "min_status must be an integer from 100 to 599"})
             if limit is not None and (
                     isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
                 return json.dumps({"error": "limit must be an integer of 1 or more"})
-            if not isinstance(failed_only, bool):
-                return json.dumps({"error": "failed_only must be a boolean"})
 
             request = {
                 "id": str(uuid.uuid4()),
@@ -2835,26 +2837,12 @@ class FoxMCPTools:
 
             if response.get("type") == "response" and "data" in response:
                 data = response["data"]
-                # Compare with None and False by identity: 0 == False, so a test
-                # such as `v not in (None, False)` would treat 0 as no filter.
-                filtered = any(v is not None and v is not False for v in
-                               (url_contains, method, resource_type, min_status, failed_only, limit))
-                if filtered:
+                if limit is not None:
                     if not isinstance(data, dict) or not isinstance(data.get("requests"), list):
                         return json.dumps({"error": "Failed to list captured requests: "
                                                     "the extension returned no request list"})
-
-                    def keep(item):
-                        status = item.get("status_code") or 0
-                        return ((not url_contains or url_contains in (item.get("url") or ""))
-                                and (not method or (item.get("method") or "").upper() == method.upper())
-                                and (not resource_type or item.get("type") == resource_type)
-                                and (min_status is None or status >= min_status)
-                                and (not failed_only or bool(item.get("error")) or status >= 400))
-                    matches = [item for item in data["requests"] if keep(item)]
-                    if limit is not None:
-                        matches = matches[-limit:]
-                    data = {**data, "matched_requests": len(matches), "requests": matches}
+                    kept = data["requests"][-limit:]
+                    data = {**data, "returned_requests": len(kept), "requests": kept}
                 return json.dumps(data)
             elif response.get("type") == "error":
                 error_msg = response.get("data", {}).get("message", "Unknown error")

@@ -1782,7 +1782,12 @@ function normalizeMonitorOptions(options) {
     capture_request_bodies: true,
     capture_response_bodies: true,
     max_body_size: 50000,
-    content_types_to_capture: ['application/json', 'text/plain']
+    content_types_to_capture: ['application/json', 'text/plain'],
+    // Capture filters: empty or null selects everything.
+    methods: [],
+    resource_types: [],
+    min_status: null,
+    failed_only: false
   };
   for (const key of Object.keys(options)) {
     if (!Object.prototype.hasOwnProperty.call(defaults, key)) {
@@ -1801,6 +1806,20 @@ function normalizeMonitorOptions(options) {
     throw new Error('content_types_to_capture must be an array of nonempty strings');
   }
   result.content_types_to_capture = Object.freeze([...result.content_types_to_capture]);
+  for (const key of ['methods', 'resource_types']) {
+    if (!Array.isArray(result[key]) ||
+        !result[key].every(value => typeof value === 'string' && value.length > 0)) {
+      throw new Error(`${key} must be an array of nonempty strings`);
+    }
+  }
+  // HTTP methods are case-insensitive; webRequest reports them in upper case.
+  result.methods = Object.freeze(result.methods.map(method => method.toUpperCase()));
+  result.resource_types = Object.freeze([...result.resource_types]);
+  if (result.min_status !== null &&
+      (!Number.isInteger(result.min_status) || result.min_status < 100 || result.min_status > 599)) {
+    throw new Error('min_status must be null or an integer from 100 to 599');
+  }
+  if (typeof result.failed_only !== 'boolean') throw new Error('failed_only must be a boolean');
   return Object.freeze(result);
 }
 
@@ -1953,6 +1972,16 @@ function shouldCaptureRequest(monitor, details) {
     return false;
   }
 
+  // Check the method and resource type filters, which are known as soon as the request starts
+  const filters = monitor.options;
+  if (filters && filters.methods.length > 0 &&
+      !filters.methods.includes((details.method || 'GET').toUpperCase())) {
+    return false;
+  }
+  if (filters && filters.resource_types.length > 0 && !filters.resource_types.includes(details.type)) {
+    return false;
+  }
+
   // Check URL patterns
   if (monitor.url_patterns && monitor.url_patterns.length > 0) {
     const url = details.url;
@@ -1976,6 +2005,16 @@ function shouldCaptureRequest(monitor, details) {
   }
 
   return true; // No filters, capture all
+}
+
+// The filters that need the outcome of a request, so they are checked when it completes.
+// A request that failed has no status code, and a status filter does not match it.
+function passesOutcomeFilters(options, request) {
+  if (!options) return true;
+  const failed = !!request.error || (request.status_code >= 400);
+  if (options.failed_only && !failed) return false;
+  if (options.min_status !== null && !(request.status_code >= options.min_status)) return false;
+  return true;
 }
 
 function captureRequestEvent(monitorId, eventType, details) {
@@ -2059,7 +2098,8 @@ function captureRequestEvent(monitorId, eventType, details) {
   request.events.push(event);
 
   // If request is complete, add to captured list
-  if (request.completed && !request.listed_by.has(monitorId)) {
+  if (request.completed && !request.listed_by.has(monitorId) &&
+      passesOutcomeFilters(monitorCaptureOptions.get(monitorId), request)) {
     const captured = capturedRequests.get(monitorId) || [];
     captured.push({
       request_id: requestId,
