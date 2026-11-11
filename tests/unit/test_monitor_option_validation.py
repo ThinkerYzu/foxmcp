@@ -72,7 +72,8 @@ async def test_schema_exposes_options_and_defaults_are_not_shared():
         assert definition["additionalProperties"] is False
         assert set(definition["properties"]) == {
             "capture_request_bodies", "capture_response_bodies", "max_body_size",
-            "content_types_to_capture"}
+            "content_types_to_capture", "methods", "resource_types", "min_status",
+            "failed_only"}
         await client.call_tool("requests_start_monitoring", {
             "profile_id": 1, "url_patterns": ["https://example.org/*"],
             "options": {"capture_request_bodies": False, "content_types_to_capture": []}})

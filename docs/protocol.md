@@ -1499,6 +1499,15 @@ format only.
 extension normalize omitted options to the defaults above. Both body toggles must
 be booleans, `max_body_size` must be a positive integer, and content-type patterns
 must be an array of nonempty strings (an empty array selects all supported text).
+
+`options` may also carry capture filters: `methods` and `resource_types` (arrays of nonempty
+strings; methods are matched case-insensitively and stored in upper case), `min_status` (`null`
+or an integer from 100 to 599) and `failed_only` (a boolean). They default to no filtering, and
+the answer's `options` always lists all of them. The server sends a filter only when it is set,
+because an extension from before the filters rejects options it does not know with
+`INVALID_PARAMETER`. A request that does not match `methods` or `resource_types` is not captured;
+`min_status` and `failed_only` are checked when the request completes, and a request that fails
+them is not listed. The protocol ID stays 3: the options are additive and omitted when unset.
 Unknown fields, including `sensitive_headers`, and invalid values are rejected;
 the extension returns `INVALID_PARAMETER` before starting a monitor.
 

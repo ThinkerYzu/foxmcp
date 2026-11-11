@@ -112,7 +112,8 @@ a request that matches more than one is captured by each.
 
 ## Options
 
-`options` is a dict passed to `requests_start_monitoring`. Four settings control capture:
+`options` is a dict passed to `requests_start_monitoring`. Four settings control body capture and
+four filters narrow what is captured:
 
 | Option | Default | Effect |
 |---|---|---|
@@ -120,6 +121,16 @@ a request that matches more than one is captured by each.
 | `capture_response_bodies` | `true` | Retain response bodies for this monitor; `false` omits them |
 | `max_body_size` | `50000` | Positive integer bytes kept per response body. The rest is dropped and `truncated` is `true`, but the full size is still counted |
 | `content_types_to_capture` | `["application/json", "text/plain"]` | A body is returned as text only if its `Content-Type` **contains** one of these — `application/json` matches `application/json; charset=utf-8`, and the bare string `json` would match it too. An entry with a `*`, such as `text/*`, matches on the major type. An empty list means every type. Whatever does not match is still counted, and comes back with `content: null` |
+| `methods` | `[]` | HTTP methods to capture, such as `["POST"]`; case-insensitive, and an empty list means every method. Decided when the request starts |
+| `resource_types` | `[]` | Firefox resource types to capture, such as `["xmlhttprequest", "script"]`; an empty list means every type. Decided when the request starts |
+| `min_status` | `null` | An integer from 100 to 599: only requests whose response status is at least this are listed. A request that failed before any response arrived has no status, so it is not listed |
+| `failed_only` | `false` | `true` lists only requests that failed, meaning an error or a status of 400 and above. A request aborted by navigating away counts as an error |
+
+`methods` and `resource_types` decide what is captured at all, so a request that does not match
+is neither listed nor has its body kept. `min_status` and `failed_only` depend on the outcome, so
+they are checked when a request completes: a response body can already be held for a request that
+is then not listed. The server sends a filter to the extension only when it is set, so an
+extension from before the filters keeps working, and rejects only a call that uses one.
 
 The MCP schema exposes these fields and rejects unknown fields and wrong types.
 `max_body_size=0` is invalid; disable response capture with

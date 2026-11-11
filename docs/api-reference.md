@@ -212,8 +212,13 @@ for the complete input-assignment example and transfer details.
     `capture_response_bodies` (booleans, default `true`), `max_body_size` (positive
     integer response bytes, default `50000`) and `content_types_to_capture` (list
     of nonempty strings, default JSON/plain text; empty list selects all supported
-    text types). Unknown fields, including `sensitive_headers`, are rejected.
-    Overlapping monitors apply their own body policies. See
+    text types). Capture filters, all optional: `methods` and `resource_types` (lists of
+    nonempty strings, such as `["POST"]` and `["xmlhttprequest"]`; HTTP methods ignore case)
+    capture only matching requests, `min_status` (integer from 100 to 599) lists only
+    responses with at least that status, and `failed_only` (boolean, default `false`) lists
+    only requests that failed, meaning an error or a status of 400 and above. Unknown fields,
+    including `sensitive_headers`, are rejected. Overlapping monitors apply their own body
+    policies and filters. See
     [capture options](web-request-monitoring.md#options).
   - `tab_id`: Optional tab ID to monitor (if not provided, monitors all tabs)
   - Returns JSON with `monitor_id` and monitoring status
@@ -222,13 +227,18 @@ for the complete input-assignment example and transfer details.
   - `drain_timeout`: **ignored** — the monitor stops immediately
   - Returns JSON with stop status and statistics
   - Captured data outlives the monitor: the two tools below still answer afterwards
-- `requests_list_captured(profile_id, monitor_id)` - List captured request summaries
+- `requests_list_captured(profile_id, monitor_id, limit=None)` - List captured request summaries
   - Returns JSON with array of request summaries (metadata only, no full content)
   - A request appears once it has completed, so a navigation started a moment ago
     is not in the list yet
   - `MONITOR_NOT_FOUND` for an id that never existed or has been cleared. Monitors
     are cleared when the client that started them disconnects, and when the
     extension loses its connection to the server
+  - `limit` (optional, an integer of 1 or more) returns only that many of the last requests
+    captured, to keep the answer short on a busy page; the JSON then also has
+    `returned_requests`, and `total_requests` still counts everything captured. Anything
+    else is refused with `{"error": ...}` without contacting the extension. To capture less in
+    the first place, use the capture filters of `requests_start_monitoring`
 - `requests_get_content(profile_id, monitor_id, request_id, include_binary=False, save_request_body_to=None, save_response_body_to=None)` - Get full request/response content
   - `include_binary`: **ignored** — non-text bodies never come back as content, only as a size
   - `save_request_body_to`, `save_response_body_to`: **ignored** — `saved_to_file` is always `null`
