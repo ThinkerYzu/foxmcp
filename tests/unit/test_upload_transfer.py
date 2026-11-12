@@ -363,3 +363,32 @@ async def test_screenshot_requires_a_transfer_service():
 
     tool = await FoxMCPTools(UnusedPeer()).mcp.get_tool('tabs_capture_screenshot')
     assert 'transfer service is unavailable' in await tool.fn(profile_id=1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('timeout_type', [asyncio.TimeoutError, TimeoutError],
+                         ids=['asyncio-deadline', 'receiver-deadline'])
+async def test_both_upload_timeout_types_return_capture_errors(service, tmp_path, timeout_type):
+    original_reserve = service.reserve_upload
+
+    def failed_upload(*args, **kwargs):
+        token, url, grant = original_reserve(*args, **kwargs)
+        grant.completion.set_exception(timeout_type('Upload deadline expired'))
+        return token, url, grant
+
+    service.reserve_upload = failed_upload
+
+    class DeadlinePeer:
+        async def send_request_and_wait(self, request, timeout):
+            return {'type': 'response', 'data': {'upload': {
+                'requestId': request['data']['upload']['requestId'],
+                'type': 'image/png', 'size': 5}}}
+
+    call = await screenshot_tool(service, DeadlinePeer())
+    output = tmp_path / 'existing.png'
+    output.write_bytes(b'existing image')
+    result = await call(profile_id=1, filename=str(output))
+    assert result == 'Error capturing screenshot: Upload deadline expired'
+    assert output.read_bytes() == b'existing image'
+    assert not service._uploads
+    assert not list(tmp_path.glob('.foxmcp-upload-*'))

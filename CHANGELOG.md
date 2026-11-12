@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Return capture errors for screenshot upload deadlines on Python 3.10 as well
+  as newer runtimes, preserving destination files and transfer cleanup.
 - Select redirected request chains by their initial URL, method and resource
   type, independently of other monitors. Capture network events once and keep
   response content associated with the final observed hop.

@@ -1633,7 +1633,7 @@ class FoxMCPTools:
                     f"{preview[:100]}...\n\n"
                     f"Base64 data size: {data_size} characters"
                 )
-            except (OSError, ValueError, RuntimeError) as error:
+            except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as error:
                 detail = str(error) or type(error).__name__
                 return f"Error capturing screenshot: {detail}"
             finally:
