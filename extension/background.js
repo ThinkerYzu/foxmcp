@@ -315,10 +315,19 @@ class ScriptConsentGate {
     }
   }
 
-  async run(id, tabId, script) {
+  async run(id, tabId, script, {deadline = null} = {}) {
+    if (deadline !== null && !Number.isFinite(deadline)) {
+      throw this.error('Script deadline must be finite', 'INVALID_PARAMETER');
+    }
     const job = {id, tabId, state: 'preparing', deferred: this.transition !== null};
     this.jobs.set(id, job);
     try {
+      if (deadline !== null) {
+        if (deadline <= Date.now()) throw this.error('Script execution timed out', 'WAIT_TIMEOUT');
+        // Cancel queued approval/preparation at the same deadline as execution.
+        job.executionTimer = setTimeout(() => this.cancel(id,
+          'Script execution timed out', 'WAIT_TIMEOUT'), deadline - Date.now());
+      }
       const tab = await browser.tabs.get(tabId);
       if (job.cancelled) throw job.cancelled;
       job.origin = this.origin(tab.url);
@@ -338,11 +347,29 @@ class ScriptConsentGate {
       if (job.cancelled || !requestSockets.has(id)) throw job.cancelled || this.error('Request cancelled');
       // Check inside the actual destination document too, closing the navigation
       // race between tabs.get and executeScript. Preserve the script's last value.
-      const code = job.gated
+      let code = job.gated
         ? `${this.hasStrictDirective(script) ? '"use strict";\n' : ''}if (this.location.origin !== ${JSON.stringify(job.origin)}) { throw new Error('FoxMCP target origin changed'); }\n${script}`
         : script;
-      return await browser.tabs.executeScript(tabId, {code});
+      if (deadline !== null) {
+        if (deadline <= Date.now()) throw this.error('Script execution timed out', 'WAIT_TIMEOUT');
+        // Bound the promise inside the injected operation too. A background-only
+        // race would leave executeScript pending and block later consent changes.
+        // Indirect eval preserves the caller's global scope and last script value.
+        code = '(async () => { let timer; try { return await Promise.race([' +
+          'Promise.resolve().then(() => (0, eval)(' + JSON.stringify(code) + '))' +
+          '.then(value => ({value})), new Promise(resolve => {' +
+          'timer = setTimeout(() => resolve({timedOut:true}), Math.max(0,' +
+          deadline + ' - Date.now())); })]); } finally { clearTimeout(timer); } })()';
+      }
+      const results = await browser.tabs.executeScript(tabId, {code});
+      if (deadline === null) return results;
+      if (job.cancelled) throw job.cancelled;
+      if (results.some(result => result?.timedOut)) {
+        throw this.error('Script execution timed out', 'WAIT_TIMEOUT');
+      }
+      return results.map(result => result?.value);
     } finally {
+      clearTimeout(job.executionTimer);
       this.jobs.delete(id);
       this.advance();
     }
@@ -1598,16 +1625,14 @@ async function handleContentAction(id, action, data) {
         let lastProblem = null;
         let finished = false;
         while (!finished) {
-          const remaining = deadline === null ? 90000 : deadline - Date.now();
+          const attemptDeadline = deadline === null ? Date.now() + 90000 : deadline;
+          const remaining = attemptDeadline - Date.now();
           // Timers can fire a little early, so a sliver of time left is no time to run again.
           if (remaining <= 0 || (deadline !== null && remaining < 20)) break;
           attempts++;
-          let timer;
           try {
-            const results = await Promise.race([
-              scriptConsent.run(id, data.tabId, wrapped),
-              new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('attempt timed out')), remaining); })
-            ]);
+            const results = await scriptConsent.run(id, data.tabId, wrapped,
+              {deadline: attemptDeadline});
             const outcome = results && results.length > 0 ? results[0] : null;
             if (outcome && typeof outcome === 'object' && 'error' in outcome) {
               sendError(id, 'SCRIPT_ERROR', `Wait script failed: ${outcome.error}`);
@@ -1621,13 +1646,13 @@ async function handleContentAction(id, action, data) {
             }
             lastProblem = null;
           } catch (waitError) {
-            if (typeof waitError.code === 'string' && waitError.code) {
+            if (waitError.code === 'WAIT_TIMEOUT') {
+              lastProblem = 'a run of the script did not finish';
+              break;
+            } else if (typeof waitError.code === 'string' && waitError.code) {
               // Consent was denied or cancelled, or the origin changed: not worth another run.
               sendError(id, waitError.code, `Wait script not run: ${waitError.message}`);
               finished = true;
-            } else if (waitError.message === 'attempt timed out') {
-              lastProblem = 'a run of the script did not finish';
-              break;
             } else {
               // The tab cannot be scripted right now (loading, navigating): look again, unless
               // it is gone.
@@ -1639,8 +1664,6 @@ async function handleContentAction(id, action, data) {
               }
               lastProblem = `the tab could not be scripted (${waitError.message})`;
             }
-          } finally {
-            clearTimeout(timer);
           }
           if (finished) break;
           if (deadline === null) deadline = Date.now() + data.timeoutMs;

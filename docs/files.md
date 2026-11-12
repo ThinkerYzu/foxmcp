@@ -80,7 +80,7 @@ See [reconnection](configuration.md#tuning).
 | [browser_profile.py](../server/browser_profile.py) | Owns one profile socket, pending reply futures, connection identity, version diagnostics and monitor ownership. A disconnect affects only that connection. |
 | [browser_proxy.py](../server/browser_proxy.py) | `BrowserProxyHub` and `RemoteBrowser` implement `/discovery` and `/proxy`, validates local clients and forwards browser commands while preserving the target profile. |
 | [profile_names.py](../server/profile_names.py) | Resolves names from Firefox's local metadata without modifying it. Reports unavailable or ambiguous names. |
-| [mcp_tools.py](../server/mcp_tools.py) | Registers 46 tools by default. `profiles_list` discovers targets; browser tools require `profile_id`. Runs predefined scripts locally before sending generated JavaScript. |
+| [mcp_tools.py](../server/mcp_tools.py) | Registers 47 tools by default. `profiles_list` discovers targets; browser tools require `profile_id`. Runs predefined scripts locally before sending generated JavaScript. |
 | [single_instance.py](../server/single_instance.py) | Discovers/starts the browser owner using `BrowserEndpoint` settings, then constructs a shared-stdio frontend. Manages detached worker election and lifetime. |
 | [file_transfer.py](../server/file_transfer.py) | Streams regular local files through one-use HTTP grants; does not encode file contents into the WebSocket request. |
 | [cli.py](../server/cli.py), [version.py](../server/version.py) | Installed command setup and release-version reporting. |

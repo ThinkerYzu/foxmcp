@@ -119,8 +119,8 @@ in-memory tab/origin decisions and one sequential approval queue. Toggle changes
 wait for the current batch, including executing scripts, before admitting later
 requests under the new policy. The popup owns no authorization state. Origin
 changes, closure and restart invalidate decisions; extension disconnect removes
-pending work. The injected code also checks the destination origin. Script tool
-calls use a 300-second server timeout with ordinary request/response messages;
+pending work. The injected code also checks the destination origin. Raw and
+predefined script calls use a 300-second server timeout with ordinary messages;
 the extension gives each active prompt 60 seconds. Accepting a decision first
 arms popup-unload listeners and acknowledges the choice. The popup then closes;
 the background waits for unload and revalidates before releasing the job or
@@ -133,6 +133,15 @@ A successful opening clears recovery state so dismissal alone does not reopen
 the popup. See
 [configuration](configuration.md#script-injection-consent) and
 [protocol](protocol.md#script-consent-unreleased-2026-10-31).
+
+For `content_wait`, the gate also owns each attempt's absolute deadline. A
+background timer expires queued approval work before injection. During execution,
+an injected wrapper races the script promise against that same deadline, so the
+Firefox operation settles before the gate releases its job. A timed-out promise
+cannot retain the job indefinitely and block a later consent-policy change.
+This stops awaiting the promise; it does not terminate synchronous JavaScript or
+undo script side effects. Ordinary script calls without a deadline keep their
+existing execution path. No additional server cancellation messages are used.
 
 #### Content Script (`content.js`)
 - **Page Injection**: Declared for `<all_urls>` in each tab's top-level document;
@@ -186,7 +195,7 @@ routing keys. See the [handshake](protocol.md#profile-connections-protocol-id-3)
 
 #### MCP Tools (`mcp_tools.py`)
 
-FastMCP exposes 46 tools by default. `profiles_list` and
+FastMCP exposes 47 tools by default. `profiles_list` and
 `debug_websocket_status` are untargeted; every browser tool requires a positive
 integer `profile_id`. `_send(profile_id, request)` adds routing metadata before forwarding
 to the registry. Native tab/window/group/container/monitor IDs are meaningful

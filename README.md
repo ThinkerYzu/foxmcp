@@ -317,7 +317,7 @@ protocol 3. Follow the [multiple-profile setup](docs/configuration.md#connecting
 to connect each Firefox instance, then use
 [profile discovery](docs/api-reference.md#firefox-profiles) to choose a target.
 
-All **46 tools** are enabled by default. Available groups are `profiles`, `windows`, `tabs`,
+All **47 tools** are enabled by default. Available groups are `profiles`, `windows`, `tabs`,
 `containers`, `bookmarks`, `navigation`, `content`, `requests`, `history`, and `debug`.
 See [configuration](docs/configuration.md) for client examples and other options.
 

@@ -67,6 +67,28 @@ metadata, empty and one/two/three-entry `redirects` arrays, 302/303 method rewri
 and loops, initial-URL matching, stopped reads, raw option rejection and method
 selection independent of overlapping monitors.
 
+#### Wait execution lifecycle
+
+`integration/test_content_wait_lifecycle.py` uses real Firefox and MCP HTTP to
+verify that an unresolved wait returns `WAIT_TIMEOUT` without retaining a gate
+job, then permits a consent-policy change and a script in another tab. It also
+checks first-attempt execution deadlines with consent off/on, queued approval
+expiry without injection, and preservation of scope, values and script errors.
+
+A temporary custom XPI adds gate inspection and remembered-decision controls;
+it delegates all execution/deadline logic to the production gate. The shared
+fixture isolates this extension from cached profiles. Normal packaged artifacts
+are not modified. These tests exercise remembered approvals and queue expiry,
+not native interaction with the approval popup.
+
+```bash
+FIREFOX_PATH=/path/to/firefox-developer-edition/firefox \
+  venv/bin/python -m pytest tests/integration/test_content_wait_lifecycle.py -v
+```
+
+Run `make package` first. The main timeout regression fails on the merged PR's
+background-only race because its executing gate job remains after the reply.
+
 #### Discarded-tab content reads
 
 `integration/test_discarded_tabs_end_to_end.py` exercises text/HTML reads through
@@ -195,6 +217,7 @@ Selected test modules:
 |---|---|
 | `test_browser_connection_versions.py` | Real Firefox hello plus actual background/popup scripts: protocol-3 registration/refusal, release mismatch, stale sockets and edit-preserving refresh |
 | `test_script_consent.py` | Actual consent-controller source, queue/deadline/target behavior and real-extension policy isolation |
+| `test_content_wait_lifecycle.py` | MCP HTTP/Firefox wait deadlines, queued approval expiry, gate cleanup, subsequent policy/script progress and result/error preservation |
 | `test_extension_settings.py` | Actual background, Popup/Options scripts and HTML: validation, autosave, reset, storage failures, constant retries, stale timers, profile registration/errors and live status |
 | `test_file_loading.py` | File integrity and metadata, predefined input assignment, events, empty files, tab isolation, expiry and navigation during a transfer |
 | `test_discarded_tabs_end_to_end.py` | Real discard/reload through MCP HTTP: text/HTML, concurrent reload coalescing, rediscard, loaded reads and inactive/active-tab preservation |

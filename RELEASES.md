@@ -29,6 +29,16 @@ with the maintainer.
   observable change to existing content actions, covered by the same next
   protocol-ID increment rather than a separate increment for this PR.
 
+- The new `content_wait` action uses gate-owned attempt deadlines. Expired
+  approval work cannot inject later, and unresolved script promises no longer
+  leave an executing job blocking subsequent consent-policy changes. The wire
+  request/reply shapes are unchanged; include lifecycle/error behavior in the
+  release-wide review, using the same shared increment.
+
+The catalog now includes `content_wait`. Reconcile fixed tool/filter counts and
+its final-archive smoke scenario before the strict release rehearsal, as required
+by the release checklist; ordinary PR CI does not establish that release coverage.
+
 Update both peers, compatibility tests and the final release review before
 rehearsing, tagging or publishing. See the
 [protocol policy](docs/protocol.md#protocol-id-compatibility-policy) and

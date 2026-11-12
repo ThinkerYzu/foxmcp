@@ -119,7 +119,7 @@ foxmcp/
 │   ├── browser_profile.py # Per-profile sockets, replies and monitor ownership
 │   ├── browser_proxy.py   # Shared-port discovery and forwarding
 │   ├── profile_names.py   # Read-only Firefox metadata lookup
-│   └── mcp_tools.py       # The 46 MCP tool definitions
+│   └── mcp_tools.py       # The 47 MCP tool definitions
 ├── tests/           # Test suite (unit/, integration/, fixtures/)
 ├── scripts/         # install-xpi.sh, install-from-github.sh
 ├── venv/            # Python virtual environment
@@ -374,7 +374,7 @@ all advertised tools have smoke scenarios and all expected counts are updated.
 
 Before release, update affected totals in the install workflow, Windows installer,
 Python-package, shared-stdio container and archive smoke checks. For example,
-with 46 tools and 10 in the tabs group, enabling only its screenshot exposes 37.
+with 47 tools and 10 in the tabs group, enabling only its screenshot exposes 38.
 To check the default HTTP tool count by hand:
 
 ```bash
@@ -622,8 +622,10 @@ The default startup script was also tried, exposing the occupied-MCP-port
 behavior described above. This check did not repeat the interactive installer
 prompts, manual Firefox Add-ons installation, Claude Code registration, or the
 natural-language examples through an AI assistant. The release package smoke
-tests separately exercise all 46 tools over HTTP and stdio with an unsigned XPI
-in Firefox Developer Edition; they do not verify the signed Add-ons installation.
+tests separately exercise tools over HTTP and stdio with an unsigned XPI in
+Firefox Developer Edition; they do not verify the signed Add-ons installation.
+Their expected counts and scenarios must cover the release candidate's actual
+catalog before release.
 
 ## Security Notes
 

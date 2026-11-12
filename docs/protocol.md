@@ -817,8 +817,9 @@ opened the tab. If it does not finish loading in time the request fails with an 
 `null` or `undefined`, then answers that value. A returned promise is awaited, `false` and `0`
 count as values, and the value must be JSON-compatible. The script goes through the same consent
 gate as `content.execute_script`, so with script consent on the first run may wait for the
-person to approve, the later runs reuse the answer, and the time limit starts after the first run
-(a single run, the first included, is cut off after 90 seconds at most). A script that throws, or
+person to approve, and later runs reuse the answer. The first attempt has a 90-second
+deadline including approval; after it finishes, later attempts share the `timeoutMs`
+polling budget. A script that throws, or
 returns a value that cannot be cloned (a DOM node, a function), ends the wait with
 `SCRIPT_ERROR`; a tab that no longer exists is an `API_ERROR`; a tab that cannot be scripted yet (loading, navigating) is tried
 again until the limit; consent errors are the ones `content.execute_script` gives.
@@ -831,6 +832,14 @@ again until the limit; consent errors are the ones `content.execute_script` give
 `timeoutMs` is an integer from 1 to 120000 and `intervalMs` from 100 to 5000, otherwise the answer
 is an `INVALID_PARAMETER` error. `WAIT_TIMEOUT` says whether the script kept returning `null`, a
 run did not finish, or the tab could not be scripted.
+
+The gate owns attempt deadlines, including time spent awaiting approval. An
+expired queued attempt is cancelled before injection. For an executing attempt,
+the injected wrapper stops awaiting the script promise at the deadline, allowing
+Firefox's execution and the gate job to settle before a later consent-policy
+change. Firefox timer scheduling can delay delivery. Timeout does
+not stop synchronous JavaScript, cancel an arbitrary caller promise or undo its
+side effects. Scripts must remain safe to run repeatedly.
 
 #### Execute Script
 **Request:**
