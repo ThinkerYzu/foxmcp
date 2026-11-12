@@ -200,7 +200,7 @@ Selected test modules, including local-file coverage:
 | `test_tab_move.py` | `tabs_move`'s request and result, and the window scoping on `tabs_list` |
 | `test_protocol.py` | Message structure, JSON serialization, error codes |
 | `test_window_handlers.py` | Window action handlers |
-| `test_predefined_script_logging.py` | Predefined script audit/validation and raw/predefined script response timeouts |
+| `test_predefined_script_logging.py` | Predefined script audit/validation, portable Python generators without execute permission, literal arguments and raw/predefined script response timeouts |
 | `test_request_monitoring.py` | Web request capture logic |
 | `test_ping_pong.py` | Ping-pong protocol |
 | `test_connection_versions.py` | Version parsing and advisory diagnostics; per-profile connection tests are in `test_server.py` |

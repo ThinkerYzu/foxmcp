@@ -16,14 +16,17 @@ def windows(monkeypatch):
     monkeypatch.delenv('FOXMCP_BASH', raising=False)
 
 
-def test_python_uses_server_interpreter(windows):
-    path = r'C:\scripts with spaces\helper.PY'
+@pytest.mark.parametrize('platform', ['win32', 'linux', 'darwin'])
+@pytest.mark.parametrize('suffix', ['py', 'PY'])
+def test_python_uses_server_interpreter(monkeypatch, platform, suffix):
+    monkeypatch.setattr(sys, 'platform', platform)
+    path = '/scripts with spaces/helper.' + suffix
     assert mcp_tools.predefined_script_command(path) == [sys.executable, path]
 
 
 def test_posix_keeps_shebang_execution(monkeypatch):
     monkeypatch.setattr(sys, 'platform', 'linux')
-    assert mcp_tools.predefined_script_command('/scripts/a.py') == ['/scripts/a.py']
+    assert mcp_tools.predefined_script_command('/scripts/a.sh') == ['/scripts/a.sh']
 
 
 def test_native_executable_is_unchanged(windows):

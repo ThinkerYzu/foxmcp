@@ -437,7 +437,10 @@ Enforced in `mcp_tools.py` before a predefined script runs:
 - **Directory selection**: Source startup requires `FOXMCP_EXT_SCRIPTS`; the installed console command defaults to bundled examples when it is absent. An explicit value overrides the bundle, including an empty value to disable scripts.
 - **Name Filtering**: Script names must match `^[a-zA-Z0-9._-]+$` and may not contain `/`, `\`, or `..`
 - **Path Containment**: The resolved absolute path must stay inside the scripts directory
-- **Executable Check**: The file must exist and be executable
+- **File Access Check**: The file must be regular and readable for `.py`
+  generators (case-insensitive), or executable for other generators. Python
+  generators run with `sys.executable` in the originating MCP process on every
+  platform. See [script authoring](scripts.md#multi-language-support).
 - **Timeout Protection**: Scripts are killed after 30 seconds
 - **Execution Isolation**: Scripts run as separate subprocesses
 - **Audit Logging**: Every invocation is logged at `INFO` with script name, arguments and tab; every refusal and failure at `WARNING`. Arguments are truncated at 120 characters; the generated JavaScript is never logged, only its size. See [`scripts.md`](scripts.md#what-gets-logged)

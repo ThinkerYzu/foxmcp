@@ -4,7 +4,7 @@ Every browser tool requires an explicit `profile_id` from `profiles_list` in
 addition to the action-specific arguments. Tab and monitor IDs are local to that
 profile; see [profile discovery](api-reference.md#firefox-profiles).
 
-Predefined scripts are external executable scripts that generate JavaScript code dynamically and execute it in browser tabs. This powerful feature allows you to create reusable, parameterized browser automation scripts that can be called via the `content_execute_predefined` MCP tool.
+Predefined scripts are external scripts that generate JavaScript code dynamically and execute it in browser tabs. This powerful feature allows you to create reusable, parameterized browser automation scripts that can be called via the `content_execute_predefined` MCP tool.
 
 ## How Predefined Scripts Work
 
@@ -23,8 +23,13 @@ collection; set it to an empty string to disable scripts. Source startup still
 requires this variable, and the GitHub installer sets it in its startup script.
 Bash must be available to run the shell examples.
 
-On Windows, `.py` scripts run with the same Python interpreter as the FoxMCP server.\
-For `.sh` scripts, install [Git for Windows](https://gitforwindows.org/).
+On every platform, `.py` scripts (case-insensitive) run with the same Python
+interpreter and environment as the FoxMCP server. They must be readable regular
+files; no shebang or executable permission is required. Arguments are passed
+literally, without shell evaluation. Scripts print JavaScript to stdout and
+use stderr for diagnostics. The generator timeout is 30 seconds.
+
+For `.sh` scripts on Windows, install [Git for Windows](https://gitforwindows.org/).
 
 FoxMCP looks for Git Bash beside `git.exe` and in the standard Git installation directories.\
 For a custom location, set the executable path before starting the server:
@@ -67,7 +72,8 @@ The server already lists every available script in the
 
 ### 3. Create Executable Script
 
-Scripts must be executable and output JavaScript to stdout:
+Scripts must output JavaScript to stdout. Python files must be readable; other
+scripts must be executable. Shell example:
 
 **Simple Example** (`get_title.sh`):
 ```bash
@@ -270,8 +276,9 @@ line is often just a title ("DOM Summarization Script"), so add the marker to
 any script an agent should pick correctly. A script with no usable comment at
 all is listed by name only, on an `Also available, without a description` line.
 
-**Only scripts the tool would run are listed:** executable regular files directly
-in the directory, named with letters, digits, `.`, `_` and `-`, not starting with
+**Only scripts the tool would run are listed:** readable `.py` files and
+other executable regular files
+directly in the directory, named with letters, digits, `.`, `_` and `-`, not starting with
 a dot.
 
 **The list is read when the server starts.** A script you add later runs at once
@@ -319,7 +326,7 @@ entry after use with `globalThis.foxmcpFiles.delete(fileId)`. The page cannot
 read this map directly. Clone the File into the page before assigning it through
 the page's own DataTransfer; [set-file-input.py](../predefined-ex/set-file-input.py)
 demonstrates this and dispatches `input` and `change` events. The package and
-GitHub installer include it; for a custom collection, copy that executable
+GitHub installer include it; for a custom collection, copy that Python
 example into `FOXMCP_EXT_SCRIPTS`. Choose `profile_id` from `profiles_list` and a tab in that profile. Then call:
 
 ```python
@@ -442,29 +449,25 @@ EOF
 
 ### Multi-language Support
 
-Scripts can be written in any language as long as they output JavaScript:
+Python generators use the server interpreter on Windows, Linux and macOS,
+including its virtual environment. Other languages use executable scripts and
+their shebang on Linux/macOS; Windows shell scripts require Git Bash.
 
-**Python Example** (`analyze_page.py`):
+Use `json.dumps` to embed argument values safely in generated JavaScript:
+
+**Python Example** (`greet.py`):
 ```python
-#!/usr/bin/env python3
-import sys
+# foxmcp-description: Return a greeting from the page
+# foxmcp-args: <name>
 import json
+import sys
 
-def generate_analysis_script():
-    return """
-(function() {
-  const stats = {
-    paragraphs: document.querySelectorAll('p').length,
-    images: document.querySelectorAll('img').length,
-    links: document.querySelectorAll('a').length,
-    headings: document.querySelectorAll('h1,h2,h3,h4,h5,h6').length
-  };
-  return 'Page analysis: ' + JSON.stringify(stats);
-})()
-"""
+if len(sys.argv) != 2:
+    print("Usage: greet.py <name>", file=sys.stderr)
+    sys.exit(1)
 
-if __name__ == "__main__":
-    print(generate_analysis_script().strip())
+message = json.dumps("Hello " + sys.argv[1])
+print(f"(() => {message})()")
 ```
 
 ## Testing Scripts
@@ -484,7 +487,7 @@ Test your scripts independently before using with FoxMCP:
 ### Common Issues
 
 1. **Script not found**: Check `FOXMCP_EXT_SCRIPTS` environment variable
-2. **Permission denied**: Ensure script has execute permissions (`chmod +x script.sh`)
+2. **Permission denied**: Python scripts need read permission; other scripts need execute permission (`chmod +x script.sh` on Linux/macOS).
 3. **Invalid JavaScript**: Test script output manually
 4. **Timeout errors**: Optimize script for faster execution (< 30 seconds)
 5. **Argument parsing**: Ensure arguments are properly escaped and validated

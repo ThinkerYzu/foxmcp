@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Predefined `.py` scripts use the server's Python interpreter on every platform.
+  Readable Python files are discoverable and runnable without a shebang or
+  executable permission; shell script behavior is preserved.
+
 - Enforce fixed tool counts and complete archive tool coverage during release
   rehearsals and tagged releases, while ordinary CI keeps functional checks
   running without blocking tool additions on catalog totals.

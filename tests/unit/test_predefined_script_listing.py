@@ -124,6 +124,17 @@ class TestListing:
         for left_out in ('inert.sh', '.hidden.sh', 'bad name.sh', 'subdir'):
             assert left_out not in listing
 
+    @pytest.mark.parametrize('suffix', ['py', 'PY'])
+    def test_readable_python_without_execute_permission_is_listed(self, tmp_path, suffix):
+        name = 'generator.' + suffix
+        write_script(tmp_path, name, '# foxmcp-description: Python generator\n', executable=False)
+        (tmp_path / 'directory.py').mkdir()
+
+        listing = describe_predefined_scripts(str(tmp_path))
+
+        assert f'- {name}: Python generator' in listing
+        assert 'directory.py' not in listing
+
     def test_undescribed_scripts_share_one_line(self, tmp_path):
         write_script(tmp_path, 'described.sh', '# foxmcp-description: Has one\n')
         write_script(tmp_path, 'bare.sh', '#!/bin/bash\necho hi\n')

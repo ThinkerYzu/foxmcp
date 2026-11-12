@@ -84,20 +84,16 @@ SCRIPT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
 
 
 def predefined_script_command(script_path):
-    """Choose a native Windows interpreter without evaluating a shell command.
+    """Use the server's Python for .py files and Git Bash for Windows .sh files.
 
-    This belongs here because content_execute_predefined launches the scripts.
-    Windows cannot launch .py/.sh files through their shebang like Linux/macOS,
-    so it needs an explicit interpreter. The guard leaves POSIX launches alone.
-    POSIX keeps its executable/shebang behaviour. On Windows, prefer Git's Bash
-    over a bare bash.exe lookup, which can select the WSL launcher instead.
+    Other POSIX scripts keep executable/shebang behavior. On Windows, prefer
+    Git's Bash over a bare bash.exe lookup, which can select the WSL launcher.
     """
-    if sys.platform != 'win32':
-        return [script_path]
     extension = os.path.splitext(script_path)[1].lower()
     if extension == '.py':
-        # Reuses the server's environment and dependencies
         return [sys.executable, script_path]
+    if sys.platform != 'win32':
+        return [script_path]
     if extension != '.sh':
         return [script_path]
 
@@ -127,6 +123,12 @@ def predefined_script_command(script_path):
         'Shell scripts on Windows require Git Bash. Install Git for Windows '
         'or set FOXMCP_BASH to the absolute path to its bash.exe, then restart FoxMCP.'
     )
+
+
+def predefined_script_accessible(script_path: str) -> bool:
+    """Accept readable regular Python files or executable other generators."""
+    permission = os.R_OK if os.path.splitext(script_path)[1].lower() == '.py' else os.X_OK
+    return os.path.isfile(script_path) and os.access(script_path, permission)
 
 
 def run_predefined_script(command, args_list):
@@ -226,7 +228,7 @@ def describe_predefined_scripts(scripts_dir):
     """The script listing appended to content_execute_predefined's description
 
     scripts_dir is FOXMCP_EXT_SCRIPTS, or None when it is unset. Lists the files
-    the tool would run - executable regular files directly in the directory with
+    the tool would run - readable Python or executable other regular files with
     an allowed name - except dot files, one line each from read_script_header.
     Scripts with nothing to say for themselves share one line of names. When
     there is nothing to list, says why, so an agent does not spend a call to
@@ -250,7 +252,7 @@ def describe_predefined_scripts(scripts_dir):
     for name in names:
         path = os.path.join(scripts_dir, name)
         if (name.startswith('.') or not SCRIPT_NAME_PATTERN.match(name)
-                or not os.path.isfile(path) or not os.access(path, os.X_OK)):
+                or not predefined_script_accessible(path)):
             continue
         description, args = read_script_header(path)
         if not description and not args:
@@ -2579,9 +2581,14 @@ class FoxMCPTools:
                 logger.warning(f"Predefined script refused: {script_name!r} not found in {scripts_dir!r}")
                 return f"Error: Script '{script_name}' not found in {scripts_dir}"
 
-            if not os.access(script_path, os.X_OK):
-                logger.warning(f"Predefined script refused: {script_name!r} is not executable")
-                return f"Error: Script '{script_name}' is not executable"
+            if not os.path.isfile(script_path):
+                logger.warning(f"Predefined script refused: {script_name!r} is not a regular file")
+                return f"Error: Script '{script_name}' is not a regular file"
+
+            if not predefined_script_accessible(script_path):
+                required = 'readable' if os.path.splitext(script_path)[1].lower() == '.py' else 'executable'
+                logger.warning(f"Predefined script refused: {script_name!r} is not {required}")
+                return f"Error: Script '{script_name}' is not {required}"
 
             try:
                 # Parse JSON arguments - handle both empty string and JSON arrays
@@ -2612,7 +2619,7 @@ class FoxMCPTools:
                     logger.warning(f"Predefined script {script_name!r} refused: script_args is not valid JSON - {e}")
                     return f"Error: Invalid JSON in script_args: {e}"
 
-                # Chooses an interpreter only where Windows needs one, after the existing script-name, permission, and argument validation.
+                # Choose an interpreter after script-name, permission and argument validation.
                 try:
                     command = predefined_script_command(script_path)
                 except ValueError as e:

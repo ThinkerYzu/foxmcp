@@ -7,7 +7,9 @@ the log lines; they are also the first automated coverage of the validation
 chain itself, which had none.
 """
 
+import json
 import logging
+import sys
 import os
 import stat
 import subprocess
@@ -239,3 +241,62 @@ async def test_script_calls_allow_time_for_consent(tool_name, scripts_dir, monke
     assert browser.sent_request["action"] == "content.execute_script"
     assert browser.sent_request["data"]["script"] == "40+2"
     assert browser.sent_timeout == 300.0
+
+
+class TestPortablePython:
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('suffix', ['py', 'PY'])
+    async def test_readable_generator_uses_server_python_and_literal_args(
+            self, scripts_dir, suffix):
+        path = scripts_dir / ('generator.' + suffix)
+        path.write_text(
+            'import json, sys\n'
+            'print(json.dumps({"python": sys.executable, "args": sys.argv[1:]}))\n'
+        )
+        path.chmod(0o644)
+        browser = StubWebSocketServer()
+        tools = FoxMCPTools(browser)
+        tool = await tools.mcp.get_tool('content_execute_predefined')
+        args = ['', 'two words', 'a"b', "c'd", '$HOME; $(echo injected)', '日本語', 'C:\\some path\\']
+
+        result = await tool.fn(profile_id=1, tab_id=17, script_name=path.name,
+                               script_args=json.dumps(args))
+
+        assert 'Error' not in result
+        generated = json.loads(browser.sent_request['data']['script'])
+        assert generated == {'python': sys.executable, 'args': args}
+        assert browser.sent_timeout == 300.0
+
+    @pytest.mark.asyncio
+    async def test_python_failure_preserves_both_streams(self, run_script, scripts_dir):
+        (scripts_dir / 'broken.py').write_text(
+            'import sys\nprint("usage")\nprint("diagnostic", file=sys.stderr)\nsys.exit(3)\n'
+        )
+        result = await run_script(tab_id=1, script_name='broken.py')
+        assert 'exit code 3' in result
+        assert 'stdout: usage' in result
+        assert 'stderr: diagnostic' in result
+
+    @pytest.mark.asyncio
+    async def test_python_directory_is_refused(self, run_script, scripts_dir, caplog):
+        (scripts_dir / 'directory.py').mkdir()
+        result = await run_script(tab_id=1, script_name='directory.py')
+        assert 'not a regular file' in result
+        assert 'not a regular file' in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_unreadable_python_is_not_listed_or_run(
+            self, run_script, scripts_dir, monkeypatch, caplog):
+        from server import mcp_tools
+
+        path = scripts_dir / 'unreadable.py'
+        path.write_text('print("document.title")\n')
+        access = os.access
+        # Model an OS read denial even when the test process has elevated access.
+        monkeypatch.setattr(mcp_tools.os, 'access',
+                            lambda name, mode: False if str(name) == str(path) else access(name, mode))
+        assert 'unreadable.py' not in mcp_tools.describe_predefined_scripts(str(scripts_dir))
+        result = await run_script(tab_id=1, script_name='unreadable.py')
+        assert 'not readable' in result
+        assert 'not readable' in caplog.text
