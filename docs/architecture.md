@@ -21,12 +21,16 @@ flowchart TB
         frontend -->|tools| tools
         frontend -->|file_transfers| files
         tools <-->|browser| remote
+        tools -->|download and upload grants| files
     end
 
     subgraph ownerProcess["Browser-owner process"]
         directFrontend["MCPFrontend (HTTP mode only)"]
         directTools["FoxMCPTools"]
+        directFiles["FileTransferServer"]
         directFrontend -->|tools| directTools
+        directFrontend -->|file_transfers| directFiles
+        directTools -->|download and upload grants| directFiles
 
         subgraph browserServer["BrowserServer"]
             hub["BrowserProxyHub"]
@@ -48,13 +52,18 @@ flowchart TB
     httpClient <-->|"MCP HTTP :3000"| directFrontend
     profile1 <-->|"/ WebSocket :8765"| firefox1
     profile2 <-->|"/ WebSocket :8765"| firefox2
+    firefox1 <-->|"HTTP binary transfers (loopback)"| files
+    firefox2 <-->|"HTTP binary transfers (loopback)"| files
+    firefox1 <-->|"HTTP binary transfers (loopback)"| directFiles
+    firefox2 <-->|"HTTP binary transfers (loopback)"| directFiles
 ```
 
 Each Python component label names an actual class or attribute. The outer boxes
 label process boundaries. Registry arrows represent calls through
 `BrowserServer.send_request_and_wait` or `BrowserServer.list_profiles`; the
-`profiles` dictionary itself does not execute requests. The HTTP frontend owns
-its own `FileTransferServer` too, omitted from the diagram for space.
+`profiles` dictionary itself does not execute requests. Each frontend owns its
+own `FileTransferServer`; only the frontend issuing a tool call grants its
+transfer URL. Binary HTTP data bypasses the browser owner's proxy.
 
 | Diagram symbol | Source definition | Reference in code |
 |---|---|---|
@@ -65,7 +74,7 @@ its own `FileTransferServer` too, omitted from the diagram for space.
 | `BrowserProxyHub` | [browser_proxy.py](../server/browser_proxy.py) | `BrowserServer.proxy_hub` |
 | `BrowserServer.profiles` | [browser_server.py](../server/browser_server.py) | Maps profile IDs to `BrowserProfile` instances |
 | `BrowserProfile` | [browser_profile.py](../server/browser_profile.py) | One socket and its pending replies |
-| `FileTransferServer` | [file_transfer.py](../server/file_transfer.py) | `MCPFrontend.file_transfers` |
+| `FileTransferServer` | [file_transfer.py](../server/file_transfer.py) | `MCPFrontend.file_transfers`; `grant` for downloads, `reserve_upload` for staged uploads |
 
 
 The browser owner's `/discovery` HTTP route shares port 8765 with `/proxy` and
@@ -273,6 +282,35 @@ process owns its `MCPFrontend.file_transfers`; `RemoteBrowser` only forwards
 browser commands. The grant URL and metadata pass through `/proxy` and the selected extension fetches the
 file directly from the originating process. File bytes do not pass through the
 browser owner's proxy.
+
+#### Browser uploads
+
+Screenshot tools reserve a one-use `PUT /uploads/<token>` URL from the same
+frontend-owned `FileTransferServer`. `BrowserServer` or `RemoteBrowser` forwards
+that URL and a stable upload request ID through the ordinary control route.
+The extension background uploads a PNG/JPEG Blob directly to that frontend
+with cookies omitted, redirects refused and a 110-second fetch timeout. Page
+content scripts cannot implement this privileged capture/transport operation.
+
+The receiver validates Host, extension Origin (when present), fetch destination,
+request ID, expected MIME type and Content-Length. It reads at most 64 KiB at a
+time into a private temporary file, with no payload-size ceiling. The request,
+profile and payload kind are bound to the grant in the frontend. Proxy rewriting
+of the outer request ID does not change the upload correlation ID. No new public
+MCP tool or browser-owner receiver is added.
+
+Both capture actions require an upload grant. The receiver returns HTTP 204
+only after the complete body is received and its staging file is closed. The
+extension awaits that acknowledgement before sending its metadata-only control
+reply. The tool requires both completions; it has no inline data-URL fallback.
+For a filename, staging is beside the destination and `os.replace` publishes
+only after success; failures preserve existing output. Previews read only enough
+bytes for the existing 100-character preview and calculate the base64 length
+from the byte count. All grants, including completed uploads awaiting the browser
+reply, count toward the existing 32-transfer limit. A 120-second total deadline,
+an idle socket timeout, tool cancellation and frontend shutdown revoke grants
+and remove partial/staged files. The browser's capture API still allocates the
+image in Firefox memory; disk space and capture limits still apply.
 
 #### WebSocket Protocol
 ```json
@@ -499,7 +537,10 @@ Tested in `tests/integration/test_connection_origin.py`. Test clients standing i
 - Results are not cached; every browser call makes a fresh round trip.
 - The browser owner's listener uses the WebSocket library's default incoming
   message-size limit. `RemoteBrowser` connects with `max_size=None` for incoming
-  proxy replies; this does not remove the owner's incoming limits.
+  proxy replies; this does not remove the owner's incoming limits. Screenshot
+  tools use direct binary HTTP uploads and are not subject to that payload
+  limit. Screenshot requests without upload grants are refused. Transfers
+  require Firefox and the originating frontend on the same host.
 
 ## Extension Points
 

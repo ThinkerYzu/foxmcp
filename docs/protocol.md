@@ -646,7 +646,11 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
   "data": {
     "windowId": 1,
     "format": "png",
-    "quality": 90
+    "quality": 90,
+    "upload": {
+      "url": "http://127.0.0.1:49152/uploads/<opaque-one-use-token>",
+      "requestId": "req_007b"
+    }
   },
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
@@ -659,10 +663,14 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
   "type": "response",
   "action": "tabs.captureVisibleTab",
   "data": {
-    "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
     "format": "png",
     "quality": 90,
-    "windowId": 1
+    "windowId": 1,
+    "upload": {
+      "requestId": "req_007b",
+      "size": 70,
+      "type": "image/png"
+    }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
@@ -670,8 +678,7 @@ Colours are `blue`, `cyan`, `grey`, `green`, `orange`, `pink`, `purple`, `red` a
 
 #### Capture Screenshot of One Tab
 `tabs.captureVisibleTab` can only see the tab a window is showing. This one captures a given tab
-wherever it is, a background tab included, and does not switch to it. An extension without it
-answers `UNKNOWN_ACTION`.
+wherever it is, a background tab included, and does not switch to it.
 
 **Request:**
 ```json
@@ -682,7 +689,11 @@ answers `UNKNOWN_ACTION`.
   "data": {
     "tabId": 123,
     "format": "png",
-    "quality": 90
+    "quality": 90,
+    "upload": {
+      "url": "http://127.0.0.1:49152/uploads/<opaque-one-use-token>",
+      "requestId": "req_007c"
+    }
   },
   "timestamp": "2025-09-03T12:00:00.000Z"
 }
@@ -695,10 +706,14 @@ answers `UNKNOWN_ACTION`.
   "type": "response",
   "action": "tabs.captureTab",
   "data": {
-    "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
     "format": "png",
     "quality": 90,
-    "tabId": 123
+    "tabId": 123,
+    "upload": {
+      "requestId": "req_007c",
+      "size": 70,
+      "type": "image/png"
+    }
   },
   "timestamp": "2025-09-03T12:00:01.000Z"
 }
@@ -723,8 +738,17 @@ producing a 200 x 100 pixel image:
     "tabId": 123,
     "format": "png",
     "quality": 90,
-    "rect": {"x": 0, "y": 0, "width": 400, "height": 200},
-    "scale": 0.5
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 400,
+      "height": 200
+    },
+    "scale": 0.5,
+    "upload": {
+      "url": "http://127.0.0.1:49152/uploads/<opaque-one-use-token>",
+      "requestId": "originating-tool-request-id"
+    }
   }
 }
 ```
@@ -736,8 +760,17 @@ producing a 200 x 100 pixel image:
     "windowId": 1,
     "format": "png",
     "quality": 90,
-    "rect": {"x": 0, "y": 0, "width": 400, "height": 200},
-    "scale": 0.5
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 400,
+      "height": 200
+    },
+    "scale": 0.5,
+    "upload": {
+      "url": "http://127.0.0.1:49152/uploads/<opaque-one-use-token>",
+      "requestId": "originating-tool-request-id"
+    }
   }
 }
 ```
@@ -747,22 +780,58 @@ producing a 200 x 100 pixel image:
 | With `rect` | `1`, independent of display density |
 | Without `rect` | The target tab's device pixel ratio (DPR) |
 
-Responses carry the complete image in `dataUrl`. This differs from the MCP tool's
-text output: without `filename`, that tool returns only a data-URL preview and
-size count. See the [MCP screenshot tool](api-reference.md#screenshots).
+Both capture actions require an `upload` grant, with and without a filename.
+A missing or invalid grant returns `INVALID_PARAMETER` before capture:
 
-For `tabs.captureTab`, `tabId` must be a non-negative integer
-(`INVALID_PARAMETER` otherwise). A tab that does not exist or cannot be captured
-returns `CAPTURE_ERROR`. The extension
-also returns `CAPTURE_ERROR` if the data URL exceeds 1,000,000 characters. This
-conservative threshold leaves room for response metadata within the server's
-1 MiB incoming-message limit and applies even when the MCP tool saves to a file.
-The error suggests JPEG, lower JPEG quality, a smaller scale or a smaller crop.
-See [Known Limits](architecture.md#3-known-limits).
+```json
+"upload": {
+  "url": "http://127.0.0.1:49152/uploads/<opaque-one-use-token>",
+  "requestId": "originating-tool-request-id"
+}
+```
 
-Use matching server and extension builds. An older extension may ignore `rect`
-and `scale` and return an uncropped image. Protocol compatibility is reviewed
-during [release preparation](development.md#release-process).
+The extension uploads binary `image/png` or `image/jpeg` bytes with `PUT`, an
+explicit Content-Length and `X-FoxMCP-Request-Id` matching the stable grant ID.
+The upload ID is carried in data because `/proxy` remaps outer request IDs.
+The receiver belongs to the originating MCP frontend, not the browser owner.
+No filename or profile ID is sent to the extension for the transfer.
+
+Cookies are omitted, redirects refused and fetch is limited to 110 seconds.
+URLs must target `http://127.0.0.1:<port>/uploads/<token>` without credentials,
+queries or fragments. The receiver accepts one transfer, validates its expected
+MIME/correlation ID, streams to disk and returns HTTP 204 only after the entire
+Content-Length has arrived and the staging file is closed. Grants expire after
+120 seconds; malformed or unauthorized requests cannot consume them. Claimed grants cannot be retried.
+Partial/expired/cancelled transfers are discarded, with no WebSocket-sized cap.
+The listener grants no page CORS access.
+
+Only after HTTP 204 does the extension send its normal capture response with
+`upload` metadata; format/quality and tab/window metadata are unchanged. The
+extension awaits the receiver's acknowledgement before sending this reply:
+
+```json
+"data": {
+  "upload": {"requestId": "originating-tool-request-id", "size": 2000000, "type": "image/png"},
+  "format": "png", "quality": 90, "tabId": 4
+}
+```
+
+The tool requires both successful reception and this matching acknowledgement
+before publishing the file or rendering its existing preview/size result.
+Upload failure returns `CAPTURE_ERROR`. Files are staged and published by the
+frontend, never written to arbitrary paths by the extension.
+
+Inline `dataUrl` responses and the old data-URL size guard are removed. The
+server requires a matching upload acknowledgement and will not decode a legacy
+inline reply. For `tabs.captureTab`, `tabId` must be a non-negative integer
+(`INVALID_PARAMETER` otherwise). Missing/uncapturable tabs and failed uploads
+return `CAPTURE_ERROR`. See the [MCP tool](api-reference.md#screenshots)
+and [transfer ownership](architecture.md#browser-uploads).
+
+Use matching server and extension builds. The required upload contract shares
+the next release's protocol-ID increment from 3 to 4; release preparation must
+enforce the new ID on both peers. See
+[release preparation](development.md#release-process).
 
 ### 3. Tab Content
 
@@ -1767,7 +1836,7 @@ request-error envelope.
 | `UNKNOWN_ACTION` | The action namespace or operation is unsupported. |
 | `INVALID_PARAMETER` | An action field is missing or has an invalid type/value. |
 | `UNSUPPORTED_API` | This Firefox lacks the API or permission required for the action. |
-| `CAPTURE_ERROR` | The screenshot API rejected capture of the visible or specified tab, or the image is too large for the connection. |
+| `CAPTURE_ERROR` | The screenshot API rejected capture of the visible or specified tab, or a screenshot upload failed. |
 | `WINDOW_NOT_FOUND` | Firefox rejected a window ID as invalid. |
 | `INVALID_WINDOW_STATE` | Firefox rejected a requested window state. |
 | `INVALID_WINDOW_TYPE` | Firefox rejected a requested window type. |

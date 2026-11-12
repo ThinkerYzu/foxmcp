@@ -151,9 +151,22 @@ and container lifecycle integration tests cover normal worker shutdown/restart.
 `integration/test_browser_functionality.py` exercises screenshot regions through
 the real MCP HTTP transport and Firefox extension using a local fixture. It
 checks document-relative pixels after scrolling, cropped dimensions at DPR 1
-and 2 with omitted/explicit scales, and legacy uncropped dimensions. It also
-checks that an oversized screenshot returns an error and a smaller capture
-succeeds on the same profile. DPR changes affect only disposable test profiles.
+and 2 with omitted/explicit scales, and uncropped dimensions. It also
+checks that a noisy PNG above 1 MiB saves identically over HTTP and shared
+stdio, returns only metadata on the real control socket, preserves preview
+output and leaves the profile usable. DPR changes affect only disposable profiles.
+
+`unit/test_upload_transfer.py` exercises actual HTTP grants, byte integrity,
+one-use/expiry rules, concurrent profiles/requests, interrupted bodies,
+cancellation/shutdown, atomic output preservation and a 32 MiB upload with a
+Python allocation peak below 4 MiB. `integration/test_multiple_profiles.py`
+checks concurrent uploads to independent HTTP/shared-stdio frontends through
+the real browser proxy with simulated profiles. `test_extension_settings.py`
+runs the production upload function in Firefox to verify fetch credentials,
+redirect refusal, metadata and HTTP-error handling. Both actual capture actions
+are also checked against a receiver that deliberately delays completion: no
+control reply is sent before the receiver acknowledges the finished upload.
+Missing grants and legacy inline replies are refused.
 
 ## Source-installation smoke checks
 

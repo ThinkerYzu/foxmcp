@@ -15,9 +15,18 @@ with the maintainer.
 
 - Monitoring rejects unknown/invalid options, honors request-body suppression
   and isolates each monitor's retained bodies and content lookup.
-- Screenshots from PR #30 support crop/scale options that older extensions
-  ignore. Crops default to one output pixel per CSS pixel, and oversized
-  captures return `CAPTURE_ERROR` instead of disconnecting the profile.
+- Screenshots from PR #30 support crop/scale options. Crops default to one
+  output pixel per CSS pixel. Include these options and their defaults in the
+  release-wide compatibility review alongside the required upload contract.
+
+- Screenshot tools negotiate a direct binary upload URL and require a matching
+  upload acknowledgement. Both capture actions can now save images above the
+  old control-message cap; HTTP failures produce capture errors. Include this
+  response/transport behavior in the same release-wide ID 3-to-4 review.
+  Upload grants are required for both capture actions; the inline data-URL
+  response, server decoding fallback and legacy size guard are removed. The
+  extension replies only after the receiver acknowledges completed reception
+  and closes the staging file.
 
 - Redirect capture exposes follow-on requests in `redirects`, original response
   status/destination at the top level, and selects chains by initial URL/method/

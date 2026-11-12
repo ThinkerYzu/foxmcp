@@ -1505,8 +1505,8 @@ class FoxMCPTools:
             """Capture a tab screenshot with optional crop and scale
 
             Use filename for the complete image; otherwise return a preview and size.
-            Crops use document-relative CSS pixels. Data URLs over 1,000,000 characters
-            are refused; use a smaller crop/scale or JPEG.
+            Crops use document-relative CSS pixels. Images transfer directly to this
+            server over HTTP, including images larger than the control-message limit.
 
             Args:
                 filename: Output path for the complete image; omitted returns a preview and size
@@ -1569,77 +1569,76 @@ class FoxMCPTools:
                     "timestamp": datetime.now().isoformat()
                 }
 
-            response = await self._send(profile_id, request)
+            token = None
+            service = self.file_transfers
+            output_filename = filename
+            if filename and not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                output_filename = f"{filename}.{format}"
+            try:
+                if service is None:
+                    raise RuntimeError("Screenshot transfer service is unavailable")
+                directory = os.path.dirname(os.path.abspath(output_filename)) if filename else None
+                token, url, upload = service.reserve_upload(
+                    request["id"], profile_id, "screenshot", f"image/{format}", directory)
+                request["data"]["upload"] = {"url": url, "requestId": request["id"]}
+                response = await self._send(profile_id, request, timeout=120.0)
 
-            if "error" in response:
-                return f"Error capturing screenshot: {response['error']}"
+                if "error" in response:
+                    return f"Error capturing screenshot: {response['error']}"
+                if response.get("type") == "error":
+                    error_msg = response.get("data", {}).get("message", "Unknown error")
+                    return f"Failed to capture screenshot: {error_msg}"
+                if response.get("type") != "response" or "data" not in response:
+                    return "Unable to capture screenshot"
 
-            if (tab_id is not None and response.get("type") == "error"
-                    and response.get("data", {}).get("code") == "UNKNOWN_ACTION"):
-                return (
-                    "Failed to capture screenshot: this FoxMCP extension is too old to capture a "
-                    "tab that is not showing (it has no tabs.captureTab). Update the extension, or "
-                    "make the tab the active one (tabs_switch) and use window_id."
-                )
+                data = response["data"]
+                uploaded = data.get("upload")
+                if (not isinstance(uploaded, dict)
+                        or uploaded.get("requestId") != request["id"]
+                        or uploaded.get("type") != upload.mime_type):
+                    return "Error capturing screenshot: missing or mismatched upload acknowledgement"
+                completed = await asyncio.wait_for(
+                    asyncio.shield(asyncio.wrap_future(upload.completion)),
+                    timeout=max(0.001, upload.expires - time.monotonic()))
+                if (type(uploaded.get("size")) is not int
+                        or uploaded["size"] != completed["size"] or completed["size"] == 0):
+                    return "Error capturing screenshot: upload size mismatch"
 
-            if response.get("type") == "response" and "data" in response:
-                data_url = response["data"].get("dataUrl", "")
-                captured_format = response["data"].get("format", format)
-                captured_quality = response["data"].get("quality", quality)
-                captured_window_id = response["data"].get("windowId", "current")
-                captured_tab_id = response["data"].get("tabId")
+                captured_format = data.get("format", format)
+                captured_quality = data.get("quality", quality)
+                captured_window_id = data.get("windowId", "current")
+                captured_tab_id = data.get("tabId")
                 captured_from = (
                     f"tab {captured_tab_id}" if captured_tab_id is not None
                     else f"window {captured_window_id}"
                 )
-
-                if not data_url:
-                    return "No screenshot data received"
-
-                # Extract the base64 part from data URL
-                data_prefix = f"data:image/{captured_format};base64,"
-                if not data_url.startswith(data_prefix):
-                    return f"Screenshot captured but unexpected format: {data_url[:100]}..."
-
-                base64_data = data_url[len(data_prefix):]
-
-                # If filename is provided, save to file
                 if filename:
                     try:
-                        # Add file extension if not provided
-                        if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                            filename = f"{filename}.{captured_format}"
-
-                        # Decode base64 and save to file
-                        image_data = base64.b64decode(base64_data)
-                        with open(filename, 'wb') as f:
-                            f.write(image_data)
-
-                        file_size = len(image_data)
-                        return (
-                            f"Screenshot saved to '{filename}' "
-                            f"({captured_from}, {captured_format}, "
-                            f"quality: {captured_quality}, size: {file_size} bytes)"
-                        )
-
-                    except Exception as e:
-                        return f"Error saving screenshot to file '{filename}': {str(e)}"
-
-                else:
-                    # Return base64 data as before when no filename provided
-                    data_size = len(base64_data)
+                        os.replace(completed["path"], output_filename)
+                    except OSError as error:
+                        return f"Error saving screenshot to file '{output_filename}': {error}"
                     return (
-                        f"Screenshot captured successfully from {captured_from} "
-                        f"({captured_format}, quality: {captured_quality}):\n"
-                        f"{data_url[:100]}...\n\n"
-                        f"Base64 data size: {data_size} characters"
+                        f"Screenshot saved to '{output_filename}' "
+                        f"({captured_from}, {captured_format}, "
+                        f"quality: {captured_quality}, size: {completed['size']} bytes)"
                     )
 
-            elif response.get("type") == "error":
-                error_msg = response.get("data", {}).get("message", "Unknown error")
-                return f"Failed to capture screenshot: {error_msg}"
-
-            return "Unable to capture screenshot"
+                prefix = f"data:{completed['type']};base64,"
+                with open(completed["path"], "rb") as image:
+                    preview = prefix + base64.b64encode(image.read(75)).decode("ascii")
+                data_size = 4 * ((completed["size"] + 2) // 3)
+                return (
+                    f"Screenshot captured successfully from {captured_from} "
+                    f"({captured_format}, quality: {captured_quality}):\n"
+                    f"{preview[:100]}...\n\n"
+                    f"Base64 data size: {data_size} characters"
+                )
+            except (OSError, ValueError, RuntimeError) as error:
+                detail = str(error) or type(error).__name__
+                return f"Error capturing screenshot: {detail}"
+            finally:
+                if token is not None:
+                    service.revoke(token)
 
     def _setup_history_tools(self):
         """Setup history management tools"""

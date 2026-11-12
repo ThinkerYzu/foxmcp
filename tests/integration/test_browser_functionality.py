@@ -16,6 +16,7 @@ from pathlib import Path
 from threading import Thread
 
 from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
 
 import test_imports  # Automatic path setup
 from test_config import profile_connection
@@ -213,9 +214,9 @@ async def test_screenshot_regions_with_scrolling_and_dpr(screenshot_tools, scree
 
 
 @pytest.mark.asyncio
-async def test_screenshot_regions_oversize_error_keeps_profile(screenshot_tools, screenshot_site,
+async def test_screenshot_large_upload_keeps_profile(screenshot_tools, screenshot_site,
                                                              tmp_path):
-    """Real noisy pixels exceed the transport budget; the next small capture still works."""
+    """Real noisy pixels exceed the old budget and travel outside the WebSocket."""
     setup, call, script, open_page = screenshot_tools
     tab = await open_page(screenshot_site)
     profile_id = next(iter(setup["server"].profiles))
@@ -237,17 +238,55 @@ async def test_screenshot_regions_oversize_error_keeps_profile(screenshot_tools,
       ctx.putImageData(image, 0, 0);
       return 'painted';
     })()""")
-    refused_path = tmp_path / "oversized.png"
-    error = await call("tabs_capture_screenshot", tab_id=tab, filename=str(refused_path),
-                       x=0, y=0, width=800, height=800, scale=1)
-    assert error.startswith("Failed to capture screenshot: The screenshot is "), error
-    assert "use jpeg" in error, error
-    assert not refused_path.exists()
+    profile = setup["server"].profiles[profile_id]
+    original_response = profile.handle_extension_response
+    replies = []
+
+    async def record_response(message):
+        if message.get("action") in ("tabs.captureTab", "tabs.captureVisibleTab"):
+            replies.append(message)
+        return await original_response(message)
+
+    # Record the real control messages to prove bytes never cross this socket.
+    profile.handle_extension_response = record_response
+    try:
+        size, png = await capture_png(call, tmp_path, "oversized", tab_id=tab,
+                                     x=0, y=0, width=800, height=800, scale=1)
+        assert size == (800, 800)
+        assert len(png) > 1024 * 1024
+        assert png_pixel(png, 10, 10) == (207, 250, 18)
+        assert replies and "dataUrl" not in replies[-1]["data"]
+        assert replies[-1]["data"]["upload"]["size"] == len(png)
+        assert len(json.dumps(replies[-1])) < 1024
+        preview = await call("tabs_capture_screenshot", tab_id=tab,
+                             x=0, y=0, width=800, height=800, scale=1)
+        assert "Screenshot captured successfully" in preview
+        assert f"Base64 data size: {4 * ((len(png) + 2) // 3)} characters" in preview
+        async with Client(StdioTransport(sys.executable, [
+                str(Path(__file__).resolve().parents[2] / "server/server.py"),
+                "--stdio", "--single-instance", "--port", str(setup["server"].port)])) as stdio:
+            destination = tmp_path / "shared-stdio.png"
+            result = await stdio.call_tool("tabs_capture_screenshot", {
+                "profile_id": profile_id, "tab_id": tab, "filename": str(destination),
+                "x": 0, "y": 0, "width": 800, "height": 800, "scale": 1})
+            assert "Screenshot saved to" in result.content[0].text, result
+            assert destination.read_bytes() == png
+            assert "dataUrl" not in replies[-1]["data"]
+            assert len(json.dumps(replies[-1])) < 1024
+
+    finally:
+        profile.handle_extension_response = original_response
     assert profile_id in setup["server"].profiles
     size, png = await capture_png(call, tmp_path, "recovered", tab_id=tab,
                                  x=0, y=0, width=32, height=32, scale=1)
     assert size == (32, 32)
     assert png_pixel(png, 10, 10) == (207, 250, 18)
+    jpeg_path = tmp_path / "uploaded.jpeg"
+    result = await call("tabs_capture_screenshot", tab_id=tab, filename=str(jpeg_path),
+                       format="jpeg", quality=70, x=0, y=0, width=32, height=32, scale=1)
+    assert "Screenshot saved to" in result and "jpeg, quality: 70" in result
+    assert jpeg_path.read_bytes().startswith(b"\xff\xd8")
+    assert jpeg_path.read_bytes().endswith(b"\xff\xd9")
 
 
 class TestBrowserFunctionality:
@@ -800,3 +839,91 @@ class TestBrowserFunctionality:
             assert response["data"]["code"] == "INVALID_PARAMETER", response
 
         print("✅ Background tab screenshot test successful!")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('action', ['tabs.captureTab', 'tabs.captureVisibleTab'])
+async def test_screenshot_reply_waits_for_completed_upload(
+        screenshot_tools, screenshot_site, tmp_path, monkeypatch, action):
+    """Withhold the real receiver's acknowledgement and observe the control socket."""
+    from threading import Event
+
+    setup, call, script, open_page = screenshot_tools
+    tab = await open_page(screenshot_site)
+    await call('tabs_switch', tab_id=tab)
+    server = setup['server']
+    profile = next(iter(server.profiles.values()))
+    receiver = server.file_transfers
+    received, acknowledge = Event(), Event()
+    original_reserve = receiver.reserve_upload
+    original_response = profile.handle_extension_response
+    grants, replies = [], []
+
+    class DelayedCompletion:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __getattr__(self, name):
+            return getattr(self.handle, name)
+
+        def close(self):
+            if self.handle.closed:
+                return
+            self.handle.close()
+            received.set()
+            if not acknowledge.wait(10):
+                raise TimeoutError('Test did not release the receiver acknowledgement')
+
+    def reserve(*args, **kwargs):
+        token, url, grant = original_reserve(*args, **kwargs)
+        grant.file = DelayedCompletion(grant.file)
+        grants.append(grant)
+        return token, url, grant
+
+    async def record_response(message):
+        if message.get('action') == action:
+            replies.append(message)
+        return await original_response(message)
+
+    monkeypatch.setattr(receiver, 'reserve_upload', reserve)
+    monkeypatch.setattr(profile, 'handle_extension_response', record_response)
+    output = tmp_path / 'acknowledged.png'
+    task = asyncio.create_task(call('tabs_capture_screenshot', filename=str(output),
+        **({'tab_id': tab} if action == 'tabs.captureTab' else {})))
+    try:
+        assert await asyncio.wait_for(asyncio.to_thread(received.wait, 5), 6)
+        assert grants and grants[0].file.closed
+        assert not grants[0].completion.done()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(asyncio.shield(task), .2)
+        assert replies == [], 'Extension replied before the receiver acknowledged completion'
+        assert not output.exists()
+        acknowledge.set()
+        assert 'Screenshot saved to' in await asyncio.wait_for(task, 10)
+        assert output.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+        assert len(replies) == 1 and 'dataUrl' not in replies[0]['data']
+        assert replies[0]['data']['upload']['size'] == output.stat().st_size
+        assert not receiver._uploads
+    finally:
+        acknowledge.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_screenshot_control_requests_require_upload_grants(screenshot_tools, screenshot_site):
+    setup, call, script, open_page = screenshot_tools
+    tab = await open_page(screenshot_site)
+    profile = next(iter(setup['server'].profiles.values()))
+    import uuid
+
+    for action in ('tabs.captureTab', 'tabs.captureVisibleTab'):
+        response = await profile.send_request_and_wait({
+            'id': str(uuid.uuid4()), 'type': 'request', 'action': action,
+            'data': {'tabId': tab} if action == 'tabs.captureTab' else {},
+        })
+        assert response['type'] == 'error'
+        assert response['data']['code'] == 'INVALID_PARAMETER'
+        assert 'upload grant' in response['data']['message']
+        assert 'dataUrl' not in response['data']

@@ -6,27 +6,19 @@ import test_imports  # Automatic path setup
 from server.mcp_tools import FoxMCPTools
 
 
-class StubWebSocketServer:
-    """Records the request and replays a canned response"""
-
-    def __init__(self):
-        self.sent_request = None
-        self.response = {"type": "response", "data": {
-            "dataUrl": "data:image/png;base64,AAAA", "format": "png", "quality": 90, "tabId": 4}}
-
-    async def send_request_and_wait(self, request, timeout=30.0):
-        self.sent_request = request
-        return self.response
+from test_screenshot_filename import StubScreenshotServer
 
 
 @pytest.fixture
 def stub_server():
-    return StubWebSocketServer()
+    server = StubScreenshotServer()
+    yield server
+    server.file_transfers.close()
 
 
 @pytest.fixture
 def capture(stub_server):
-    tools = FoxMCPTools(stub_server)
+    tools = FoxMCPTools(stub_server, file_transfers=stub_server.file_transfers)
 
     async def call(**kwargs):
         tool = await tools.mcp.get_tool("tabs_capture_screenshot")
@@ -142,9 +134,7 @@ class TestRefusedByTheExtension:
 
     @pytest.mark.asyncio
     async def test_the_extension_refusal_reaches_the_client(self, capture, stub_server):
-        message = ("The screenshot is 1500000 characters as a data URL, over the 1000000 "
-                   "the connection to the server can carry; use jpeg, a lower quality or "
-                   "scale, or a smaller region")
+        message = "Screenshot upload returned HTTP 400"
         stub_server.response = {"type": "error", "data": {
             "code": "CAPTURE_ERROR", "message": message}}
 

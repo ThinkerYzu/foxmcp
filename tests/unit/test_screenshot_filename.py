@@ -1,147 +1,16 @@
-#!/usr/bin/env python3
-"""
-Unit tests for screenshot filename functionality
-Tests the new filename parameter in tabs_capture_screenshot
-"""
+"""Screenshot file/preview output and target routing use required binary uploads."""
+
+import asyncio
+import base64
+import os
+import tempfile
 
 import pytest
-import pytest_asyncio
-import tempfile
-import os
-import base64
-import re
-from unittest.mock import Mock, AsyncMock
-import sys
 
-import test_imports  # Automatic path setup
+import test_imports  # noqa: F401
+from server.file_transfer import FileTransferServer
 from server.mcp_tools import FoxMCPTools
-
-
-class TestScreenshotFilename:
-    """Test screenshot filename functionality"""
-
-    @pytest.fixture
-    def mock_websocket_server(self):
-        """Create mock WebSocket server for testing"""
-        # Create a minimal 1x1 PNG image in base64
-        test_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-
-        mock_server = Mock()
-        mock_server.send_request_and_wait = AsyncMock(return_value={
-            "type": "response",
-            "data": {
-                "dataUrl": f"data:image/png;base64,{test_png_base64}",
-                "format": "png",
-                "quality": 90,
-                "windowId": "current"
-            }
-        })
-        return mock_server
-
-    @pytest.fixture
-    def mcp_tools(self, mock_websocket_server):
-        """Create MCP tools instance with mock server"""
-        return FoxMCPTools(mock_websocket_server)
-
-    @pytest.mark.asyncio
-    async def test_screenshot_file_saving_logic(self, mock_websocket_server):
-        """Test the file saving logic of screenshot functionality"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            filename = os.path.join(temp_dir, "test_screenshot.png")
-
-            # Simulate the exact logic from the screenshot function
-            test_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-            data_url = f"data:image/png;base64,{test_png_base64}"
-            captured_format = "png"
-
-            # Extract the base64 part from data URL (like in actual function)
-            data_prefix = f"data:image/{captured_format};base64,"
-            assert data_url.startswith(data_prefix), "Test data should have correct format"
-
-            base64_data = data_url[len(data_prefix):]
-
-            # Test the file saving logic directly (this is what the function does)
-            test_filename = filename
-            if not test_filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                test_filename = f"{test_filename}.{captured_format}"
-
-            # Decode base64 and save to file (exact logic from function)
-            image_data = base64.b64decode(base64_data)
-            with open(test_filename, 'wb') as f:
-                f.write(image_data)
-
-            file_size = len(image_data)
-
-            # Verify file was created and has correct content
-            assert os.path.exists(test_filename), "Screenshot file should be created"
-            assert file_size > 0, "File should not be empty"
-
-            # Verify content matches
-            with open(test_filename, 'rb') as f:
-                saved_data = f.read()
-
-            assert saved_data == image_data, "Saved file should match decoded image data"
-            assert len(saved_data) == file_size, "File size should match"
-
-    @pytest.mark.asyncio
-    async def test_screenshot_without_filename_returns_base64(self, mcp_tools, mock_websocket_server):
-        """Test that not providing filename returns base64 data as before"""
-        # This tests backward compatibility
-        mock_response = await mock_websocket_server.send_request_and_wait({})
-
-        assert "dataUrl" in mock_response["data"]
-        assert "data:image/png;base64," in mock_response["data"]["dataUrl"]
-
-    def test_filename_extension_logic(self):
-        """Test filename extension logic"""
-        test_cases = [
-            ("screenshot", "png", "screenshot.png"),
-            ("screenshot.png", "png", "screenshot.png"),
-            ("screenshot.jpg", "jpeg", "screenshot.jpg"),
-            ("screenshot.jpeg", "jpeg", "screenshot.jpeg"),
-            ("my_image", "jpeg", "my_image.jpeg"),
-        ]
-
-        for filename, format_type, expected in test_cases:
-            # Test the extension logic
-            if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                result = f"{filename}.{format_type}"
-            else:
-                result = filename
-
-            assert result == expected, f"Extension logic failed for {filename} with format {format_type}"
-
-    @pytest.mark.asyncio
-    async def test_screenshot_file_error_handling(self, mcp_tools, mock_websocket_server):
-        """Test error handling when file cannot be written"""
-        # Test with invalid path (directory that doesn't exist)
-        invalid_filename = "/nonexistent/directory/screenshot.png"
-
-        # Test that the error would be caught
-        test_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-
-        try:
-            image_data = base64.b64decode(test_png_base64)
-            with open(invalid_filename, 'wb') as f:
-                f.write(image_data)
-            # Should not reach here
-            assert False, "Should have raised an exception for invalid path"
-        except (OSError, IOError, FileNotFoundError):
-            # Expected behavior - error should be caught
-            assert True
-
-    def test_base64_decoding_logic(self):
-        """Test base64 decoding logic used in screenshot saving"""
-        # Test with valid base64 PNG data
-        test_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-
-        # Test decoding
-        image_data = base64.b64decode(test_png_base64)
-        assert len(image_data) > 0, "Decoded image data should not be empty"
-
-        # Test that it's valid PNG (starts with PNG header)
-        png_header = b'\x89PNG\r\n\x1a\n'
-        assert image_data.startswith(png_header), "Should be valid PNG data"
+from test_upload_transfer import put
 
 
 PNG_1X1 = (
@@ -151,20 +20,74 @@ PNG_1X1 = (
 
 
 class StubScreenshotServer:
-    """Stands in for the WebSocket server: records the request, replays a canned answer"""
+    """Record control requests and upload canned bytes through actual HTTP."""
 
     def __init__(self):
+        self.file_transfers = FileTransferServer()
         self.sent_request = None
         self.requests = 0
-        self.response = {
-            "type": "response",
-            "data": {"dataUrl": f"data:image/png;base64,{PNG_1X1}", "format": "png", "quality": 90},
-        }
+        self.response = {"type": "response", "data": {"quality": 90}}
 
     async def send_request_and_wait(self, request, timeout=30.0):
         self.sent_request = request
         self.requests += 1
+        if self.response.get("type") == "response":
+            upload = request["data"]["upload"]
+            image = base64.b64decode(PNG_1X1)
+            image_format = request["data"]["format"]
+            mime_type = f"image/{image_format}"
+            status = await asyncio.to_thread(put, upload["url"], image, upload["requestId"],
+                                             **{"Content-Type": mime_type})
+            assert status == 204
+            self.response["data"].update({"format": image_format, "upload": {
+                "requestId": upload["requestId"], "size": len(image), "type": mime_type}})
         return self.response
+
+
+@pytest.fixture
+def screenshot():
+    server = StubScreenshotServer()
+    tools = FoxMCPTools(server, file_transfers=server.file_transfers)
+    yield server, tools
+    server.file_transfers.close()
+
+
+class TestScreenshotFilename:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("filename, image_format, output", [
+        ("capture", "png", "capture.png"),
+        ("capture.png", "png", "capture.png"),
+        ("capture.jpg", "jpeg", "capture.jpg"),
+        ("capture.jpeg", "jpeg", "capture.jpeg"),
+        ("capture", "jpeg", "capture.jpeg"),
+    ])
+    async def test_uploaded_file_and_extension(self, screenshot, tmp_path,
+                                               filename, image_format, output):
+        server, tools = screenshot
+        tool = await tools.mcp.get_tool("tabs_capture_screenshot")
+        result = await tool.fn(profile_id=1, filename=str(tmp_path / filename), format=image_format)
+        assert result.startswith("Screenshot saved to"), result
+        assert (tmp_path / output).read_bytes() == base64.b64decode(PNG_1X1)
+        assert not server.file_transfers._uploads
+        assert not list(tmp_path.glob('.foxmcp-upload-*'))
+
+    @pytest.mark.asyncio
+    async def test_without_filename_returns_generated_preview_and_cleans_up(self, screenshot):
+        server, tools = screenshot
+        tool = await tools.mcp.get_tool("tabs_capture_screenshot")
+        result = await tool.fn(profile_id=1)
+        assert ("data:image/png;base64," + PNG_1X1)[:100] in result
+        assert f"Base64 data size: {len(PNG_1X1)} characters" in result
+        assert not server.file_transfers._uploads
+
+    @pytest.mark.asyncio
+    async def test_missing_output_directory_is_refused_before_capture(self, screenshot, tmp_path):
+        server, tools = screenshot
+        tool = await tools.mcp.get_tool("tabs_capture_screenshot")
+        result = await tool.fn(profile_id=1, filename=str(tmp_path / 'missing' / 'capture.png'))
+        assert result.startswith("Error capturing screenshot:"), result
+        assert server.requests == 0
+        assert not server.file_transfers._uploads
 
 
 class TestScreenshotOfOneTab:
@@ -177,11 +100,13 @@ class TestScreenshotOfOneTab:
 
     @pytest.fixture
     def stub(self):
-        return StubScreenshotServer()
+        server = StubScreenshotServer()
+        yield server
+        server.file_transfers.close()
 
     @pytest.fixture
     def call(self, stub):
-        tools = FoxMCPTools(stub)
+        tools = FoxMCPTools(stub, file_transfers=stub.file_transfers)
 
         async def run(**kwargs):
             tool = await tools.mcp.get_tool("tabs_capture_screenshot")
@@ -195,7 +120,9 @@ class TestScreenshotOfOneTab:
 
         request = stub.sent_request
         assert request["action"] == "tabs.captureTab"
-        assert request["data"] == {"tabId": 42, "format": "jpeg", "quality": 70}
+        assert {key: value for key, value in request["data"].items() if key != "upload"} == {
+            "tabId": 42, "format": "jpeg", "quality": 70}
+        assert request["data"]["upload"]["requestId"] == request["id"]
 
     @pytest.mark.asyncio
     async def test_without_a_tab_id_it_is_still_the_visible_tab_of_a_window(self, call, stub):
@@ -238,7 +165,7 @@ class TestScreenshotOfOneTab:
         assert "from window 7" in await call(window_id=7)
 
     @pytest.mark.asyncio
-    async def test_an_extension_without_the_action_gets_a_message_that_says_what_to_do(
+    async def test_unknown_actions_return_the_extension_error(
         self, call, stub
     ):
         stub.response = {
@@ -248,7 +175,7 @@ class TestScreenshotOfOneTab:
 
         result = await call(tab_id=42)
 
-        assert "too old" in result and "tabs_switch" in result and "window_id" in result
+        assert result == "Failed to capture screenshot: Unknown tabs action: tabs.captureTab"
 
     @pytest.mark.asyncio
     async def test_other_errors_pass_the_extensions_message_through(self, call, stub):

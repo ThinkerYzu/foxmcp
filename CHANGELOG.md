@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Direct binary screenshot uploads to the requesting MCP frontend, allowing
+  images beyond the WebSocket payload limit. Files stream to disk and replace
+  destinations only after upload and capture acknowledgement succeed.
 - Capture filters for HTTP methods, resource types, minimum status and failures,
   plus a strict `requests_list_captured` limit and returned-request count.
 - A `redirects` array of follow-on requests in captured summaries and content
@@ -17,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Screenshot control requests require an upload grant. Inline data-URL replies
+  and their compatibility path are removed; the extension replies only after
+  the receiver acknowledges completed reception.
 - Predefined `.py` scripts use the server's Python interpreter on every platform.
   Readable Python files are discoverable and runnable without a shebang or
   executable permission; shell script behavior is preserved.

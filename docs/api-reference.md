@@ -121,14 +121,22 @@ satisfy `0 < scale <= 4`. For a 400 x 200 CSS-pixel crop:
 Cropped requests default to scale 1 on every display. Requests without a crop or
 an explicit scale retain the target tab's device pixel ratio (DPR).
 
-The extension refuses screenshots whose data URL exceeds **1,000,000 characters**,
-returning `CAPTURE_ERROR` to protect the connection's 1 MiB message limit. This
-also applies when saving to a file. Reduce image size with `format="jpeg"`, lower
-JPEG `quality`, a smaller `scale` or a smaller crop.
+Screenshots upload PNG/JPEG bytes directly to the originating MCP process over
+one-use loopback HTTP URLs. Images larger than the WebSocket's 1 MiB message
+budget can be saved without reducing resolution or quality. Python streams to
+a temporary file with bounded memory; existing output is replaced only after
+both the upload and capture acknowledgement succeed. Without a filename the
+same transfer provides the preview and size, then removes the temporary file.
 
-Use matching server and extension builds: older extensions may ignore crop and
-scale options, and extensions without `tabs.captureTab` cannot capture a specified
-background tab. See the [screenshot protocol](protocol.md#capture-screenshot-of-one-tab).
+Transfers have a 120-second total deadline (the extension fetch allows 110
+seconds) and require Firefox and the MCP process on the same host. Disk space
+and Firefox's capture/memory limits still apply. Upload failures return capture
+errors and remove staging files. The extension waits for the receiver to finish
+receiving and close its staging file before replying.
+
+Use matching server and extension builds. Inline screenshot replies from older
+extensions are unsupported. See the
+[screenshot protocol](protocol.md#capture-screenshot-of-one-tab).
 
 ### Firefox Containers
 

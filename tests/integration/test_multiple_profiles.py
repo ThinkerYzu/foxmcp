@@ -57,6 +57,16 @@ class SimulatedProfile:
             elif action == "requests.stop_monitoring":
                 self.monitors.discard(data["monitor_id"])
                 result = {"monitor_id": data["monitor_id"], "status": "stopped"}
+            elif action in ("tabs.captureTab", "tabs.captureVisibleTab"):
+                image = (self.label.encode() + b"\0") * 250000
+                async with httpx.AsyncClient(trust_env=False) as client:
+                    response = await client.put(data["upload"]["url"], content=image,
+                        headers={"Content-Type": "image/png",
+                                 "X-FoxMCP-Request-Id": data["upload"]["requestId"]})
+                    assert response.status_code == 204
+                result = {"format": "png", "quality": 90, "tabId": 1,
+                          "upload": {"requestId": data["upload"]["requestId"],
+                                     "type": "image/png", "size": len(image)}}
             elif action == "content.load_file":
                 async with httpx.AsyncClient(trust_env=False) as client:
                     assert (await client.get(data["url"])).content == b"selected profile upload"
@@ -96,6 +106,21 @@ async def test_profiles_are_visible_and_routable_from_http_and_shared_stdio(free
                 stdio.call_tool("content_execute_script", {"profile_id": a.profile_id, "tab_id": 1, "code": "label"}))
             assert "beta" in results[0].content[0].text
             assert "alpha" in results[1].content[0].text
+            # Two originating frontend processes receive large bytes directly.
+            paths = [tmp_path / "http.png", tmp_path / "stdio.png"]
+            captures = await asyncio.gather(
+                http.call_tool("tabs_capture_screenshot", {"profile_id": a.profile_id,
+                               "tab_id": 1, "filename": str(paths[0])}),
+                stdio.call_tool("tabs_capture_screenshot", {"profile_id": b.profile_id,
+                                "tab_id": 1, "filename": str(paths[1])}))
+            assert all("Screenshot saved to" in r.content[0].text for r in captures), captures
+            assert paths[0].read_bytes() == b"alpha\0" * 250000
+            assert paths[1].read_bytes() == b"beta\0" * 250000
+            messages = [next(r for r in peer.received if r["action"] == "tabs.captureTab")
+                        for peer in peers]
+            assert messages[0]["data"]["upload"]["url"] != messages[1]["data"]["upload"]["url"]
+            assert messages[1]["id"] != messages[1]["data"]["upload"]["requestId"]
+            assert not list(tmp_path.glob('.foxmcp-upload-*'))
             source = tmp_path / "upload.txt"
             source.write_bytes(b"selected profile upload")
             result = await stdio.call_tool("content_load_file", {
@@ -169,4 +194,59 @@ async def test_two_real_firefox_profiles_reconnect_and_restart_independently(fre
     finally:
         for manager in managers:
             await asyncio.to_thread(manager.cleanup)
+        await server._stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("proxied", [False, True])
+async def test_screenshot_disconnect_revokes_originating_frontend_upload(
+        free_tcp_port, tmp_path, proxied):
+    """A real socket departure releases the grant even when the upload never starts."""
+    import websockets
+    from server.browser_proxy import RemoteBrowser
+    from server.mcp_frontend import MCPFrontend
+
+    server = FoxMCPServer(port=free_tcp_port, start_mcp=False, use_stdio=True)
+    await server.start_browser_listener()
+    frontend = None
+    task = None
+    remote = None
+    try:
+        async with AsyncExitStack() as stack:
+            extension = await stack.enter_async_context(
+                connect_as_extension(f"ws://localhost:{server.port}"))
+            assert json.loads(await extension.recv())['type'] == 'hello'
+            if proxied:
+                socket = await stack.enter_async_context(
+                    websockets.connect(f"ws://localhost:{server.port}/proxy"))
+                await socket.recv()  # Proxy hello precedes the ordinary response reader.
+                remote = RemoteBrowser(socket)
+                frontend = MCPFrontend(remote, use_stdio=True)
+            else:
+                frontend = server.frontend
+            tool = await frontend.app.get_tool('tabs_capture_screenshot')
+            task = asyncio.create_task(tool.fn(profile_id=extension.profile_id,
+                tab_id=1, filename=str(tmp_path / 'disconnect.png')))
+            request = json.loads(await asyncio.wait_for(extension.recv(), 5))
+            assert request['action'] == 'tabs.captureTab'
+            grant_url = request['data']['upload']['url']
+            assert len(frontend.file_transfers._uploads) == 1
+            await extension.close()
+            result = await asyncio.wait_for(task, 5)
+            assert 'disconnected' in result
+            assert not frontend.file_transfers._uploads
+            assert not list(tmp_path.iterdir())
+            async with httpx.AsyncClient(trust_env=False) as client:
+                response = await client.put(grant_url, content=b'late image', headers={
+                    'Content-Type': 'image/png',
+                    'X-FoxMCP-Request-Id': request['data']['upload']['requestId']})
+                assert response.status_code == 404
+    finally:
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        if remote is not None:
+            await remote.close()
+        if frontend is not None and frontend is not server.frontend:
+            await frontend.close()
         await server._stop()

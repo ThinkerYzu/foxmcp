@@ -998,18 +998,43 @@ function captureRegionOptions(data) {
   return result;
 }
 
-// The server accepts one message of at most 1 MiB from the extension (see Known Limits in
-// docs/architecture.md) and closes the connection on a larger one, which would drop the whole
-// profile. A screenshot that large is refused here with a message that says how to shrink it.
-const MAX_SCREENSHOT_DATA_URL_LENGTH = 1000000;
-
-function screenshotTooLarge(dataUrl) {
-  if (dataUrl.length <= MAX_SCREENSHOT_DATA_URL_LENGTH) {
-    return null;
+// Screenshot control requests always carry a frontend-owned upload grant.
+function screenshotUploadUrl(upload) {
+  if (!upload || typeof upload.url !== 'string'
+      || typeof upload.requestId !== 'string' || !upload.requestId) {
+    throw new Error('A screenshot upload grant with url and requestId is required');
   }
-  return `The screenshot is ${dataUrl.length} characters as a data URL, over the `
-    + `${MAX_SCREENSHOT_DATA_URL_LENGTH} the connection to the server can carry; use jpeg, a lower `
-    + 'quality or scale, or a smaller region';
+  const url = new URL(upload.url);
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port
+      || url.username || url.password || url.search || url.hash
+      || !/^\/uploads\/[A-Za-z0-9_-]{43}$/.test(url.pathname)) {
+    throw new Error('Invalid screenshot upload grant');
+  }
+  return url;
+}
+
+async function transferScreenshot(dataUrl, upload, format) {
+  const url = screenshotUploadUrl(upload);
+  // Firefox's capture API already allocates a data URL. Decode bounded chunks
+  // into a Blob so the WebSocket never carries the image or a large byte array.
+  const prefix = `data:image/${format};base64,`;
+  if (!dataUrl.startsWith(prefix)) throw new Error('Unexpected screenshot format');
+  const parts = [];
+  const encoded = dataUrl.slice(prefix.length);
+  for (let offset = 0; offset < encoded.length; offset += 65536) {
+    const decoded = atob(encoded.slice(offset, offset + 65536));
+    parts.push(Uint8Array.from(decoded, character => character.charCodeAt(0)));
+  }
+  const blob = new Blob(parts, {type: `image/${format}`});
+  const response = await fetch(url.href, {
+    method: 'PUT', body: blob, credentials: 'omit', redirect: 'error', cache: 'no-store',
+    headers: {'X-FoxMCP-Request-Id': upload.requestId},
+    signal: AbortSignal.timeout(110000)
+  });
+  // The receiver sends 204 only after receiving every byte and closing its
+  // staging file. Await this acknowledgement before returning control metadata.
+  if (response.status !== 204) throw new Error(`Screenshot upload returned HTTP ${response.status}`);
+  return {upload: {requestId: upload.requestId, size: blob.size, type: blob.type}};
 }
 
 // The tab group properties a request sets, out of title, color and collapsed
@@ -1336,6 +1361,7 @@ async function handleTabsAction(id, action, data) {
         let visibleRegion;
         try {
           visibleRegion = captureRegionOptions(data);
+          screenshotUploadUrl(data.upload);
         } catch (regionError) {
           sendError(id, 'INVALID_PARAMETER', regionError.message);
           break;
@@ -1348,13 +1374,9 @@ async function handleTabsAction(id, action, data) {
 
         try {
           const dataUrl = await browser.tabs.captureVisibleTab(windowId, options);
-          const visibleTooLarge = screenshotTooLarge(dataUrl);
-          if (visibleTooLarge) {
-            sendError(id, 'CAPTURE_ERROR', visibleTooLarge);
-            break;
-          }
+          const transferred = await transferScreenshot(dataUrl, data.upload, options.format);
           sendResponse(id, action, {
-            dataUrl: dataUrl,
+            ...transferred,
             format: options.format,
             quality: options.quality,
             windowId: windowId
@@ -1375,6 +1397,7 @@ async function handleTabsAction(id, action, data) {
         let tabRegion;
         try {
           tabRegion = captureRegionOptions(data);
+          screenshotUploadUrl(data.upload);
         } catch (regionError) {
           sendError(id, 'INVALID_PARAMETER', regionError.message);
           break;
@@ -1387,13 +1410,9 @@ async function handleTabsAction(id, action, data) {
 
         try {
           const dataUrl = await browser.tabs.captureTab(captureTabId, captureOptions);
-          const tabTooLarge = screenshotTooLarge(dataUrl);
-          if (tabTooLarge) {
-            sendError(id, 'CAPTURE_ERROR', tabTooLarge);
-            break;
-          }
+          const transferred = await transferScreenshot(dataUrl, data.upload, captureOptions.format);
           sendResponse(id, action, {
-            dataUrl: dataUrl,
+            ...transferred,
             format: captureOptions.format,
             quality: captureOptions.quality,
             tabId: captureTabId
