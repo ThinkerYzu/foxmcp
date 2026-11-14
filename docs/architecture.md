@@ -143,6 +143,20 @@ the popup. See
 [configuration](configuration.md#script-injection-consent) and
 [protocol](protocol.md#script-consent-unreleased-2026-10-31).
 
+Raw script requests can select one frame through `data.frameId`, defaulting to
+0. This stays within the existing FoxMCPTools/browser route/Firefox extension
+components and connections in the diagram. The gate's consent remains tab-wide,
+keyed by top-level origin, covering all nested/cross-origin frames. For gated
+child injection, the gate prepares a non-enumerable per-request marker in the
+selected document, then rechecks the top-level origin and request. A prefix
+requires and removes that marker before direct caller injection, so replacement
+documents cannot receive the script. Failed preparations clean up their marker.
+Direct injection preserves global let/const declarations across calls without
+an eval wrapper. Top-frame injection retains its synchronous destination-origin
+check. Frame discovery uses runtime.getFrameId in existing agent scripts; no
+new component, process boundary, permission or listing tool is added. See
+[frame targeting](api-reference.md#frame-targeting).
+
 For `content_wait`, the gate also owns each attempt's absolute deadline. A
 background timer expires queued approval work before injection. During execution,
 an injected wrapper races the script promise against that same deadline, so the

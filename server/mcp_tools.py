@@ -2476,16 +2476,22 @@ class FoxMCPTools:
 
         # Execute Script Tool
         @self._tool()
-        async def content_execute_script(profile_id: int, tab_id: int, code: str) -> str:
-            """Execute JavaScript code in a tab
-
-            An optional extension setting requires user approval per tab/origin.
-            Each approval prompt expires after 60 seconds; queued tabs wait in turn.
+        async def content_execute_script(
+            profile_id: int, tab_id: int, code: str,
+            frame_id: Annotated[int, Field(strict=True, ge=0)] = 0
+        ) -> str:
+            """Execute JavaScript in a tab or frame. Discover frame IDs with
+            browser.runtime.getFrameId() and window.frames. Optional tab approval
+            covers all frames; each prompt expires after 60 seconds.
 
             Args:
                 tab_id: ID of the tab to execute script in
                 code: JavaScript code to execute
+                frame_id: Non-negative Firefox frame ID; defaults to 0 (top document).
+                    Missing or inaccessible frames fail without fallback.
             """
+            if isinstance(frame_id, bool) or not isinstance(frame_id, int) or frame_id < 0:
+                return "Error executing script: frame_id must be a non-negative integer"
             request = {
                 "id": str(uuid.uuid4()),
                 "type": "request",
@@ -2496,6 +2502,9 @@ class FoxMCPTools:
                 },
                 "timestamp": datetime.now().isoformat()
             }
+
+            if frame_id != 0:
+                request["data"]["frameId"] = frame_id
 
             response = await self._send(profile_id, request, timeout=300.0)
 

@@ -781,9 +781,11 @@ prompt starts. The target and deadline are checked again after popup closure.
 Closing/reopening the popup does not reset the deadline. Timeout rejects pending
 injections without remembering Deny. Late clicks cannot execute expired requests.
 
-Allow and Deny apply only to that tab on its current origin (scheme, host and
-port). Reloads and same-origin navigation retain them. Origin changes, tab
-closure and extension/browser restart forget them; returning to a previous site
+Allow and Deny apply to the entire tab, including all nested and cross-origin
+frames, on its current top-level origin (scheme, host and port). A child-frame
+origin change does not require another approval. Reloads and same-origin
+navigation retain them. Top-level origin changes, tab closure and
+extension/browser restart forget them; returning to a previous site
 requires a new decision. Other tabs on the same origin remain independent.
 Non-opaque origins are required when consent is enabled; normal Firefox
 restrictions on script execution still apply. Already approved tabs can execute

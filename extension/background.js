@@ -315,11 +315,15 @@ class ScriptConsentGate {
     }
   }
 
-  async run(id, tabId, script, {deadline = null} = {}) {
+  async run(id, tabId, script, {deadline = null, frameId = 0} = {}) {
+    if (!Number.isInteger(frameId) || frameId < 0) {
+      throw this.error('frameId must be a non-negative integer', 'INVALID_PARAMETER');
+    }
     if (deadline !== null && !Number.isFinite(deadline)) {
       throw this.error('Script deadline must be finite', 'INVALID_PARAMETER');
     }
-    const job = {id, tabId, state: 'preparing', deferred: this.transition !== null};
+    const job = {id, tabId, frameId, state: 'preparing', deferred: this.transition !== null};
+    let frameMarker = null;
     this.jobs.set(id, job);
     try {
       if (deadline !== null) {
@@ -350,6 +354,26 @@ class ScriptConsentGate {
       let code = job.gated
         ? `${this.hasStrictDirective(script) ? '"use strict";\n' : ''}if (this.location.origin !== ${JSON.stringify(job.origin)}) { throw new Error('FoxMCP target origin changed'); }\n${script}`
         : script;
+      if (job.gated && frameId !== 0) {
+        // Bind the origin recheck to this child document without wrapping the
+        // caller in eval, which would discard global let/const declarations.
+        frameMarker = `__foxmcpFrame_${crypto.randomUUID()}`;
+        const markerKey = JSON.stringify(frameMarker);
+        const prepared = await browser.tabs.executeScript(tabId, {frameId,
+          code: `this.Object.defineProperty(this, ${markerKey}, {value:true, configurable:true}); true;`});
+        if (!prepared || prepared.length !== 1 || prepared[0] !== true) {
+          throw this.error(`Frame ${frameId} is missing or inaccessible`, 'SCRIPT_ERROR');
+        }
+        const target = await browser.tabs.get(tabId);
+        if (job.cancelled || !requestSockets.has(id) || this.origin(target.url) !== job.origin) {
+          throw job.cancelled || this.error('Target origin changed', 'SCRIPT_TARGET_CHANGED');
+        }
+        // Navigation replacing this frame after the recheck loses the marker.
+        // No caller code can execute in the replacement document.
+        code = `${this.hasStrictDirective(script) ? '"use strict";\n' : ''}` +
+          `if (this[${markerKey}] !== true) { throw new Error('FoxMCP target document changed'); }\n` +
+          `delete this[${markerKey}];\n${script}`;
+      }
       if (deadline !== null) {
         if (deadline <= Date.now()) throw this.error('Script execution timed out', 'WAIT_TIMEOUT');
         // Bound the promise inside the injected operation too. A background-only
@@ -361,7 +385,11 @@ class ScriptConsentGate {
           'timer = setTimeout(() => resolve({timedOut:true}), Math.max(0,' +
           deadline + ' - Date.now())); })]); } finally { clearTimeout(timer); } })()';
       }
-      const results = await browser.tabs.executeScript(tabId, {code});
+      const results = await browser.tabs.executeScript(tabId, {code, frameId});
+      if (frameId !== 0 && (!results || results.length !== 1)) {
+        throw this.error(`Frame ${frameId} is missing or inaccessible`, 'SCRIPT_ERROR');
+      }
+      frameMarker = null; // The injected prefix removed it before caller code.
       if (deadline === null) return results;
       if (job.cancelled) throw job.cancelled;
       if (results.some(result => result?.timedOut)) {
@@ -369,6 +397,12 @@ class ScriptConsentGate {
       }
       return results.map(result => result?.value);
     } finally {
+      if (frameMarker !== null) {
+        try {
+          await browser.tabs.executeScript(tabId, {frameId,
+            code: `delete this[${JSON.stringify(frameMarker)}];`});
+        } catch (_) { /* Navigation or closure already destroyed the marker. */ }
+      }
       clearTimeout(job.executionTimer);
       this.jobs.delete(id);
       this.advance();
@@ -1709,9 +1743,10 @@ async function handleContentAction(id, action, data) {
         sendResponse(id, action, { html: htmlResult.html });
         break;
 
-      case 'content.execute_script':
+      case 'content.execute_script': {
+        const frameId = Object.hasOwn(data, 'frameId') ? data.frameId : 0;
         try {
-          const executeResults = await scriptConsent.run(id, data.tabId, data.script);
+          const executeResults = await scriptConsent.run(id, data.tabId, data.script, {frameId});
           // executeScript returns an array of results from each frame
           const result = executeResults && executeResults.length > 0 ? executeResults[0] : null;
           sendResponse(id, action, { 
@@ -1719,9 +1754,10 @@ async function handleContentAction(id, action, data) {
             url: await getCurrentTabUrl(data.tabId)
           });
         } catch (scriptError) {
-          sendError(id, scriptError.code || 'SCRIPT_ERROR', `Script execution failed: ${scriptError.message}`);
+          sendError(id, scriptError.code || 'SCRIPT_ERROR', `Script execution failed${frameId ? ` in frame ${frameId}` : ''}: ${scriptError.message}`);
         }
         break;
+      }
 
       default:
         sendError(id, 'UNKNOWN_ACTION', `Unknown content action: ${action}`);

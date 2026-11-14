@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional `frame_id` on `content_execute_script` selects a nested or cross-origin
+  frame, with tab-wide script approval and errors instead of top-frame fallback.
+  Discover IDs through `browser.runtime.getFrameId()` and `window.frames`.
+
 - Direct binary screenshot uploads to the requesting MCP frontend, allowing
   images beyond the WebSocket payload limit. Files stream to disk and replace
   destinations only after upload and capture acknowledgement succeed.

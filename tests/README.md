@@ -67,6 +67,21 @@ metadata, empty and one/two/three-entry `redirects` arrays, 302/303 method rewri
 and loops, initial-URL matching, stopped reads, raw option rejection and method
 selection independent of overlapping monitors.
 
+#### Script frame targeting
+
+`unit/test_script_frames.py` checks strict MCP schema/direct-call validation,
+profile/frame forwarding, default behavior, tools/list discovery guidance and
+errors without retries. `integration/test_script_frames_end_to_end.py` uses
+actual MCP HTTP and disposable Firefox profiles with same-origin, nested and cross-origin local
+pages. It checks recursive discovery, exact execution targets, missing/removed
+frames, raw validation, real missing-host-permission failures, tab approval and
+denial across all frames, child navigation and top-level-origin invalidation.
+It also verifies lexical/global scope and holds real preparation calls to check
+child/top-level navigation races without caller injection into replacement
+documents. Its custom XPI adds gate controls and a preparation barrier; normal
+artifacts and cached profiles are isolated. Existing controller checks cover
+queue/race rules and marker cleanup after cancellation.
+
 #### Wait execution lifecycle
 
 `integration/test_content_wait_lifecycle.py` uses real Firefox and MCP HTTP to

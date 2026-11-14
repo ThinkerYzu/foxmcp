@@ -216,7 +216,10 @@ for the complete input-assignment example and transfer details.
 - `content_get_html(profile_id, tab_id)` - Read the main document's current
   `document.documentElement.outerHTML`, truncated to 2,000 characters plus an ellipsis
   when longer. Neither content reader includes iframe documents.
-- `content_execute_script(profile_id, tab_id, code)` - Execute JavaScript directly
+- `content_execute_script(profile_id, tab_id, code, frame_id=0)` - Execute
+  JavaScript in the top document or a selected frame. Discover IDs with
+  `browser.runtime.getFrameId()` and `window.frames`; see
+  [frame targeting](#frame-targeting).
 - `content_execute_predefined(profile_id, tab_id, script_name, script_args="")` - Execute predefined external scripts. `.py` files use the server's Python interpreter on every platform and need read permission, without requiring a shebang or executable bit. See [script authoring](scripts.md#multi-language-support).
 - `content_wait(profile_id, tab_id, script, timeout=10.0, interval=0.2)` - Run `script` in the tab every `interval` seconds until it returns something other than `null` or `undefined`, and return that value (`false` and `0` are values). Use it to wait for an element, text, a URL, an animation, a video or an event; for example `document.querySelector('#done') ? true : null`. `script` is a nonempty string whose last value is the result, and a promise is awaited. `timeout` is a number of seconds above 0 and at most 120, counted after the first run, and `interval` is from 0.1 to 5. A script that throws ends the wait with its error (`SCRIPT_ERROR`); a tab that is loading or navigating is tried again; the wait fails with `WAIT_TIMEOUT` when time runs out. The script runs repeatedly, so it must not change the page. It is subject to the same per-tab approval as `content_execute_script`, asked once
 
@@ -524,15 +527,72 @@ What Firefox does on its own:
 For WebSocket protocol details, see [protocol.md](protocol.md).
 
 
+## Frame targeting
+
+`content_execute_script` accepts an optional non-negative integer `frame_id`.
+Omitting it or passing `0` selects the top document. A positive ID selects only
+that frame, including nested and cross-origin frames for which Firefox grants
+host access. Missing, removed or inaccessible frames fail with an error; the
+call never falls back to the top document. Boolean, string, null, fractional and
+negative selectors are rejected. Use matching server and extension builds;
+older extensions do not implement frame selection.
+
+Discover frame IDs through the existing script tool, without a separate listing
+tool or `webNavigation` permission. For example, run this code in the top frame:
+
+```javascript
+(() => {
+  const frames = [];
+  function visit(win, parentId = -1) {
+    const id = browser.runtime.getFrameId(win);
+    frames.push({frame_id: id, parent_frame_id: parentId});
+    for (let i = 0; i < win.frames.length; i++) visit(win.frames[i], id);
+  }
+  visit(window);
+  return frames;
+})()
+```
+
+The traversal includes nested frames, including descendants of cross-origin
+frames. It collects IDs and parent relationships without reading their DOM or
+location. For a known iframe element, `browser.runtime.getFrameId(element)`
+returns its ID directly, or `-1` if no frame exists. Ordinary page JavaScript
+does not have this extension API. See Mozilla's
+[runtime.getFrameId reference](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/getFrameId).
+
+Pass a discovered ID to the script tool, for example:
+
+```python
+content_execute_script(
+    profile_id=profile_id, tab_id=tab_id, frame_id=child_frame_id,
+    code="document.title",
+)
+```
+
+Frame IDs select browsing contexts, not immutable documents. Rediscover after
+frames are removed/replaced; a navigation within an existing frame can change
+its document. Each frame has its own extension-isolated script scope; global
+variable and function declarations, including `let` and `const`, retain their
+normal behavior across calls in that document. The result is from the selected
+frame, while the existing result URL remains the top-level tab URL. Predefined scripts, `content_wait`, text/HTML
+readers and file loading retain their top-frame behavior.
+
+When script consent is enabled, one tab decision covers every frame, including
+cross-origin descendants. A child-frame origin change does not require another
+approval. Changing the tab's top-level origin invalidates its decision. See
+[script consent](#script-consent).
+
 ## Script consent
 
 `content_execute_script` and the generated JavaScript from
 `content_execute_predefined` obey the optional extension
 [script consent setting](configuration.md#script-injection-consent), off by
-default. Each target tab/origin requires its own approval. Requests queue one
-tab at a time with a 60-second decision deadline per active prompt; queue wait
+default. Each target tab/top-level origin requires its own approval, covering
+all nested and cross-origin frames in that tab. Requests queue one tab at a time
+with a 60-second decision deadline per active prompt; queue wait
 is separate. The server allows 300 seconds total for queue wait, approval and
 execution. Rejection, prompt expiry and origin changes return a script error
-without executing. Timeout does not remember a Deny. Raw/predefined script tool
-parameters remain unchanged. Built-in content-reading and file-loading tools
-are outside this gate; predefined local generators run before consent.
+without executing. Timeout does not remember a Deny. Raw scripts accept the
+optional frame selector described above; predefined scripts keep their existing
+parameters. Built-in content-reading and file-loading tools are outside this
+gate; predefined local generators run before consent.

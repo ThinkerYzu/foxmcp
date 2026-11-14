@@ -939,6 +939,36 @@ side effects. Scripts must remain safe to run repeatedly.
 }
 ```
 
+`data.frameId` is optional and defaults to `0` (the top document). It must be a
+non-negative integer; booleans, strings, null and fractional values are
+`INVALID_PARAMETER` errors. A positive ID is passed to Firefox's `frameId`
+execution option and targets only that frame. Missing or inaccessible frames
+and host-permission failures return `SCRIPT_ERROR` with Firefox's reason;
+there is no fallback to the top document. Responses retain `result` and the
+**top-level tab** `url`, even when the result comes from a child frame.
+
+For example, a targeted request uses
+`{"tabId": 123, "frameId": 42, "script": "document.title"}` as its data.
+Agents discover frame IDs using the existing script mechanism; see the
+[recursive API example](api-reference.md#frame-targeting). No frame-listing
+action or additional permission is introduced.
+
+Script approval is scoped to the tab/top-level origin and includes all its
+nested/cross-origin frames. The gate checks the tab before injection. Gated
+child preparation places a non-enumerable request marker in the selected
+document. After the gate rechecks the current top-level origin and request, the
+injected prefix requires and removes that marker before running caller code.
+Replacing the document loses the marker and fails instead of executing in the
+replacement. This uses normal Firefox script evaluation, preserving global
+let/const bindings across calls; failed preparations clean up their markers.
+No runtime-message API grants or modifies approval. Child origins are not
+separate consent scopes. Top-level-origin navigation,
+closure, disconnect and restart retain existing invalidation behavior.
+
+The optional selector modifies an existing action. Include it in the shared
+next-release protocol ID 3-to-4 review, as recorded in
+[unreleased compatibility requirements](../RELEASES.md#unreleased-compatibility-requirements).
+
 #### Execute Predefined Script
 
 `content_execute_predefined` is an MCP tool implemented by

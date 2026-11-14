@@ -13,6 +13,10 @@ released v1.7.0's 3 to 4. All incompatible unreleased changes share this single
 increment. The development ID remains 3 until release preparation, as agreed
 with the maintainer.
 
+- Raw script requests accept a validated optional `frameId`, defaulting to the
+  top document. Include frame selection, failure behavior and tab-wide consent
+  across nested/cross-origin frames in the same shared ID 3-to-4 review.
+
 - Monitoring rejects unknown/invalid options, honors request-body suppression
   and isolates each monitor's retained bodies and content lookup.
 - Screenshots from PR #30 support crop/scale options. Crops default to one

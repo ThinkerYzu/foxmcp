@@ -8,7 +8,7 @@
     const timers = new Map(), executions = [], switches = [], updates = [], removed = [], popups = [];
     const tabs = new Map([1, 2, 3].map(id => [id, {id, title: `Tab ${id}`, url: 'https://example.org/page', status:'complete', windowId: id === 3 ? 2 : 1, active: id === 1}]));
     const socket = {readyState: 1, send() {}};
-    let failExecute = null, popupFailures = 0, popupWait = null;
+    let failExecute = null, popupFailures = 0, popupWait = null, afterPreparation = null;
     const popupViews = [], focusListeners = [], activationListeners = [];
     const browser = {
       extension: {getViews: () => popupViews},
@@ -23,6 +23,10 @@
         },
         async executeScript(id, options) {
           executions.push({id, ...options});
+          if (options.code.startsWith('this.Object.defineProperty(this, "__foxmcpFrame_')) {
+            if (afterPreparation) await afterPreparation();
+            return [true];
+          }
           if (failExecute) return await failExecute;
           return [42];
         }
@@ -46,9 +50,9 @@
       }
       now=end;await settle();
     }
-    function run(id, tabId=1, script='40+2') {
+    function run(id, tabId=1, script='40+2', options={}) {
       api.requestSockets.set(id,socket);
-      return api.gate.run(id,tabId,script).then(value=>({value}), error=>({error:error.code || error.message}));
+      return api.gate.run(id,tabId,script,options).then(value=>({value}), error=>({error:error.code || error.message}));
     }
     async function decide(allowed) { const view=await api.gate.view(); return api.gate.decide(view.token,allowed); }
     function navigate(id,url,status='complete') { Object.assign(tabs.get(id),{url,status});for (const callback of updates) callback(id,{url,status},{...tabs.get(id)}); }
@@ -56,6 +60,7 @@
       failPopups(count) { popupFailures=count; }, holdPopup(promise) {popupWait=promise;},
       close(id) { tabs.delete(id);for (const callback of removed) callback(id); },
       holdExecution(promise) {failExecute=promise;},
+      afterPreparation(callback) {afterPreparation=callback;},
       focus(id, notify=true) {focused=id;if(notify)for(const callback of focusListeners)callback(id);},
       activate(id) { for(const tab of tabs.values())if(tab.windowId===tabs.get(id).windowId)tab.active=tab.id===id;for(const callback of activationListeners)callback({tabId:id,windowId:tabs.get(id).windowId}); }};
   }
@@ -290,5 +295,28 @@
   check(refused && !hidden.executions.length,'approval refused when target window loses focus');
   hidden.gate.cancel('hidden');await waiting;
   const restarted=await app();check(!restarted.gate.decisions.size,'new extension instance forgets decisions');
+  const framed=await app();
+  framed.gate.decisions.set(1,{origin:'https://example.org',allowed:true});
+  const frameResult=await framed.run('frame-normal',1,'40+2',{frameId:42});
+  check(frameResult.value[0]===42 && framed.executions.length===2 &&
+    framed.executions.every(call=>call.frameId===42), 'child preparation and caller target only the selected frame');
+  check(framed.executions[1].code.includes('delete this[') &&
+    !framed.executions[1].code.includes('eval)('), 'child guard removes its marker and preserves direct script evaluation');
+  const navigatedFrame=await app();
+  navigatedFrame.gate.decisions.set(1,{origin:'https://example.org',allowed:true});
+  navigatedFrame.afterPreparation(()=>navigatedFrame.navigate(1,'https://example.org:8443/'));
+  const staleFrame=await navigatedFrame.run('frame-stale',1,'unapprovedPayload()',{frameId:42});
+  check(staleFrame.error==='SCRIPT_TARGET_CHANGED' &&
+    !navigatedFrame.executions.some(call=>call.code.includes('unapprovedPayload')),
+    'origin change during child preparation prevents caller injection');
+  check(navigatedFrame.executions.at(-1).code.startsWith('delete this['),
+    'cancelled preparation cleans up its document marker');
+  const disconnectedFrame=await app();
+  disconnectedFrame.gate.decisions.set(1,{origin:'https://example.org',allowed:true});
+  disconnectedFrame.afterPreparation(()=>disconnectedFrame.requestSockets.delete('frame-disconnect'));
+  const goneFrame=await disconnectedFrame.run('frame-disconnect',1,'unapprovedPayload()',{frameId:42});
+  check(goneFrame.error==='SCRIPT_TARGET_CHANGED' &&
+    !disconnectedFrame.executions.some(call=>call.code.includes('unapprovedPayload')),
+    'disconnect during preparation prevents caller injection and cleans up');
   return checks;
 })

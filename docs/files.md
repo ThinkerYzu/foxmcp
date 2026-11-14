@@ -50,7 +50,7 @@ foxmcp/
 | File | Responsibility |
 |---|---|
 | [manifest.json](../extension/manifest.json) | Registers `config.js` before the persistent `background.js`, the content script, Popup/Options entry points and permissions. |
-| [background.js](../extension/background.js) | Owns the socket, protocol/profile handshake, browser action routing, redirect-chain capture, monitor cleanup and settings read/write queue. Reports Connected only after profile registration. |
+| [background.js](../extension/background.js) | Owns the socket, protocol/profile handshake, tab-wide script consent/frame targeting, browser action routing, redirect-chain capture, monitor cleanup and settings read/write queue. Reports Connected only after profile registration. |
 | [config.js](../extension/config.js) | Supplies defaults, validates Host/Port and integer intervals, applies test overrides and constructs `ws://` endpoints. |
 | [settings.js](../extension/settings.js) | Binds inputs in both views, sends edits/reset requests to the background, polls status and preserves unfinished edits. Formats connection and release/protocol diagnostics. |
 | [settings.css](../extension/settings.css) | Shared controls, error feedback and system light/dark theme. |
